@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import unicodedata
 import xml.etree.ElementTree as ET
@@ -21,7 +22,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v002"
+APP_VERSION = "2026-10-v003"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -396,10 +397,18 @@ def _fetch_uploads(api_key, channel_id, oldest, max_pages=40):
             r = SESSION.get(YOUTUBE_PLAYLIST_URL, params=params, timeout=10)
         except Exception as e:
             log.warning("API YouTube indisponible (%s)", type(e).__name__)
+            API_STATUS.update(ok=False, msg=f"API YouTube injoignable ({type(e).__name__})", at=time.time())
             break
         if r.status_code != 200:
             log.warning("API YouTube : HTTP %s", r.status_code)
+            reason = ""
+            try:
+                reason = ((r.json().get("error") or {}).get("errors") or [{}])[0].get("reason", "")
+            except Exception:
+                pass
+            API_STATUS.update(ok=False, msg=f"API YouTube refusée : HTTP {r.status_code} {reason}".strip(), at=time.time())
             break
+        API_STATUS.update(ok=True, msg="API YouTube active", at=time.time())
         payload = r.json()
         page = []
         for item in payload.get("items") or []:
@@ -416,8 +425,9 @@ def _fetch_uploads(api_key, channel_id, oldest, max_pages=40):
 
 @st.cache_data(ttl=3600, show_spinner=False, max_entries=50)
 def channel_videos(channel_id, oldest_iso, _bucket):
-    """Vidéos de la chaîne publiées depuis `oldest_iso` : flux public (15 dernières) + API YouTube si une clé est donnée."""
-    videos = {}
+    """Vidéos de la chaîne publiées depuis `oldest_iso` : ce que la veille a déjà vu, flux public (15 dernières)
+    et API YouTube si une clé est donnée."""
+    videos = dict(video_watcher()["seen"].get(channel_id) or {})
     try:
         r = SESSION.get(YOUTUBE_FEED_URL.format(channel_id), timeout=8)
         if r.status_code == 200:
@@ -431,6 +441,47 @@ def channel_videos(channel_id, oldest_iso, _bucket):
         for v in _fetch_uploads(key, channel_id, oldest):
             videos.setdefault(v["id"], v)
     return list(videos.values())
+
+
+API_STATUS = {"ok": None, "msg": "", "at": 0}
+
+
+@st.cache_resource(show_spinner=False)
+def video_watcher():
+    """Veille : relit les deux chaînes toutes les 10 minutes, même sans visiteur, et garde chaque vidéo vue (10 jours).
+    Le flux public ne montre que les 15 dernières vidéos : sans cette veille, les résumés de la nuit en sortent avant le matin."""
+    seen = disk_get("seen.json") or {}
+    state = {"seen": seen, "last": 0}
+
+    def tick():
+        key = str(_secret("youtube", "api_key", ""))
+        limit = datetime.now(timezone.utc) - timedelta(days=10)
+        for ch in (NBA_CHANNEL, EXTRA_CHANNEL):
+            box = seen.setdefault(ch, {})
+            try:
+                r = SESSION.get(YOUTUBE_FEED_URL.format(ch), timeout=8)
+                found = _parse_feed(r.text) if r.status_code == 200 else []
+            except Exception:
+                found = []
+            if key:
+                found += _fetch_uploads(key, ch, datetime.now(timezone.utc) - timedelta(hours=18), max_pages=3)
+            for v in found:
+                box[v["id"]] = v
+            for vid in [k for k, v in box.items() if (parse_dt(v.get("published")) or limit) < limit]:
+                box.pop(vid, None)
+        disk_put("seen.json", seen)
+        state["last"] = time.time()
+
+    def loop():
+        while True:
+            try:
+                tick()
+            except Exception as e:
+                log.warning("Veille vidéos : %s", type(e).__name__)
+            time.sleep(600)
+
+    threading.Thread(target=loop, daemon=True, name="veille-videos").start()
+    return state
 
 
 def videos_since(day):
@@ -458,6 +509,16 @@ def _title_date(title_norm):
         return None
 
 
+def _in_window(v, pub, tip, days):
+    """Vidéo publiée après le coup d'envoi et moins de `days` jours après. Les dates des résultats de recherche
+    (« il y a 8 h ») sont approximatives : marge d'un jour."""
+    if not pub or not tip:
+        return False
+    if v.get("approx"):
+        return tip - timedelta(days=1) <= pub <= tip + timedelta(days=days + 1)
+    return tip <= pub <= tip + timedelta(days=days)
+
+
 def nba_video(videos, g):
     """Résumé officiel NBA : « KINGS at CLIPPERS | FULL GAME HIGHLIGHTS | October 21, 2026 »."""
     tip = parse_dt(g["utc"])
@@ -472,7 +533,7 @@ def nba_video(videos, g):
         if td and td != g["day"]:
             continue
         pub = parse_dt(v["published"])
-        if not pub or not tip or pub < tip or pub > tip + timedelta(days=2):
+        if not _in_window(v, pub, tip, 2):
             continue
         key = (0 if "full game highlights" in t else 1, pub)
         if best is None or key < best[0]:
@@ -489,7 +550,7 @@ def extra_video(videos, g):
         if not t.startswith("resume") or not (_has_team(t, g["home"]["id"]) and _has_team(t, g["away"]["id"])):
             continue
         pub = parse_dt(v["published"])
-        if not pub or not tip or pub < tip or pub > tip + timedelta(days=3):
+        if not _in_window(v, pub, tip, 3):
             continue
         if best is None or pub < best[0]:
             best = (pub, v)
@@ -530,6 +591,116 @@ def yt_search_url(g):
     q = f"{team(g['away']['id'])['name']} at {team(g['home']['id'])['name']} full game highlights " \
         f"{MONTHS_EN[g['day'].month - 1].title()} {g['day'].day}, {g['day'].year}"
     return "https://www.youtube.com/results?search_query=" + requests.utils.quote(q)
+
+
+# =========================================================================
+# RECHERCHE YOUTUBE (filet de sécurité quand une vidéo n'est pas dans les listes des chaînes)
+# =========================================================================
+_REL_UNITS = {"s": 1 / 60, "sec": 1 / 60, "second": 1 / 60, "m": 1, "min": 1, "minute": 1, "h": 60, "hr": 60, "hour": 60,
+              "d": 1440, "day": 1440, "w": 10080, "wk": 10080, "week": 10080, "mo": 43200, "month": 43200, "y": 525600, "yr": 525600, "year": 525600}
+
+
+def _rel_time(text, now):
+    """« 8h ago », « 2 days ago », « Streamed 3 hours ago » -> date approximative."""
+    m = re.search(r"(\d+)\s*([a-z]+)", norm(text))
+    if not m:
+        return None
+    unit = m.group(2) if m.group(2) in _REL_UNITS else m.group(2).rstrip("s")
+    minutes = _REL_UNITS.get(unit)
+    return now - timedelta(minutes=int(m.group(1)) * minutes) if minutes else None
+
+
+def _walk_videos(o):
+    if isinstance(o, dict):
+        if "videoRenderer" in o:
+            yield o["videoRenderer"]
+        for x in o.values():
+            yield from _walk_videos(x)
+    elif isinstance(o, list):
+        for x in o:
+            yield from _walk_videos(x)
+
+
+@st.cache_data(ttl=900, show_spinner=False, max_entries=1000)
+def yt_search(query):
+    """Résultats d'une recherche YouTube (page publique, sans clé) : [{id, title, published (approx.), channel, mins}]."""
+    try:
+        r = SESSION.get("https://www.youtube.com/results", params={"search_query": query, "hl": "en", "gl": "US"},
+                        headers={"Accept-Language": "en-US,en"}, cookies={"CONSENT": "YES+1", "SOCS": "CAI"}, timeout=12)
+        m = re.search(r"var ytInitialData = (\{.*?\});</script>", r.text)
+        data = json.loads(m.group(1)) if m else {}
+    except Exception as e:
+        log.warning("Recherche YouTube indisponible (%s)", type(e).__name__)
+        return []
+    now = datetime.now(timezone.utc)
+    out = []
+    for v in _walk_videos(data):
+        title = "".join(x.get("text", "") for x in (v.get("title") or {}).get("runs") or [])
+        owner = ((v.get("ownerText") or {}).get("runs") or [{}])[0]
+        channel = ((owner.get("navigationEndpoint") or {}).get("browseEndpoint") or {}).get("browseId", "")
+        pub = _rel_time((v.get("publishedTimeText") or {}).get("simpleText", ""), now)
+        length = (v.get("lengthText") or {}).get("simpleText", "")
+        parts = [int(x) for x in length.split(":") if x.isdigit()]
+        secs = sum(x * 60 ** i for i, x in enumerate(reversed(parts)))
+        if v.get("videoId") and title:
+            out.append({"id": v["videoId"], "title": title, "published": pub.isoformat() if pub else "", "channel": channel,
+                        "mins": max(1, round(secs / 60)) if secs else None, "approx": True})
+    return out
+
+
+def _from(channel, results):
+    return [v for v in results if v["channel"] == channel]
+
+
+@st.cache_resource(show_spinner=False)
+def found_videos():
+    """Vidéos déjà trouvées {clé: vidéo}, gardées en mémoire et sur disque (on ne cherche plus ce qu'on a trouvé)."""
+    return disk_get("videos.json") or {}
+
+
+_STORE_LOCK = threading.Lock()
+
+
+def remember_video(key, v):
+    store = found_videos()
+    if v and store.get(key, {}).get("id") != v["id"]:
+        with _STORE_LOCK:
+            store[key] = {k: v.get(k) for k in ("id", "title", "published", "mins")}
+            disk_put("videos.json", dict(store))
+
+
+def game_videos(g, nba_vids, extra_vids):
+    """(résumé NBA, résumé NBA Extra) d'un match terminé : listes des chaînes, puis mémoire, puis recherche YouTube."""
+    store = found_videos()
+    nba = nba_video(nba_vids, g) or store.get(f"nba_{g['id']}")
+    extra = extra_video(extra_vids, g) or store.get(f"x_{g['id']}")
+    if g["state"] == "post" and not nba:
+        ta, th = team(g["away"]["id"])["name"], team(g["home"]["id"])["name"]
+        q = f"{ta} at {th} full game highlights {MONTHS_EN[g['day'].month - 1].title()} {g['day'].day}, {g['day'].year}"
+        nba = nba_video(_from(NBA_CHANNEL, yt_search(q)), g)
+    tip = parse_dt(g["utc"])
+    if g["state"] == "post" and not extra and tip and datetime.now(timezone.utc) - tip < timedelta(days=4):
+        ta, th = team(g["away"]["id"])["name"], team(g["home"]["id"])["name"]
+        extra = extra_video(_from(EXTRA_CHANNEL, yt_search(f"Résumé {ta} @ {th} NBA Extra beIN SPORTS")), g)
+    remember_video(f"nba_{g['id']}", nba)
+    remember_video(f"x_{g['id']}", extra)
+    return nba, extra
+
+
+def night_videos(day, nba_vids, extra_vids):
+    """(résumé de la nuit NBA, émission NBA Extra du lendemain) : listes des chaînes, mémoire, puis recherche."""
+    store = found_videos()
+    show_day = day + timedelta(days=1)
+    recap = nightly_recap(nba_vids, day) or store.get(f"recap_{day}")
+    if not recap:
+        q = f"NBA's Nightly Recap {MONTHS_EN[day.month - 1].title()} {day.day}, {day.year}"
+        recap = nightly_recap(_from(NBA_CHANNEL, yt_search(q)), day)
+    show = journals(extra_vids).get(show_day) or store.get(f"show_{show_day}")
+    if not show and datetime.now(ZONES["Paris"]).date() >= show_day:
+        show = journals(_from(EXTRA_CHANNEL, yt_search(f"NBA Extra ({show_day.day:02d}/{show_day.month:02d}) replay"))).get(show_day)
+    remember_video(f"recap_{day}", recap)
+    remember_video(f"show_{show_day}", show)
+    return recap, show
 
 
 # =========================================================================
@@ -953,7 +1124,7 @@ def video_durations(ids):
 
 
 def dur(v, durs):
-    m = durs.get(v["id"]) if v else None
+    m = (durs.get(v["id"]) or v.get("mins")) if v else None
     return f"{m} min" if m else ""
 
 
@@ -1393,8 +1564,7 @@ def game_card(g, ctx):
     acts = []
     checked = " checked" if ctx["show_all"] else ""
     if g["state"] == "post":
-        v = nba_video(ctx["nba_vids"], g)
-        x = extra_video(ctx["extra_vids"], g)
+        v, x = ctx["vids"].get(gid, (None, None))
         if v:
             d = dur(v, ctx["durs"])
             acts.append(f"<a class='pill main' href='{yt_url(v)}' target='_blank'>▶ Résumé NBA{' <small>' + d + '</small>' if d else ''}</a>")
@@ -1451,12 +1621,11 @@ def night_html(day, games, ctx, today):
 
     # NBA Extra : l'émission du lendemain matin parle de cette nuit
     show_day = day + timedelta(days=1)
-    js = journals(ctx["extra_vids"])
     show_time = datetime.combine(show_day, datetime.min.time(), ZONES["Paris"]).replace(hour=12, minute=45)
     show_local = show_time.astimezone(ZONES[zone])
     label = f"NBA Extra du {JOURS[show_day.weekday()][:3]}. {show_day.day:02d}/{show_day.month:02d}"
-    if show_day in js:
-        v = js[show_day]
+    v = ctx["show"]
+    if v:
         d = dur(v, ctx["durs"])
         extra = (f"<a class='media' href='{yt_url(v)}' target='_blank'><div class='ic'><span class='frf big'></span></div><div><b>{label}</b>"
                  f"<small>L'émission de beIN SPORTS sur cette nuit{' · ' + d if d else ''}</small></div><div class='go'>▶</div></a>")
@@ -1471,7 +1640,7 @@ def night_html(day, games, ctx, today):
         extra = (f"<div class='media off'><div class='ic'><span class='frf big'></span></div><div><b>{label}</b><small>{when}</small></div>"
                  f"<div class='go'>⏳</div></div>")
 
-    recap = nightly_recap(ctx["nba_vids"], day)
+    recap = ctx["recap"]
     if recap:
         d = dur(recap, ctx["durs"])
         nba = (f"<a class='media' href='{yt_url(recap)}' target='_blank'><div class='ic'>🏀</div><div><b>Le résumé de la nuit</b>"
@@ -1565,6 +1734,16 @@ def main():
         if other != day:
             st.session_state.day = other
             st.rerun()
+        w = video_watcher()
+        if not _secret("youtube", "api_key", ""):
+            yt = "⚠️ Pas de clé YouTube : seulement les 15 dernières vidéos de chaque chaîne (+ la veille)."
+        elif API_STATUS["ok"] is False:
+            yt = f"⚠️ {API_STATUS['msg']}"
+        else:
+            yt = "✅ Clé YouTube active"
+        nb = sum(len(v) for v in w["seen"].values())
+        st.caption(f"{yt} · veille : {nb} vidéos gardées"
+                   + (f", dernier passage à {fr_hour(datetime.fromtimestamp(w['last'], ZONES[zone]))}" if w["last"] else ""))
         st.caption(f"Version {APP_VERSION} · ESPN, YouTube")
 
     # Choix de la nuit
@@ -1596,8 +1775,11 @@ def main():
     upcoming = [g for g in games if g["state"] == "pre"]
     if len(upcoming) >= 3:
         ctx["affiche"] = max(upcoming, key=lambda g: hype(g, idx, pre_info(g, summs.get(g["id"]))))["id"]
-    found = [v for g in games if g["state"] == "post" for v in (nba_video(nba_vids, g), extra_video(extra_vids, g)) if v]
-    found += [v for v in (nightly_recap(nba_vids, day), journals(extra_vids).get(day + timedelta(days=1))) if v]
+    with ThreadPoolExecutor(8) as pool:  # vidéos : listes des chaînes, puis recherche YouTube pour ce qui manque
+        vids = pool.map(lambda g: game_videos(g, nba_vids, extra_vids) if g["state"] == "post" else (None, None), games)
+        ctx["vids"] = dict(zip([g["id"] for g in games], vids))
+    ctx["recap"], ctx["show"] = night_videos(day, nba_vids, extra_vids)
+    found = [v for pair in ctx["vids"].values() for v in pair if v] + [v for v in (ctx["recap"], ctx["show"]) if v]
     ctx["durs"] = video_durations(tuple(sorted({v["id"] for v in found})))
 
     st.markdown(night_html(day, games, ctx, today), unsafe_allow_html=True)

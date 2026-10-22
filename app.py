@@ -22,7 +22,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v003"
+APP_VERSION = "2026-10-v004"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -337,6 +337,7 @@ def summary(event_id, _bucket):
         rows = []
         for a in stat.get("athletes") or []:
             rows.append({
+                "id": (a.get("athlete") or {}).get("id"),
                 "name": (a.get("athlete") or {}).get("displayName", ""), "short": (a.get("athlete") or {}).get("shortName", ""),
                 "starter": bool(a.get("starter")), "dnp": bool(a.get("didNotPlay")), "reason": a.get("reason") or "",
                 "stats": dict(zip(labels, a.get("stats") or [])),
@@ -345,6 +346,18 @@ def summary(event_id, _bucket):
     out["team_stats"] = {}
     for t in (d.get("boxscore") or {}).get("teams") or []:
         out["team_stats"][(t.get("team") or {}).get("id")] = {s.get("label") or s.get("name"): s.get("displayValue") for s in t.get("statistics") or []}
+    out["shots"] = []
+    for p in d.get("plays") or []:
+        c = p.get("coordinate") or {}
+        x, y = c.get("x"), c.get("y")
+        if not p.get("shootingPlay") or x is None or y is None or not (-10 <= x <= 60 and -10 <= y <= 95):
+            continue
+        if "free throw" in norm(p.get("text")):
+            continue
+        aid = (((p.get("participants") or [{}])[0]).get("athlete") or {}).get("id")
+        if aid:
+            out["shots"].append((aid, (p.get("team") or {}).get("id"), x, y, bool(p.get("scoringPlay")),
+                                 p.get("pointsAttempted") == 3 or "three point" in norm(p.get("text"))))
     out["plays"] = [
         (int((p.get("period") or {}).get("number") or 0), (p.get("clock") or {}).get("displayValue", ""), p.get("awayScore", 0),
          p.get("homeScore", 0), bool(p.get("scoringPlay")), p.get("text", ""), (p.get("team") or {}).get("id"))
@@ -830,7 +843,9 @@ def preview_points(g, idx, pre):
             dom = th if wh else ta
             txt = f"{dom['name']} a gagné les {len(h2h)} derniers face-à-face"
         else:
-            txt = f"{wh}-{len(h2h) - wh} pour {th['name']} sur les {len(h2h)} derniers face-à-face"
+            lead, n1, n2 = (th, wh, len(h2h) - wh) if wh * 2 >= len(h2h) else (ta, len(h2h) - wh, wh)
+            txt = (f"{n1}-{n2} sur les {len(h2h)} derniers face-à-face" if n1 == n2
+                   else f"{lead['name']} mène {n1}-{n2} sur les {len(h2h)} derniers face-à-face")
         points.append(f"🆚 {txt} (dernier : {winner['name']} {sc}, le {last[0].day:02d}/{last[0].month:02d}/{last[0].year}).")
 
     # Absents
@@ -910,17 +925,14 @@ def _num(stats, key):
 
 
 def game_score(stats):
-    def made_att(k):
-        try:
-            m, a = str(stats.get(k, "0-0")).split("-")
-            return int(m), int(a)
-        except ValueError:
-            return 0, 0
-    fgm, fga = made_att("FG")
-    ftm, fta = made_att("FT")
+    """Note d'une performance, pensée pour ressembler à « la grosse perf » qu'on retient : les points d'abord."""
     n = lambda k: _num(stats, k)
-    return (n("PTS") + 0.4 * fgm - 0.7 * fga - 0.4 * (fta - ftm) + 0.7 * n("OREB") + 0.3 * n("DREB")
-            + n("STL") + 0.7 * n("AST") + 0.7 * n("BLK") - 0.4 * n("PF") - n("TO"))
+    try:
+        fgm, fga = (int(x) for x in str(stats.get("FG", "0-0")).split("-"))
+    except ValueError:
+        fgm, fga = 0, 0
+    eff = (fgm / fga - 0.47) * fga * 0.5 if fga else 0
+    return n("PTS") + 0.5 * n("REB") + 0.7 * n("AST") + n("STL") + n("BLK") - 0.5 * n("TO") + eff
 
 
 def stat_line(stats):
@@ -1085,7 +1097,7 @@ def watch_score(g, summ):
         tags.append("Rebondissements")
     if top_pts >= 40 or triple:
         tags.append("Perf XXL")
-    return level, tags
+    return level, tags, s
 
 
 def hype(g, idx, pre):
@@ -1269,6 +1281,67 @@ div[data-testid="stSegmentedControl"] button p {font-size:.85rem;}
   .mid .real {font-size:1.2rem;}
   .pill {font-size:.78rem; padding:6px 10px;}
 }
+/* Comparatif « Forme & duels » */
+.cmp {background:var(--card2); border:1px solid var(--line); border-radius:14px; padding:10px 12px;}
+.cmp-h {display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; padding-bottom:8px; border-bottom:1px solid var(--line);}
+.cmp-h > div {display:flex; align-items:center; gap:8px; font-size:.95rem;}
+.cmp-h .r {justify-content:flex-end;}
+.cmp-h img {width:34px; height:34px;}
+.cmp-h .vs {color:var(--muted); font-size:.68rem; text-transform:uppercase; letter-spacing:.08em; justify-content:center;}
+.cmp-r {display:grid; grid-template-columns:1fr minmax(120px, auto) 1fr; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid rgba(36,48,68,.6); font-size:.88rem; font-variant-numeric:tabular-nums;}
+.cmp-r:last-child {border-bottom:none;}
+.cmp-r .lab {color:var(--muted); font-size:.74rem; text-align:center;}
+.cmp-r .r {text-align:right;}
+.cmp-r .up {color:#fff; font-weight:800;}
+.cmp-r .up::after {content:" ●"; color:var(--accent); font-size:.6rem; vertical-align:2px;}
+.cmp-r .r.up::after {content:"";}
+.cmp-r .r.up::before {content:"● "; color:var(--accent); font-size:.6rem; vertical-align:2px;}
+.cmp .w {color:var(--green); font-weight:700;} .cmp .l {color:var(--red); font-weight:700;}
+.dts {display:inline-flex; gap:4px;}
+.dt {width:20px; height:20px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; font-size:.66rem; font-weight:800; color:#0b0f17; cursor:default;}
+.cmp .dt {color:#0b0f17;} .dt.w {background:var(--green);} .dt.l {background:var(--red);} .dt.old {opacity:.35;}
+.h2h-sum {display:flex; align-items:center; gap:10px; font-size:1.3rem; margin:2px 0 6px; flex-wrap:wrap;}
+.h2h-sum img {width:26px; height:26px;}
+.h2h-sum small {color:var(--muted); font-size:.75rem;}
+.h2h-r {display:grid; grid-template-columns:4.4rem 1fr auto 1fr 4.5rem; align-items:center; gap:6px; padding:4px 0; font-size:.85rem; border-bottom:1px solid rgba(36,48,68,.6); font-variant-numeric:tabular-nums;}
+.h2h-r img {width:18px; height:18px; vertical-align:-4px;}
+.h2h-r .d {color:var(--muted); font-size:.72rem;}
+.h2h-r span:nth-child(2) {text-align:right;}
+.h2h-r .sep {color:#5d6780; font-size:.75rem;}
+.h2h-r .b {font-weight:800;} .h2h-r .f {color:#6b7590;}
+/* Carte de tirs */
+label.pl {cursor:pointer; border-bottom:1px dotted var(--accent);}
+label.pl span {font-size:.7rem;}
+label.pl:hover {color:var(--accent);}
+.pm {display:none; position:fixed; inset:0; z-index:1000000; align-items:center; justify-content:center; padding:14px;}
+.tgp:checked + .pm {display:flex;}
+.pm-bg {position:absolute; inset:0; background:rgba(4,7,12,.78); cursor:pointer;}
+.pm-box {position:relative; background:var(--card); border:1px solid var(--line); border-radius:18px; width:100%; max-width:440px; max-height:92vh; overflow:auto; padding:14px; box-shadow:0 20px 60px rgba(0,0,0,.5);}
+.pm-head {display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+.pm-head .ph {width:58px; height:44px; object-fit:cover; object-position:top; border-radius:10px; background:var(--card2);}
+.pm-name {font-weight:800; font-size:1.05rem;}
+.pm-sub {color:var(--muted); font-size:.76rem;}
+.pm-sub img {width:16px; height:16px; vertical-align:-3px;}
+.pm-x {margin-left:auto; cursor:pointer; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:var(--card2); border:1px solid var(--line); flex:none;}
+.court {width:100%; height:auto; display:block; border-radius:12px;}
+.pm-leg {display:flex; flex-wrap:wrap; gap:12px; font-size:.72rem; color:var(--muted); margin:8px 0;}
+.pm-leg i {display:inline-block; vertical-align:-2px; font-style:normal;}
+.pm-leg .dot {width:10px; height:10px; border-radius:50%; background:var(--accent);}
+.pm-leg .cross {color:#9aa4b8; font-weight:800;}
+.pm-leg .sq {width:12px; height:12px; border-radius:3px;}
+.pm-leg .sq.hot {background:rgba(239,68,68,.55);} .pm-leg .sq.cold {background:rgba(59,130,246,.55);}
+.zones {display:grid; grid-template-columns:repeat(auto-fit, minmax(90px, 1fr)); gap:6px;}
+.z {background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:6px 8px; text-align:center;}
+.z b {display:block; font-size:1rem;} .z span {display:block; font-size:.68rem; color:var(--muted);} .z small {font-size:.72rem;}
+.z.hot {border-color:rgba(239,68,68,.6);} .z.hot small {color:#ff8a8a; font-weight:700;}
+.z.cold {border-color:rgba(59,130,246,.6);} .z.cold small {color:#8ab4ff; font-weight:700;}
+@media (max-width: 640px) {
+  .cmp-r {grid-template-columns:1fr minmax(92px, auto) 1fr; font-size:.82rem;}
+  .cmp-h > div {font-size:.85rem;}
+  .h2h-r {grid-template-columns:3.6rem 1fr auto 1fr;}
+  .h2h-r span:last-child {display:none;}
+  .dt {width:17px; height:17px; font-size:.6rem;}
+}
 </style>
 """
 
@@ -1415,9 +1488,13 @@ def worm_svg(g, summ):
 
 
 def box_html(g, summ):
+    """Stats des joueurs ; un clic sur un joueur ouvre sa carte de tirs (fenêtre en CSS, sans rechargement)."""
     cols = [("MIN", "MIN"), ("PTS", "PTS"), ("REB", "RBD"), ("AST", "PD"), ("FG", "TIRS"), ("3PT", "3 PTS"), ("FT", "LF"),
             ("STL", "INT"), ("BLK", "CTR"), ("TO", "BP"), ("+/-", "+/-")]
-    out = []
+    shots = defaultdict(list)
+    for aid, tid, x, y, made, three in summ.get("shots") or []:
+        shots[aid].append((x, y, made, three))
+    out, modals = [], []
     for side in ("away", "home"):
         tid = g[side]["id"]
         rows = (summ.get("box") or {}).get(tid) or []
@@ -1433,55 +1510,207 @@ def box_html(g, summ):
                 v = r["stats"].get(k, "")
                 hi = " class='hi'" if k == "PTS" and _num(r["stats"], "PTS") == top and top > 0 else ""
                 cells.append(f"<td{hi}>{esc(v)}</td>")
-            body.append(f"<tr class='{'st' if r['starter'] else ''}'><td>{esc(r['short'] or r['name'])}</td>{''.join(cells)}</tr>")
+            name = esc(r["short"] or r["name"])
+            mid = f"p{g['id']}_{r.get('id')}"
+            if r.get("id") and shots.get(r["id"]):
+                name = f"<label for='{mid}' class='pl'>{name} <span>🎯</span></label>"
+                modals.append(f"<input type='checkbox' class='tg tgp' id='{mid}'>" + shot_modal(g, r, tid, shots[r["id"]], mid))
+            body.append(f"<tr class='{'st' if r['starter'] else ''}'><td>{name}</td>{''.join(cells)}</tr>")
         dnp = [f"{r['short'] or r['name']}" + (f" ({INJURY_FR.get(reason_fr(r['reason']), '')})" if reason_fr(r["reason"]) else "")
                for r in rows if r["dnp"]]
         out.append(f"<table class='box'><caption>{logo(tid, 18)} {esc(team(tid)['name'])}</caption><tr><th>Joueur</th>{head}</tr>{''.join(body)}</table>"
                    + (f"<div class='dnp'>N'ont pas joué : {esc(', '.join(dnp))}</div>" if dnp else ""))
-    return "".join(out) or "<div class='note'>Feuille de match pas encore disponible.</div>"
+    if not out:
+        return "<div class='note'>Feuille de match pas encore disponible.</div>"
+    return ("<div class='note'>🎯 Touche un joueur pour voir sa carte de tirs.</div>" + "".join(out)
+            + "".join(modals))
 
 
-def plays_html(summ):
-    by_q = defaultdict(list)
-    for p, clock, aw, hm, scoring, text, tid in summ.get("plays") or []:
-        if p and scoring:
-            by_q[p].append(f"<div class='p'><span class='c'>{esc(clock)}</span><b>{esc(team(tid)['abbr'] if tid else '')}</b>"
-                           f"<span>{esc(text)}</span><span class='s'>{aw}-{hm}</span></div>")
-    if not by_q:
-        return "<div class='note'>Pas encore d'actions.</div>"
-    parts = []
-    for p in sorted(by_q, reverse=True):
-        parts.append(f"<div class='qh'>{'QUART-TEMPS ' + str(p) if p <= 4 else 'PROLONGATION ' + str(p - 4)}</div>" + "".join(reversed(by_q[p])))
-    return "<div class='plays'>" + "".join(parts) + "</div>"
+# Zones de tir (pieds ; panier en (25, 0), comme les coordonnées d'ESPN) et réussite moyenne en NBA
+SHOT_ZONES = [("rim", "Près du cercle", 0.64), ("mid", "Mi-distance", 0.42), ("corner", "3 pts dans le coin", 0.39), ("arc", "3 pts", 0.36)]
+
+
+def shot_zone(x, y, three):
+    if three:
+        return "corner" if y <= 9 and abs(x - 25) >= 20 else "arc"
+    return "rim" if (x - 25) ** 2 + y ** 2 <= 8 ** 2 else "mid"
+
+
+def zone_color(made, att, avg):
+    """Rouge = zone chaude (au-dessus de la moyenne NBA), bleu = zone froide ; plus c'est franc, plus il y a de tirs."""
+    if not att:
+        return "rgba(120,130,150,.08)"
+    diff = made / att - avg
+    alpha = min(0.6, 0.18 + 0.05 * att) * min(1, abs(diff) / 0.15 + 0.25)
+    return f"rgba(239,68,68,{alpha:.2f})" if diff >= 0 else f"rgba(59,130,246,{alpha:.2f})"
+
+
+def court_svg(shots, uid):
+    """Demi-terrain (10 px par pied, ligne de fond en haut) : zones colorées selon la réussite, tirs réussis ● et ratés ✕."""
+    S, BY = 10, 52.5  # échelle, position du panier depuis la ligne de fond
+    px = lambda x: x * S
+    py = lambda y: BY + y * S
+    stats = {k: [0, 0] for k, _, _ in SHOT_ZONES}
+    for x, y, made, three in shots:
+        z = shot_zone(x, y, three)
+        stats[z][1] += 1
+        stats[z][0] += 1 if made else 0
+    col = {k: zone_color(stats[k][0], stats[k][1], avg) for k, _, avg in SHOT_ZONES}
+    # Ligne à 3 points : droite dans les coins (à 22 pieds du panier, jusqu'à 14 pieds de la ligne de fond), puis arc de 23,75 pieds
+    cx, r3 = 250, 237.5
+    y_join = 140
+    arc = f"M30,0 L30,{y_join} A{r3},{r3} 0 0 0 470,{y_join} L470,0"
+    three_area = f"M0,{y_join} L30,{y_join} A{r3},{r3} 0 0 0 470,{y_join} L500,{y_join} L500,470 L0,470 Z"
+    parts = [
+        '<svg viewBox="0 0 500 470" class="court" role="img" aria-label="Carte de tirs">',
+        '<rect x="0" y="0" width="500" height="470" fill="#141c2a"/>',
+        # zones colorées
+        f'<path d="{three_area}" fill-rule="evenodd" fill="{col["arc"]}"/>',
+        f'<rect x="0" y="0" width="30" height="{y_join}" fill="{col["corner"]}"/>',
+        f'<rect x="470" y="0" width="30" height="{y_join}" fill="{col["corner"]}"/>',
+        f'<path d="{arc} Z" fill="{col["mid"]}"/>',
+        f'<circle cx="{cx}" cy="{BY}" r="80" fill="{col["rim"]}"/>',
+        # lignes du terrain
+        '<g fill="none" stroke="#3a4760" stroke-width="2">',
+        f'<path d="{arc}"/>',
+        '<rect x="170" y="0" width="160" height="190"/>',
+        '<circle cx="250" cy="190" r="60"/>',
+        f'<path d="M210,{BY} A40,40 0 0 0 290,{BY}"/>',
+        '<line x1="220" y1="40" x2="280" y2="40"/>',
+        f'<circle cx="250" cy="{BY}" r="7.5" stroke="#F58426"/>',
+        '<path d="M190,470 A60,60 0 0 1 310,470"/>',
+        '<rect x="1" y="1" width="498" height="468"/>',
+        '</g>',
+    ]
+    for x, y, made, three in shots:
+        X, Y = px(x), py(y)
+        if Y > 465:
+            continue
+        if made:
+            parts.append(f'<circle cx="{X:.0f}" cy="{Y:.0f}" r="8" fill="#F58426" stroke="#0b0f17" stroke-width="2"/>')
+        else:
+            parts.append(f'<path d="M{X - 6:.0f},{Y - 6:.0f} L{X + 6:.0f},{Y + 6:.0f} M{X + 6:.0f},{Y - 6:.0f} L{X - 6:.0f},{Y + 6:.0f}" '
+                         f'stroke="#9aa4b8" stroke-width="2.6" stroke-linecap="round"/>')
+    parts.append("</svg>")
+    return "".join(parts), stats
+
+
+def shot_modal(g, r, tid, shots, mid):
+    svg, stats = court_svg(shots, mid)
+    made = sum(1 for s in shots if s[2])
+    t = team(tid)
+    zones = []
+    for k, label, avg in SHOT_ZONES:
+        m, a = stats[k]
+        if not a:
+            continue
+        pct = m / a
+        cls = "hot" if pct >= avg + 0.05 else "cold" if pct <= avg - 0.05 else ""
+        zones.append(f"<div class='z {cls}'><b>{m}/{a}</b><span>{label}</span><small>{round(pct * 100)} %</small></div>")
+    photo = f"https://a.espncdn.com/i/headshots/nba/players/full/{r['id']}.png"
+    return (f"<div class='pm'><label for='{mid}' class='pm-bg'></label><div class='pm-box'>"
+            f"<div class='pm-head'><img class='ph' src='{photo}' alt='' loading='lazy' onerror=\"this.style.display='none'\">"
+            f"<div><div class='pm-name'>{esc(r['name'])}</div><div class='pm-sub'>{logo(tid, 16)} {esc(t['name'])} · {esc(stat_line(r['stats']))}</div></div>"
+            f"<label for='{mid}' class='pm-x'>✕</label></div>"
+            f"{svg}"
+            f"<div class='pm-leg'><span><i class='dot'></i> réussi</span><span><i class='cross'>✕</i> raté</span>"
+            f"<span><i class='sq hot'></i> zone chaude</span><span><i class='sq cold'></i> zone froide</span></div>"
+            f"<div class='zones'>{''.join(zones)}</div>"
+            f"<div class='note'>{made} tirs réussis sur {len(shots)} (hors lancers francs) · chaud / froid : par rapport à la moyenne NBA de chaque zone.</div>"
+            f"</div></div>")
+
+
+def tale(idx, tid, day, season, home):
+    """Fiche d'une équipe avant le match : bilan, bilan à domicile ou à l'extérieur, points, série, repos, 5 derniers."""
+    past = [m for m in idx.get(tid, []) if m[0] < day]
+    cur = [m for m in past if m[5] == season]
+    prev = [m for m in past if m[5] == season - 1 and m[6] == "R"]
+    use, old = (cur, False) if len(cur) >= 3 else (prev, True)
+    w = sum(1 for m in use if m[2] > m[3])
+    split = [m for m in use if m[4] == home]
+    sw = sum(1 for m in split if m[2] > m[3])
+    f = team_form(idx, tid, day, season)
+    return {
+        "old": old, "w": w, "l": len(use) - w, "pct": w / len(use) if use else 0,
+        "sw": sw, "sl": len(split) - sw,
+        "pf": sum(m[2] for m in use) / len(use) if use else 0, "pa": sum(m[3] for m in use) / len(use) if use else 0,
+        "streak": f["streak"], "rest": (day - past[-1][0]).days - 1 if past else None, "last": past[-5:],
+    }
 
 
 def form_html(g, idx):
-    """Forme (5 derniers matchs avant celui-ci) et 5 derniers face-à-face."""
-    rows = []
-    for side in ("away", "home"):
-        tid = g[side]["id"]
-        f = team_form(idx, tid, g["day"], g["season"])
-        s = streak_text(f["streak"])
-        title = (f"{logo(tid, 18)} <b>{esc(team(tid)['name'])}</b> · " + (f"{f['w']}-{f['l']}" if f["n"] else "début de saison")
-                 + (f" · {s}" if s else "") + (" · 2e match en 2 soirs" if f["b2b"] else ""))
-        cells = []
-        for m in reversed(f["last"]):
+    """Comparatif des deux équipes avant le match (visiteurs à gauche, domicile à droite), puis les derniers face-à-face."""
+    a, h = g["away"]["id"], g["home"]["id"]
+    ta, th = tale(idx, a, g["day"], g["season"], False), tale(idx, h, g["day"], g["season"], True)
+
+    def better(va, vh, higher=True):
+        if va == vh:
+            return "", ""
+        return ("up", "") if (va > vh) == higher else ("", "up")
+
+    def streak(s):
+        if not s:
+            return "—"
+        return f"<span class='{'w' if s > 0 else 'l'}'>{abs(s)} {'victoire' if s > 0 else 'défaite'}{'s' if abs(s) > 1 else ''}</span>"
+
+    def rest(n):
+        if n is None or n > 30:
+            return "—"
+        if n == 0:
+            return "<span class='l'>2e soir de suite</span>"
+        return f"{n} jour{'s' if n > 1 else ''}"
+
+    def dots(t):
+        out = []
+        for m in t["last"]:
             res = "w" if m[2] > m[3] else "l"
-            cells.append(f"<td class='{'old' if m[5] != g['season'] else ''}'><span class='{res}'>{'V' if res == 'w' else 'D'}</span> "
-                         f"{m[2]}-{m[3]} {'vs' if m[4] else '@'} {esc(team(m[1])['abbr'])}</td>")
-        rows.append(f"<tr class='hd'><td colspan='5'>{title}</td></tr><tr>{''.join(cells) or '<td>Aucun match</td>'}</tr>")
-    h2h = head_to_head(idx, g["home"]["id"], g["away"]["id"], g["day"])[-5:]
-    hrows = []
-    for m in reversed(h2h):
-        home_t, away_t = (g["home"]["id"], g["away"]["id"]) if m[4] else (g["away"]["id"], g["home"]["id"])
-        hs, as_ = (m[2], m[3]) if m[4] else (m[3], m[2])
-        win = home_t if hs > as_ else away_t
-        hrows.append(f"<tr><td>{m[0].day:02d}/{m[0].month:02d}/{str(m[0].year)[2:]}</td><td>{esc(team(away_t)['abbr'])} {as_} @ {esc(team(home_t)['abbr'])} {hs}</td>"
-                     f"<td>{logo(win, 16)} <b>{esc(team(win)['abbr'])}</b>{' · play-offs' if m[6] == 'P' else ''}</td></tr>")
-    return ("<div class='sec'>La forme avant ce match</div><div class='form-wrap'><table class='form'>" + "".join(rows) + "</table></div>"
-            "<div class='note'>Du plus récent au plus ancien · en grisé : la saison passée</div>"
-            "<div class='sec'>Les 5 derniers face-à-face</div>"
-            + ("<div class='form-wrap'><table class='form'>" + "".join(hrows) + "</table></div>" if hrows else "<div class='note'>Pas de face-à-face depuis 2016.</div>"))
+            tip = f"{'V' if res == 'w' else 'D'} {m[2]}-{m[3]} {'vs' if m[4] else '@'} {team(m[1])['abbr']} · {m[0].day:02d}/{m[0].month:02d}"
+            out.append(f"<span class='dt {res}{' old' if m[5] != g['season'] else ''}' title='{esc(tip)}'>{'V' if res == 'w' else 'D'}</span>")
+        return "".join(out) or "—"
+
+    rows = []
+    ca, ch = better(ta["pct"], th["pct"])
+    season_note = " (saison passée)" if ta["old"] or th["old"] else ""
+    rows.append((f"{ta['w']}-{ta['l']}", "Bilan" + season_note, f"{th['w']}-{th['l']}", ca, ch))
+    ca, ch = better(ta["sw"] / max(1, ta["sw"] + ta["sl"]), th["sw"] / max(1, th["sw"] + th["sl"]))
+    rows.append((f"{ta['sw']}-{ta['sl']}", "À l'extérieur · à domicile", f"{th['sw']}-{th['sl']}", ca, ch))
+    ca, ch = better(round(ta["pf"], 1), round(th["pf"], 1))
+    rows.append((fr_num(ta["pf"]), "Points marqués / match", fr_num(th["pf"]), ca, ch))
+    ca, ch = better(round(ta["pa"], 1), round(th["pa"], 1), higher=False)
+    rows.append((fr_num(ta["pa"]), "Points encaissés / match", fr_num(th["pa"]), ca, ch))
+    rows.append((streak(ta["streak"]), "Série en cours", streak(th["streak"]), "", ""))
+    ca, ch = better(ta["rest"], th["rest"]) if ta["rest"] is not None and th["rest"] is not None and max(ta["rest"], th["rest"]) <= 30 else ("", "")
+    rows.append((rest(ta["rest"]), "Repos avant le match", rest(th["rest"]), ca, ch))
+    rows.append((f"<span class='dts'>{dots(ta)}</span>", "5 derniers matchs", f"<span class='dts'>{dots(th)}</span>", "", ""))
+
+    head = (f"<div class='cmp-h'><div>{logo(a, 34)}<b>{esc(team(a)['name'])}</b></div><div class='vs'>avant ce match</div>"
+            f"<div class='r'><b>{esc(team(h)['name'])}</b>{logo(h, 34)}</div></div>")
+    body = "".join(f"<div class='cmp-r'><div class='{ca}'>{va}</div><div class='lab'>{lab}</div><div class='r {ch}'>{vh}</div></div>"
+                   for va, lab, vh, ca, ch in rows)
+    note = "<div class='note'>5 derniers : du plus ancien au plus récent · pâle = saison passée · survole une pastille pour le score.</div>"
+
+    # Face-à-face
+    all_h2h = head_to_head(idx, h, a, g["day"])
+    last = all_h2h[-5:]
+    if last:
+        wh = sum(1 for m in last if m[2] > m[3])
+        tot_h = sum(1 for m in all_h2h if m[2] > m[3])
+        lines = []
+        for m in reversed(last):
+            home_t, away_t = (h, a) if m[4] else (a, h)
+            hs, as_ = (m[2], m[3]) if m[4] else (m[3], m[2])
+            win_away = as_ > hs
+            lines.append(
+                f"<div class='h2h-r'><span class='d'>{m[0].day:02d}/{m[0].month:02d}/{str(m[0].year)[2:]}</span>"
+                f"<span class='{'b' if win_away else 'f'}'>{logo(away_t, 18)} {esc(team(away_t)['abbr'])} {as_}</span>"
+                f"<span class='sep'>@</span>"
+                f"<span class='{'f' if win_away else 'b'}'>{hs} {esc(team(home_t)['abbr'])} {logo(home_t, 18)}</span>"
+                f"<span class='d'>{'play-offs' if m[6] == 'P' else ''}</span></div>")
+        h2h = (f"<div class='sec'>Face-à-face</div><div class='h2h-sum'>{logo(a, 26)}<b>{len(last) - wh}</b><span>–</span><b>{wh}</b>{logo(h, 26)}"
+               f"<small>sur les {len(last)} derniers · {len(all_h2h) - tot_h}-{tot_h} depuis 2016</small></div>" + "".join(lines))
+    else:
+        h2h = "<div class='sec'>Face-à-face</div><div class='note'>Pas de face-à-face depuis 2016.</div>"
+    return f"<div class='cmp'>{head}{body}</div>{note}{h2h}"
 
 
 def game_card(g, ctx):
@@ -1501,7 +1730,7 @@ def game_card(g, ctx):
         tags.append("<span class='tag star'>⭐ Mon équipe</span>")
     w = ctx["watch"].get(gid)
     if w:
-        level, words = w
+        level, words, _ = w
         icon, label = WATCH_LEVELS[level]
         tags.append(f"<span class='tag {'hot' if level >= 2 else 'cold' if level == 0 else ''}'>{icon} {label}</span>")
         tags += [f"<span class='tag'>{esc(x)}</span>" for x in words[:2]]
@@ -1592,7 +1821,6 @@ def game_card(g, ctx):
         if worm:
             parts.append("<div class='sec'>Le match en un coup d'œil</div>" + worm)
         parts.append(f"<details class='more'><summary>🧾 Stats des joueurs</summary><div class='in'>{box_html(g, summ)}</div></details>")
-        parts.append(f"<details class='more'><summary>🏀 Tous les paniers</summary><div class='in'>{plays_html(summ)}</div></details>")
         panel_s = f"<div class='panel panel-s'>{''.join(parts)}</div>"
     panel_f = f"<div class='panel panel-f'>{form_html(g, idx)}</div>"
 
@@ -1654,7 +1882,8 @@ def night_html(day, games, ctx, today):
                "<small>NBA · publié après le dernier match</small></div><div class='go'>⏳</div></div>")
 
     chips = ""
-    ranked = sorted(((ctx["watch"][g["id"]][0], g) for g in games if ctx["watch"].get(g["id"])), key=lambda x: -x[0])
+    ranked = sorted(((ctx["watch"][g["id"]][0], ctx["watch"][g["id"]][2], g) for g in games if ctx["watch"].get(g["id"])), key=lambda x: -x[1])
+    ranked = [(lv, g) for lv, _, g in ranked]
     top = [(lv, g) for lv, g in ranked if lv >= 2][:6]
     if top:
         chips = "<div class='n-chips'><span class='lab'>À voir en priorité :</span>" + "".join(
@@ -1789,8 +2018,8 @@ def main():
     # Ordre : mes équipes, puis (nuit terminée) les matchs à voir d'abord, sinon l'horaire
     def order(g):
         fav = team(g["home"]["id"])["abbr"] in ctx["favs"] or team(g["away"]["id"])["abbr"] in ctx["favs"]
-        lv = watch.get(g["id"], (None,))[0]
-        return (0 if fav else 1, -(lv if lv is not None else -1) if watch else 0, g["utc"] or "")
+        sc = watch[g["id"]][2] if g["id"] in watch else -1
+        return (0 if fav else 1, -sc if watch else 0, g["utc"] or "")
     for g in sorted(games, key=order):
         st.markdown(game_card(g, ctx), unsafe_allow_html=True)
 

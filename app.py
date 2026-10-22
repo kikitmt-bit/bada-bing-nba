@@ -21,7 +21,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v001"
+APP_VERSION = "2026-10-v002"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -169,7 +169,7 @@ def teams():
         out[t["id"]] = {
             "id": t["id"], "abbr": t.get("abbreviation", ""), "name": t.get("name") or t.get("shortDisplayName", ""),
             "full": t.get("displayName", ""), "logo": ((t.get("logos") or [{}])[0]).get("href", ""),
-            "color": "#" + (t.get("color") or "888888"), "conf": "",
+            "color": "#" + (t.get("color") or "888888"), "alt": "#" + (t.get("alternateColor") or "888888"), "conf": "",
         }
     s = get_json(ESPN_STANDINGS) or {}
     for child in s.get("children") or []:
@@ -628,7 +628,7 @@ def preview_points(g, idx, pre):
         ranks = conf_ranks(idx, g["day"], g["season"]) if min(fh["n"], fa["n"]) >= 8 else {}
         def label(t, f):
             r = ranks.get(t["id"])
-            return f"{t['name']} ({rec(f)}" + (f", {r}e à l'{t['conf']})" if r else ")")
+            return f"{t['name']} ({rec(f) if f['n'] else '1er match'}" + (f", {r}e à l'{t['conf']})" if r else ")")
         same = th["conf"] and th["conf"] == ta["conf"]
         intro = f"Duel de l'{th['conf']}" if same else "Est contre Ouest"
         points.append(f"🏀 {intro} : {label(ta, fa)} chez {label(th, fh)}.")
@@ -693,14 +693,6 @@ def preview_points(g, idx, pre):
         if len(stars) == 2 and g["state"] == "pre":
             points.append(f"⭐ À suivre : {stars[0]} contre {stars[1]}.")
     return points
-
-
-def pre_info(g, summ):
-    """Ce qu'on savait avant le match (blessés, cotes, meilleurs marqueurs) ; rien si le match est passé et qu'on ne l'a pas vu avant."""
-    if g["state"] == "pre":
-        return summ
-    # Après le match : ce qui a été gardé avant, sinon seulement la cote (fixée avant le match, sans spoil)
-    return disk_get(f"pre_{g['id']}.json") or ({"line": summ.get("line")} if summ else None)
 
 
 # =========================================================================
@@ -780,7 +772,6 @@ def stat_line(stats):
 
 def recap_points(g, summ, idx):
     h, a = g["home"], g["away"]
-    th, ta = team(h["id"]), team(a["id"])
     win, lose = (h, a) if (h["score"] or 0) > (a["score"] or 0) else (a, h)
     tw, tl = team(win["id"]), team(lose["id"])
     points = []
@@ -881,43 +872,231 @@ def ai_points(kind, g, material):
 
 
 # =========================================================================
+# INDICE « À VOIR » (sans dire qui gagne) ET AFFICHE DE LA NUIT
+# =========================================================================
+WATCH_LEVELS = [("💤", "Sans suspense"), ("🔥", "Correct"), ("🔥🔥", "Bon match"), ("🔥🔥🔥", "À ne pas rater")]
+
+
+def watch_score(g, summ):
+    """Intérêt d'un match terminé, sans dire qui a gagné : (niveau 0-3, mots-clés). None si on ne sait pas."""
+    if not summ or g["state"] != "post" or not g["completed"] or g["home"]["score"] is None:
+        return None
+    h, a = g["home"]["score"], g["away"]["score"]
+    margin = abs(h - a)
+    pts, max_h, max_a, changes = flow(summ)
+    if len(pts) < 20:
+        return None
+    ot = max(len(g["home"]["lines"]), len(g["away"]["lines"])) > 4
+    comeback = max_a if h > a else max_h
+    tight_end = any(abs(d) <= 4 for m, d in pts if m >= 46)
+    top_pts, triple = 0, False
+    for rows in (summ.get("box") or {}).values():
+        for r in rows:
+            if r["dnp"]:
+                continue
+            top_pts = max(top_pts, _num(r["stats"], "PTS"))
+            triple = triple or sum(1 for k in ("PTS", "REB", "AST", "STL", "BLK") if _num(r["stats"], k) >= 10) >= 3
+    s = (3 if ot else 0) + (3 if margin <= 3 else 2 if margin <= 6 else 1 if margin <= 10 else 0)
+    s += 2 if tight_end else 0
+    s += 2 if comeback >= 18 else 1 if comeback >= 12 else 0
+    s += 1 if changes >= 15 else 0
+    s += 2 if top_pts >= 50 else 1 if top_pts >= 40 else 0
+    s += 1 if triple else 0
+    level = 3 if s >= 7 else 2 if s >= 4 else 1 if s >= 2 else 0
+    tags = []
+    if ot:
+        tags.append("Prolongation")
+    elif tight_end:
+        tags.append("Fin serrée")
+    if comeback >= 12:
+        tags.append("Remontée")
+    if changes >= 15:
+        tags.append("Rebondissements")
+    if top_pts >= 40 or triple:
+        tags.append("Perf XXL")
+    return level, tags
+
+
+def hype(g, idx, pre):
+    """Attrait d'un match à venir : bonnes équipes et match serré selon les bookmakers."""
+    total = 0.0
+    for side in ("home", "away"):
+        f = team_form(idx, g[side]["id"], g["day"], g["season"])
+        if f["n"] >= 5:
+            total += f["w"] / f["n"]
+        elif f["prev_w"] + f["prev_l"]:
+            total += f["prev_w"] / (f["prev_w"] + f["prev_l"])
+        else:
+            total += 0.5
+    m = re.search(r"-([\d.]+)", (pre or {}).get("line") or "")
+    total += 1 - min(float(m.group(1)), 15) / 15 if m else 0.5
+    return total
+
+
+# =========================================================================
+# VIDÉOS : DURÉES (API YouTube, si une clé est donnée)
+# =========================================================================
+@st.cache_data(ttl=86400, show_spinner=False, max_entries=200)
+def video_durations(ids):
+    key = str(_secret("youtube", "api_key", ""))
+    if not key or not ids:
+        return {}
+    out = {}
+    d = get_json("https://www.googleapis.com/youtube/v3/videos",
+                 {"part": "contentDetails", "id": ",".join(ids[:50]), "key": key}) or {}
+    for item in d.get("items") or []:
+        m = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", (item.get("contentDetails") or {}).get("duration", ""))
+        if m:
+            secs = int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60 + int(m.group(3) or 0)
+            out[item["id"]] = max(1, round(secs / 60))
+    return out
+
+
+def dur(v, durs):
+    m = durs.get(v["id"]) if v else None
+    return f"{m} min" if m else ""
+
+
+# =========================================================================
 # AFFICHAGE
 # =========================================================================
 CSS = """
 <style>
-.block-container {padding-top: 1.6rem; max-width: 980px;}
-.nb-top {display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap;}
-.nb-title {font-size:1.7rem; font-weight:800; letter-spacing:-.02em; margin:0;}
-.nb-title span {color:#F58426;}
-.nb-sub {opacity:.65; font-size:.85rem; margin-top:-.2rem;}
-.nb-day {font-size:1.25rem; font-weight:700; margin:.4rem 0 .1rem;}
-.nb-game {display:grid; grid-template-columns: 1fr auto; gap:.4rem; align-items:center;}
-.nb-row {display:flex; align-items:center; gap:.55rem; padding:.12rem 0; font-size:1.05rem;}
-.nb-row img {width:30px; height:30px; object-fit:contain;}
-.nb-row .rec {opacity:.55; font-size:.8rem;}
-.nb-row .sc {margin-left:auto; font-variant-numeric:tabular-nums; font-weight:700; min-width:2.2rem; text-align:right;}
-.nb-row.lose {opacity:.55;}
-.nb-row.win b {color:#F58426;}
-.nb-side {text-align:right; font-size:.85rem; opacity:.85; line-height:1.35; padding-left:.8rem; border-left:1px solid rgba(128,128,128,.25);}
-.nb-side .live {color:#ff4b4b; font-weight:700;}
-.nb-side .done {font-weight:700;}
-.nb-pts {margin:.15rem 0 0; padding-left:0; list-style:none;}
-.nb-pts li {margin:.2rem 0; font-size:.93rem; line-height:1.4;}
-.nb-form {width:100%; border-collapse:collapse; font-size:.85rem;}
-.nb-form td, .nb-form th {padding:.18rem .35rem; border-bottom:1px solid rgba(128,128,128,.18); text-align:left;}
-.nb-form .w {color:#21c354; font-weight:700;} .nb-form .l {color:#ff4b4b; font-weight:700;}
-.nb-form .old {opacity:.45;}
-.nb-q {border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:.92rem;}
-.nb-q td, .nb-q th {padding:.2rem .55rem; text-align:center; border-bottom:1px solid rgba(128,128,128,.2);}
-.nb-q td:first-child, .nb-q th:first-child {text-align:left;}
-.nb-plays {font-size:.84rem; line-height:1.45; max-height:360px; overflow-y:auto;}
-.nb-plays .t {opacity:.55; font-variant-numeric:tabular-nums; display:inline-block; min-width:3.2rem;}
-.nb-plays .s {font-variant-numeric:tabular-nums; font-weight:700; float:right; padding-left:.5rem;}
-.nb-card {border:1px solid rgba(245,132,38,.45); border-radius:.6rem; padding:.55rem .8rem; background:rgba(245,132,38,.07);}
+:root {
+  --bg:#0b0f17; --card:#131a26; --card2:#18212f; --line:#243044; --text:#e8ecf3; --muted:#8a94a8;
+  --accent:#F58426; --accent-soft:rgba(245,132,38,.14); --green:#22c55e; --red:#ef4444; --gold:#fbbf24;
+}
+.stApp {background: radial-gradient(1200px 500px at 50% -200px, #1a2333 0%, var(--bg) 60%) fixed;}
+.block-container {padding-top: 3.6rem; padding-bottom: 4rem; max-width: 860px;}
+header[data-testid="stHeader"] {background: transparent;}
+h1, h2, h3 {letter-spacing:-.01em}
+.bb-brand {font-size:1.35rem; font-weight:800; letter-spacing:-.02em; line-height:1.1;}
+.bb-brand span {color:var(--accent);}
+.bb-tag {color:var(--muted); font-size:.8rem;}
+
+/* Bandeau de la nuit */
+.night {background:linear-gradient(135deg, #182236 0%, #121a28 100%); border:1px solid var(--line); border-radius:18px; padding:16px 18px 14px; margin:.4rem 0 1rem;}
+.n-kicker {color:var(--accent); font-weight:700; font-size:.78rem; text-transform:uppercase; letter-spacing:.08em;}
+.n-title {font-size:1.35rem; font-weight:800; margin:.1rem 0 .1rem; line-height:1.25;}
+.n-sub {color:var(--muted); font-size:.82rem;}
+.n-media {display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;}
+.media {display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:13px; border:1px solid var(--line);
+        background:var(--card2); color:var(--text)!important; text-decoration:none!important; min-height:58px;}
+a.media:hover {border-color:var(--accent); background:#1d283a;}
+.media .ic {font-size:1.45rem; width:2rem; text-align:center;}
+.media b {display:block; font-size:.92rem; line-height:1.25;}
+.media small {display:block; color:var(--muted); font-size:.76rem; line-height:1.3;}
+.media .go {margin-left:auto; width:34px; height:34px; border-radius:50%; background:var(--accent); color:#111; display:flex;
+            align-items:center; justify-content:center; font-size:.85rem; flex:none;}
+.media.off {opacity:.8; border-style:dashed;}
+.media.off .go {background:transparent; border:1px solid var(--line); color:var(--muted);}
+.n-chips {margin-top:12px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;}
+.n-chips .lab {color:var(--muted); font-size:.78rem; margin-right:2px;}
+.chip {font-size:.78rem; padding:3px 9px; border-radius:999px; background:var(--card2); border:1px solid var(--line); color:var(--text)!important; text-decoration:none!important; white-space:nowrap;}
+a.chip:hover {border-color:var(--accent);}
+
+/* Carte d'un match */
+.g {background:var(--card); border:1px solid var(--line); border-radius:18px; padding:12px 16px 12px; margin:0 0 12px; scroll-margin-top:70px;}
+.g.fav {border-color:rgba(251,191,36,.55); box-shadow:0 0 0 1px rgba(251,191,36,.15) inset;}
+.g .tg {display:none;}
+.g-top {display:flex; justify-content:space-between; gap:8px; align-items:center; font-size:.76rem; color:var(--muted); min-height:1.2rem;}
+.g-top .tags {display:flex; gap:5px; flex-wrap:wrap; align-items:center;}
+.tag {padding:1px 8px; border-radius:999px; background:var(--card2); border:1px solid var(--line); color:var(--text); font-size:.72rem; white-space:nowrap;}
+.tag.hot {background:rgba(245,132,38,.16); border-color:rgba(245,132,38,.45); color:#ffc08c; font-weight:700;}
+.tag.star {background:rgba(251,191,36,.12); border-color:rgba(251,191,36,.4); color:var(--gold); font-weight:700;}
+.tag.live {background:rgba(239,68,68,.15); border-color:rgba(239,68,68,.5); color:#ff8a8a; font-weight:700;}
+.tag.cold {opacity:.75;}
+.g-match {display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; margin:8px 0 4px;}
+.tm {display:flex; align-items:center; gap:10px; min-width:0;}
+.tm.home {flex-direction:row-reverse; text-align:right;}
+.tm img {width:46px; height:46px; object-fit:contain; flex:none; filter:drop-shadow(0 2px 6px rgba(0,0,0,.35));}
+.tm .nm {font-weight:800; font-size:1.12rem; line-height:1.15;}
+.tm .mt {color:var(--muted); font-size:.74rem; line-height:1.3; margin-top:1px;}
+.tm .where {font-size:.66rem; text-transform:uppercase; letter-spacing:.06em; color:#6b7590;}
+.mid {text-align:center; min-width:92px;}
+.mid .time {font-size:1.35rem; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.1;}
+.mid .sub {color:var(--muted); font-size:.7rem; margin-top:2px;}
+.mid .at {color:#5d6780; font-size:.8rem; font-weight:700;}
+.mid .hid {display:inline-block; font-size:1.05rem; font-weight:800; letter-spacing:.12em; color:#5d6780; padding:2px 10px; border-radius:9px; background:var(--card2); border:1px dashed var(--line);}
+.mid .real {display:none; font-size:1.45rem; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap;}
+.mid .real .w {color:var(--text);} .mid .real .l {color:#6b7590;}
+.mid .state {font-size:.68rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-top:3px;}
+.mid .state.live {color:#ff6b6b; font-weight:800;}
+.pts {list-style:none; padding:0; margin:8px 0 2px;}
+.pts li {font-size:.88rem; line-height:1.42; margin:3px 0; color:#d5dbe6; padding-left:1.55em; text-indent:-1.55em;}
+.acts {display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;}
+.pill {display:inline-flex; align-items:center; gap:6px; font-size:.82rem; font-weight:600; padding:6px 12px; border-radius:999px;
+       background:var(--card2); border:1px solid var(--line); color:var(--text)!important; text-decoration:none!important; cursor:pointer; user-select:none; line-height:1.2;}
+.pill:hover {border-color:var(--accent);}
+.pill.main {background:var(--accent); border-color:var(--accent); color:#16100a!important;}
+.pill.main:hover {filter:brightness(1.08);}
+.pill.fr {background:#16233d; border-color:#2a3f66;}
+.frf {display:inline-block; width:17px; height:12px; border-radius:2px; background:linear-gradient(90deg,#1f4bd8 0 33.3%,#f4f4f4 33.3% 66.6%,#e3263b 66.6%); box-shadow:0 0 0 1px rgba(0,0,0,.25); vertical-align:-1px;}
+.frf.big {width:26px; height:18px; border-radius:3px;}
+.pill.ghost {color:var(--muted)!important; border-style:dashed;}
+.pill small {opacity:.7; font-weight:500;}
+.pill .on {display:none;}
+.panel {display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--line);}
+.tg-s:checked ~ .g-match .hid {display:none;}
+.tg-s:checked ~ .g-match .real {display:block;}
+.tg-s:checked ~ .panel-s, .tg-f:checked ~ .panel-f {display:block;}
+.tg-s:checked ~ .acts .pill-s, .tg-f:checked ~ .acts .pill-f {border-color:var(--accent); background:var(--accent-soft);}
+.tg-s:checked ~ .acts .pill-s .on, .tg-f:checked ~ .acts .pill-f .on {display:inline;}
+.tg-s:checked ~ .acts .pill-s .off, .tg-f:checked ~ .acts .pill-f .off {display:none;}
+.sec {font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:12px 0 6px;}
+.sec:first-child {margin-top:0;}
+.q {border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:.85rem; margin:2px 0 4px;}
+.q td, .q th {padding:3px 10px; text-align:center; border-bottom:1px solid var(--line);}
+.q th {color:var(--muted); font-weight:600; font-size:.72rem;}
+.q td:first-child, .q th:first-child {text-align:left; padding-left:0;}
+.q td.t {font-weight:800;}
+.worm {width:100%; height:auto; display:block; margin:2px 0;}
+.wcap {color:var(--muted); font-size:.74rem;}
+details.more {margin-top:8px; border:1px solid var(--line); border-radius:12px; background:var(--card2);}
+details.more > summary {cursor:pointer; padding:8px 12px; font-size:.84rem; font-weight:700; list-style:none;}
+details.more > summary::-webkit-details-marker {display:none;}
+details.more > summary::before {content:"▸ "; color:var(--muted);}
+details.more[open] > summary::before {content:"▾ ";}
+details.more .in {padding:0 12px 10px; overflow-x:auto;}
+.box {border-collapse:collapse; font-size:.78rem; font-variant-numeric:tabular-nums; width:100%; min-width:520px;}
+.box th {color:var(--muted); font-weight:600; text-align:right; padding:4px 5px; border-bottom:1px solid var(--line); font-size:.7rem;}
+.box td {text-align:right; padding:3px 5px; border-bottom:1px solid rgba(36,48,68,.6);}
+.box td:first-child, .box th:first-child {text-align:left;}
+.box tr.st td:first-child {font-weight:700;}
+.box td.hi {color:var(--accent); font-weight:800;}
+.box caption {text-align:left; font-weight:800; padding:6px 0 4px; font-size:.85rem;}
+.dnp {color:var(--muted); font-size:.74rem; margin:4px 0 8px;}
+.plays {font-size:.8rem; line-height:1.5;}
+.plays .qh {font-weight:800; color:var(--muted); margin:8px 0 2px; font-size:.72rem; letter-spacing:.06em;}
+.plays div.p {display:grid; grid-template-columns:3.2rem 2.6rem 1fr auto; gap:6px; border-bottom:1px solid rgba(36,48,68,.5); padding:2px 0;}
+.plays .c {color:var(--muted); font-variant-numeric:tabular-nums;}
+.plays .s {font-variant-numeric:tabular-nums; font-weight:700;}
+.form {width:100%; border-collapse:collapse; font-size:.8rem;}
+.form td {padding:4px 4px; border-bottom:1px solid var(--line); white-space:nowrap;}
+.form .hd td {padding-top:8px; font-size:.84rem; white-space:normal;}
+.form .w {color:var(--green); font-weight:800;} .form .l {color:var(--red); font-weight:800;}
+.form .old {opacity:.4;}
+.form-wrap {overflow-x:auto;}
+.note {color:var(--muted); font-size:.74rem; margin:4px 0;}
+.ai {color:var(--muted); font-size:.72rem;}
+div[data-testid="stPopover"] button {padding:.25rem .7rem; min-height:2.2rem;}
+div[data-testid="stSegmentedControl"] button p {font-size:.85rem;}
 @media (max-width: 640px) {
-  .nb-game {grid-template-columns: 1fr;}
-  .nb-side {text-align:left; border-left:none; padding-left:0;}
-  .nb-row {font-size:1rem;}
+  .block-container {padding-left:.8rem; padding-right:.8rem; padding-top:3.2rem;}
+  .night {padding:13px 13px 12px; border-radius:16px;}
+  .n-title {font-size:1.12rem;}
+  .n-media {grid-template-columns:1fr;}
+  .g {padding:11px 12px; border-radius:16px;}
+  .tm {gap:7px; flex-direction:column; align-items:flex-start; text-align:left;}
+  .tm.home {flex-direction:column; align-items:flex-end; text-align:right;}
+  .tm img {width:38px; height:38px;}
+  .tm .nm {font-size:1rem;}
+  .mid {min-width:74px;}
+  .g-top .vn {display:none;}
+  .g-top .rt {white-space:nowrap;}
+  .mid .time {font-size:1.15rem;}
+  .mid .real {font-size:1.2rem;}
+  .pill {font-size:.78rem; padding:6px 10px;}
 }
 </style>
 """
@@ -935,111 +1114,85 @@ def user_zone():
     return "Montréal" if tz.startswith("America/") else "Paris"
 
 
-def night_title(day, zone, today):
-    """Titre d'un jour de matchs, selon le fuseau : « Nuit du mercredi 22 au jeudi 23 octobre » à Paris, « Mercredi 22 octobre » à Montréal."""
-    rel = {0: ("Cette nuit", "Ce soir"), -1: ("La nuit dernière", "Hier soir"), 1: ("La nuit prochaine", "Demain soir")}.get((day - today).days)
-    if zone == "Paris":
-        nxt = day + timedelta(days=1)
-        if day.month == nxt.month:
-            core = f"Nuit du {JOURS[day.weekday()]} {day.day} au {fr_long(nxt)}"
-        else:
-            core = f"Nuit du {fr_long(day)} au {fr_long(nxt)}"
-    else:
-        core = fr_long(day).capitalize()
-    return (f"{rel[0 if zone == 'Paris' else 1]} · " if rel else "") + core
+def rel_label(day, zone, today):
+    return {0: ("Cette nuit", "Ce soir"), -1: ("La nuit dernière", "Hier soir"),
+            1: ("La nuit prochaine", "Demain soir")}.get((day - today).days, (None, None))[0 if zone == "Paris" else 1]
+
+
+def night_title(day, zone):
+    """« Nuit du mardi 20 au mercredi 21 octobre » à Paris, « Soirée du mardi 20 octobre » à Montréal."""
+    if zone != "Paris":
+        return "Soirée du " + fr_long(day)
+    nxt = day + timedelta(days=1)
+    if day.month == nxt.month:
+        return f"Nuit du {JOURS[day.weekday()]} {day.day} au {fr_long(nxt)}"
+    return f"Nuit du {fr_long(day)} au {fr_long(nxt)}"
 
 
 def pill_label(day, zone, today):
-    rel = {0: ("Cette nuit", "Ce soir"), -1: ("Nuit dernière", "Hier soir"), 1: ("Demain", "Demain")}.get((day - today).days)
+    rel = {0: ("Cette nuit", "Ce soir"), -1: ("Nuit dernière", "Hier soir"), 1: ("Nuit prochaine", "Demain")}.get((day - today).days)
     if rel:
         return rel[0 if zone == "Paris" else 1]
-    return f"Nuit du {day.day}" if zone == "Paris" else fr_short(day)
+    if zone == "Paris":
+        return f"{JOURS[day.weekday()][:3]}. {day.day}→{(day + timedelta(days=1)).day}"
+    return fr_short(day)
 
 
 def default_day(days, today):
-    """Le dernier jour où des matchs ont commencé (la nuit qu'on vient de vivre), sinon le prochain."""
-    started = [g for g in day_games(today) if g["state"] != "pre"]
-    if started:
+    """La dernière nuit où des matchs ont commencé (celle qu'on vient de vivre), sinon la prochaine."""
+    if any(g["state"] != "pre" for g in day_games(today)):
         return today
     before = [d for d in days if d < today]
     return before[-1] if before else (days[0] if days else today)
 
 
-def logo(tid, size=30):
+def _lum(hexcolor):
+    try:
+        r, g, b = (int(hexcolor[i:i + 2], 16) / 255 for i in (1, 3, 5))
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    except (ValueError, IndexError):
+        return 0.5
+
+
+def team_color(tid):
+    t = team(tid)
+    for c in (t.get("color"), t.get("alt")):
+        if c and 0.12 < _lum(c) < 0.92:
+            return c
+    return "#9aa4b8"
+
+
+def logo(tid, size=46):
     url = team(tid)["logo"]
-    return f'<img src="{esc(url)}" width="{size}" height="{size}" alt="">' if url else ""
+    return f'<img src="{esc(url)}" width="{size}" height="{size}" alt="" loading="lazy">' if url else ""
 
 
-def game_header(g, zone, revealed, rec):
-    """Les deux équipes (visiteurs en haut, comme aux États-Unis), l'heure et l'état du match."""
-    tip = parse_dt(g["utc"])
-    local = tip.astimezone(ZONES[zone]) if tip else None
-    rows = []
-    for side in ("away", "home"):
-        s = g[side]
-        t = team(s["id"])
-        cls = ""
-        score = ""
-        if revealed and s["score"] is not None and g["state"] != "pre":
-            score = str(s["score"])
-            if g["state"] == "post":
-                cls = "win" if s["winner"] else "lose"
-        rows.append(f'<div class="nb-row {cls}">{logo(s["id"])}<b>{esc(t["name"])}</b>'
-                    f'<span class="rec">{esc(rec.get(s["id"], ""))}</span><span class="sc">{score}</span></div>')
-    side = []
+def reason_fr(reason):
+    """Raison d'absence d'ESPN (« INJURY/ILLNESS - LEFT KNEE; SPRAIN ») -> mot anglais reconnu par INJURY_FR, ou None."""
+    r = norm(reason)
+    if not r or "coach" in r:
+        return None
+    for key in sorted(INJURY_FR, key=len, reverse=True):
+        if re.search(r"\b" + re.escape(key) + r"\b", r):
+            return key
+    return "undisclosed" if "injur" in r or "illness" in r else None
+
+
+def pre_info(g, summ):
+    """Ce qu'on savait avant le match. Après coup : ce qui a été gardé, sinon la cote (figée avant le match) et les absents
+    de la feuille de match (joueurs qui n'ont pas joué pour blessure)."""
     if g["state"] == "pre":
-        if g["status"] == "STATUS_POSTPONED":
-            side.append('<span class="done">Reporté</span>')
-        elif local:
-            side.append(f'<b>{fr_hour(local)}</b>' + (f" <span style='opacity:.6'>({fr_short(local.date())})</span>" if local.date() != g["day"] and zone != "Paris" else ""))
-    elif g["state"] == "in":
-        side.append('<span class="live">● En cours</span>' + (f"<br>{esc(g['detail'])}" if revealed else ""))
-    else:
-        label = esc(re.sub(r"/(\d*)OT", lambda m: f" ({m.group(1) + ' ' if m.group(1) else ''}prol.)", re.sub(r"^Final", "Terminé", g["detail"]))) if revealed else "Terminé"
-        side.append(f'<span class="done">{label}</span>')
-    place = g["city"] if g["neutral"] else ""
-    if g["tv"] and g["state"] == "pre":
-        side.append(f"<span style='opacity:.6'>{esc(g['tv'])}</span>")
-    if place:
-        side.append(f"📍 {esc(place)}")
-    return f'<div class="nb-game"><div>{"".join(rows)}</div><div class="nb-side">{"<br>".join(side)}</div></div>'
-
-
-def points_html(points):
-    return '<ul class="nb-pts">' + "".join(f"<li>{esc(p)}</li>" for p in points) + "</ul>"
-
-
-def form_html(g, idx):
-    """Forme du moment (5 derniers matchs avant celui-ci) et 5 derniers face-à-face."""
-    out = []
-    for side in ("away", "home"):
-        tid = g[side]["id"]
-        f = team_form(idx, tid, g["day"], g["season"])
-        cells = []
-        for m in reversed(f["last"]):
-            res = "w" if m[2] > m[3] else "l"
-            old = " old" if m[5] != g["season"] else ""
-            where = "vs" if m[4] else "@"
-            cells.append(f'<td class="{old.strip()}"><span class="{res}">{"V" if res == "w" else "D"}</span> '
-                         f'{m[2]}-{m[3]} {where} {esc(team(m[1])["abbr"])}</td>')
-        s = streak_text(f["streak"])
-        title = f"{logo(tid, 20)} <b>{esc(team(tid)['name'])}</b> " + (f"{f['w']}-{f['l']}" if f["n"] else "début de saison") + (f" · {s}" if s else "") + (" · 2e match en 2 soirs" if f["b2b"] else "")
-        out.append(f"<tr><th colspan='5'>{title}</th></tr><tr>{''.join(cells) or '<td>Aucun match</td>'}</tr>")
-    h2h = head_to_head(idx, g["home"]["id"], g["away"]["id"], g["day"])[-5:]
-    rows = []
-    for m in reversed(h2h):
-        home_name = team(g["home"]["id"])["abbr"] if m[4] else team(g["away"]["id"])["abbr"]
-        away_name = team(g["away"]["id"])["abbr"] if m[4] else team(g["home"]["id"])["abbr"]
-        hs, as_ = (m[2], m[3]) if m[4] else (m[3], m[2])
-        winner = home_name if hs > as_ else away_name
-        tag = " (play-offs)" if m[6] == "P" else ""
-        rows.append(f"<tr><td>{m[0].day:02d}/{m[0].month:02d}/{m[0].year}</td><td>{esc(away_name)} {as_} @ {esc(home_name)} {hs}</td>"
-                    f"<td><b>{esc(winner)}</b>{tag}</td></tr>")
-    table = f"<table class='nb-form'>{''.join(out)}</table>"
-    caption = "<div style='opacity:.6;font-size:.78rem;margin:.2rem 0 .6rem'>Avant ce match · en grisé : la saison passée</div>"
-    h2h_html = ("<div style='font-weight:700;margin-top:.3rem'>🆚 Derniers face-à-face</div><table class='nb-form'>" + "".join(rows) + "</table>"
-                if rows else "<div style='opacity:.6'>Pas de face-à-face depuis 2016.</div>")
-    return table + caption + h2h_html
+        return summ
+    kept = disk_get(f"pre_{g['id']}.json")
+    if kept or not summ:
+        return kept
+    injuries = {}
+    for tid, rows in (summ.get("box") or {}).items():
+        for r in rows:
+            what = reason_fr(r["reason"]) if r["dnp"] else None
+            if what:
+                injuries.setdefault(tid, []).append({"name": r["name"], "status": "Out", "what": what})
+    return {"line": summ.get("line"), "injuries": injuries}
 
 
 def quarters_html(g):
@@ -1049,32 +1202,298 @@ def quarters_html(g):
     for side in ("away", "home"):
         s = g[side]
         cells = "".join(f"<td>{v}</td>" for v in s["lines"]) + "<td></td>" * (n - len(s["lines"]))
-        rows.append(f"<tr><td>{logo(s['id'], 18)} {esc(team(s['id'])['abbr'])}</td>{cells}<td><b>{s['score'] if s['score'] is not None else ''}</b></td></tr>")
-    return f"<table class='nb-q'><tr><th></th>{head}<th>Total</th></tr>{''.join(rows)}</table>"
+        rows.append(f"<tr><td>{logo(s['id'], 18)} {esc(team(s['id'])['abbr'])}</td>{cells}<td class='t'>{s['score'] if s['score'] is not None else ''}</td></tr>")
+    return f"<table class='q'><tr><th></th>{head}<th>Total</th></tr>{''.join(rows)}</table>"
 
 
-def box_table(rows):
-    cols = ["MIN", "PTS", "REB", "AST", "FG", "3PT", "FT", "STL", "BLK", "TO", "PF", "+/-"]
-    names = {"REB": "RBD", "AST": "PD", "FG": "TIRS", "3PT": "3 PTS", "FT": "LF", "STL": "INT", "BLK": "CTR", "TO": "BP", "PF": "FTES"}
-    data = []
-    for r in rows:
-        if r["dnp"]:
+def worm_svg(g, summ):
+    """Écart au fil du match : au-dessus, l'équipe à domicile mène ; en dessous, les visiteurs."""
+    pts, max_h, max_a, changes = flow(summ)
+    if len(pts) < 5:
+        return ""
+    total = max(48.0, pts[-1][0])
+    W, H = 600, 130
+    mid = H / 2
+    cap = max(10, max_h, max_a)
+    sx = lambda m: m / total * W
+    sy = lambda d: mid - d / cap * (mid - 10)
+    path = f"M0,{mid:.1f} " + " ".join(f"L{sx(m):.1f},{sy(d):.1f}" for m, d in pts) + f" L{sx(pts[-1][0]):.1f},{mid:.1f} Z"
+    line = " ".join(f"{'M' if i == 0 else 'L'}{sx(m):.1f},{sy(d):.1f}" for i, (m, d) in enumerate(pts))
+    gid = g["id"]
+    ch, ca = team_color(g["home"]["id"]), team_color(g["away"]["id"])
+    n_ot = max(0, int(round((total - 48) / 5)))
+    marks = [12, 24, 36] + [48 + 5 * k for k in range(n_ot)]
+    grid = "".join(f'<line x1="{sx(m):.1f}" y1="4" x2="{sx(m):.1f}" y2="{H - 4}" stroke="#2a364b" stroke-dasharray="3 4"/>' for m in marks if m < total)
+    labels = "".join(
+        f'<text x="{sx(a + (b - a) / 2):.1f}" y="{H - 3}" fill="#5d6780" font-size="10" text-anchor="middle">{lab}</text>'
+        for a, b, lab in [(0, 12, "Q1"), (12, 24, "Q2"), (24, 36, "Q3"), (36, 48, "Q4")] + [(48 + 5 * k, 53 + 5 * k, f"P{k + 1}") for k in range(n_ot)])
+    th, ta = team(g["home"]["id"]), team(g["away"]["id"])
+    return (
+        f'<svg class="worm" viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label="Écart au fil du match">'
+        f'<defs><clipPath id="up{gid}"><rect x="0" y="0" width="{W}" height="{mid}"/></clipPath>'
+        f'<clipPath id="dn{gid}"><rect x="0" y="{mid}" width="{W}" height="{mid}"/></clipPath></defs>'
+        f'{grid}<line x1="0" y1="{mid}" x2="{W}" y2="{mid}" stroke="#3a475e"/>'
+        f'<path d="{path}" fill="{ch}" fill-opacity=".55" clip-path="url(#up{gid})"/>'
+        f'<path d="{path}" fill="{ca}" fill-opacity=".55" clip-path="url(#dn{gid})"/>'
+        f'<path d="{line}" fill="none" stroke="#e8ecf3" stroke-width="1.2" stroke-opacity=".8"/>'
+        f'<text x="4" y="14" fill="{ch}" font-size="11" font-weight="700">▲ {esc(th["abbr"])} mène</text>'
+        f'<text x="4" y="{H - 16}" fill="{ca}" font-size="11" font-weight="700">▼ {esc(ta["abbr"])} mène</text>'
+        f'{labels}</svg>'
+        f'<div class="wcap">Plus grosse avance : {esc(th["name"])} +{max_h}, {esc(ta["name"])} +{max_a} · {changes} changements de leader</div>'
+    )
+
+
+def box_html(g, summ):
+    cols = [("MIN", "MIN"), ("PTS", "PTS"), ("REB", "RBD"), ("AST", "PD"), ("FG", "TIRS"), ("3PT", "3 PTS"), ("FT", "LF"),
+            ("STL", "INT"), ("BLK", "CTR"), ("TO", "BP"), ("+/-", "+/-")]
+    out = []
+    for side in ("away", "home"):
+        tid = g[side]["id"]
+        rows = (summ.get("box") or {}).get(tid) or []
+        played = [r for r in rows if not r["dnp"]]
+        if not played:
             continue
-        line = {"Joueur": ("★ " if r["starter"] else "") + r["name"]}
-        for c in cols:
-            line[names.get(c, c)] = r["stats"].get(c, "")
-        data.append(line)
-    return data
+        top = max(_num(r["stats"], "PTS") for r in played)
+        head = "".join(f"<th>{lab}</th>" for _, lab in cols)
+        body = []
+        for r in played:
+            cells = []
+            for k, _ in cols:
+                v = r["stats"].get(k, "")
+                hi = " class='hi'" if k == "PTS" and _num(r["stats"], "PTS") == top and top > 0 else ""
+                cells.append(f"<td{hi}>{esc(v)}</td>")
+            body.append(f"<tr class='{'st' if r['starter'] else ''}'><td>{esc(r['short'] or r['name'])}</td>{''.join(cells)}</tr>")
+        dnp = [f"{r['short'] or r['name']}" + (f" ({INJURY_FR.get(reason_fr(r['reason']), '')})" if reason_fr(r["reason"]) else "")
+               for r in rows if r["dnp"]]
+        out.append(f"<table class='box'><caption>{logo(tid, 18)} {esc(team(tid)['name'])}</caption><tr><th>Joueur</th>{head}</tr>{''.join(body)}</table>"
+                   + (f"<div class='dnp'>N'ont pas joué : {esc(', '.join(dnp))}</div>" if dnp else ""))
+    return "".join(out) or "<div class='note'>Feuille de match pas encore disponible.</div>"
 
 
-def plays_html(summ, g, period):
-    lines = []
+def plays_html(summ):
+    by_q = defaultdict(list)
     for p, clock, aw, hm, scoring, text, tid in summ.get("plays") or []:
-        if p != period or not scoring:
-            continue
-        abbr = team(tid)["abbr"] if tid else ""
-        lines.append(f"<div><span class='t'>{esc(clock)}</span> <b>{esc(abbr)}</b> {esc(text)}<span class='s'>{aw}-{hm}</span></div>")
-    return "<div class='nb-plays'>" + ("".join(reversed(lines)) or "<i>Aucun panier</i>") + "</div>"
+        if p and scoring:
+            by_q[p].append(f"<div class='p'><span class='c'>{esc(clock)}</span><b>{esc(team(tid)['abbr'] if tid else '')}</b>"
+                           f"<span>{esc(text)}</span><span class='s'>{aw}-{hm}</span></div>")
+    if not by_q:
+        return "<div class='note'>Pas encore d'actions.</div>"
+    parts = []
+    for p in sorted(by_q, reverse=True):
+        parts.append(f"<div class='qh'>{'QUART-TEMPS ' + str(p) if p <= 4 else 'PROLONGATION ' + str(p - 4)}</div>" + "".join(reversed(by_q[p])))
+    return "<div class='plays'>" + "".join(parts) + "</div>"
+
+
+def form_html(g, idx):
+    """Forme (5 derniers matchs avant celui-ci) et 5 derniers face-à-face."""
+    rows = []
+    for side in ("away", "home"):
+        tid = g[side]["id"]
+        f = team_form(idx, tid, g["day"], g["season"])
+        s = streak_text(f["streak"])
+        title = (f"{logo(tid, 18)} <b>{esc(team(tid)['name'])}</b> · " + (f"{f['w']}-{f['l']}" if f["n"] else "début de saison")
+                 + (f" · {s}" if s else "") + (" · 2e match en 2 soirs" if f["b2b"] else ""))
+        cells = []
+        for m in reversed(f["last"]):
+            res = "w" if m[2] > m[3] else "l"
+            cells.append(f"<td class='{'old' if m[5] != g['season'] else ''}'><span class='{res}'>{'V' if res == 'w' else 'D'}</span> "
+                         f"{m[2]}-{m[3]} {'vs' if m[4] else '@'} {esc(team(m[1])['abbr'])}</td>")
+        rows.append(f"<tr class='hd'><td colspan='5'>{title}</td></tr><tr>{''.join(cells) or '<td>Aucun match</td>'}</tr>")
+    h2h = head_to_head(idx, g["home"]["id"], g["away"]["id"], g["day"])[-5:]
+    hrows = []
+    for m in reversed(h2h):
+        home_t, away_t = (g["home"]["id"], g["away"]["id"]) if m[4] else (g["away"]["id"], g["home"]["id"])
+        hs, as_ = (m[2], m[3]) if m[4] else (m[3], m[2])
+        win = home_t if hs > as_ else away_t
+        hrows.append(f"<tr><td>{m[0].day:02d}/{m[0].month:02d}/{str(m[0].year)[2:]}</td><td>{esc(team(away_t)['abbr'])} {as_} @ {esc(team(home_t)['abbr'])} {hs}</td>"
+                     f"<td>{logo(win, 16)} <b>{esc(team(win)['abbr'])}</b>{' · play-offs' if m[6] == 'P' else ''}</td></tr>")
+    return ("<div class='sec'>La forme avant ce match</div><div class='form-wrap'><table class='form'>" + "".join(rows) + "</table></div>"
+            "<div class='note'>Du plus récent au plus ancien · en grisé : la saison passée</div>"
+            "<div class='sec'>Les 5 derniers face-à-face</div>"
+            + ("<div class='form-wrap'><table class='form'>" + "".join(hrows) + "</table></div>" if hrows else "<div class='note'>Pas de face-à-face depuis 2016.</div>"))
+
+
+def game_card(g, ctx):
+    """Une carte de match, entièrement en HTML : score et forme s'ouvrent sans recharger la page (cases à cocher cachées)."""
+    gid, zone, idx = g["id"], ctx["zone"], ctx["idx"]
+    h, a = g["home"], g["away"]
+    th, ta = team(h["id"]), team(a["id"])
+    summ = ctx["summ"].get(gid)
+    pre = pre_info(g, summ)
+    tip = parse_dt(g["utc"])
+    local = tip.astimezone(ZONES[zone]) if tip else None
+    fav = th["abbr"] in ctx["favs"] or ta["abbr"] in ctx["favs"]
+
+    # Ligne du haut : étiquettes à gauche, heure et salle à droite
+    tags = []
+    if fav:
+        tags.append("<span class='tag star'>⭐ Mon équipe</span>")
+    w = ctx["watch"].get(gid)
+    if w:
+        level, words = w
+        icon, label = WATCH_LEVELS[level]
+        tags.append(f"<span class='tag {'hot' if level >= 2 else 'cold' if level == 0 else ''}'>{icon} {label}</span>")
+        tags += [f"<span class='tag'>{esc(x)}</span>" for x in words[:2]]
+    if gid == ctx.get("affiche"):
+        tags.append("<span class='tag star'>⭐ L'affiche de la nuit</span>")
+    if g["state"] == "in":
+        tags.append("<span class='tag live'>● En direct</span>")
+    if g["season_type"] == 3:
+        tags.append("<span class='tag'>🏆 Play-offs</span>")
+    for n in g["notes"][:1]:
+        if "series" not in norm(n) and "leads" not in norm(n):
+            tags.append(f"<span class='tag'>{esc(n)}</span>")
+    right = []
+    if local and g["state"] != "pre":
+        right.append(f"{fr_hour(local)}")
+    if g["venue"]:
+        right.append("<span class='vn'>" + (" · " if right else "") + esc(g["venue"]) + (f", {esc(g['city'])}" if g["neutral"] and g["city"] else "") + "</span>")
+    top = f"<div class='g-top'><div class='tags'>{''.join(tags)}</div><div class='rt'>{''.join(right)}</div></div>"
+
+    # Les deux équipes, visiteurs à gauche, domicile à droite
+    def side_html(s, t, where):
+        f = team_form(idx, s["id"], g["day"], g["season"])
+        rank = ctx["ranks"].get(s["id"])
+        meta = (f"{f['w']}-{f['l']}" if f["n"] else f"{f['prev_w']}-{f['prev_l']} la saison passée") + (f" · {rank}e {t['conf']}" if rank else "")
+        cls = "home" if where == "Domicile" else "away"
+        return (f"<div class='tm {cls}'>{logo(s['id'])}<div><div class='nm'>{esc(t['name'])}</div>"
+                f"<div class='mt'>{esc(meta)}</div><div class='where'>{where}</div></div></div>")
+
+    if g["state"] == "pre":
+        if g["status"] == "STATUS_POSTPONED":
+            mid = "<div class='time'>—</div><div class='state'>Reporté</div>"
+        else:
+            other_day = local and zone != "Paris" and local.date() != g["day"]
+            mid = (f"<div class='at'>@</div><div class='time'>{fr_hour(local) if local else '?'}</div>"
+                   f"<div class='sub'>{esc(g['tv']) if g['tv'] else ''}{' · ' + fr_short(local.date()) if other_day else ''}</div>")
+    else:
+        hs, as_ = h["score"], a["score"]
+        if hs is not None and as_ is not None:
+            cw = lambda me, other: "w" if g["state"] != "post" or me >= other else "l"
+            real = f"<span class='{cw(as_, hs)}'>{as_}</span> – <span class='{cw(hs, as_)}'>{hs}</span>"
+        else:
+            real = "–"
+        if g["state"] == "in":
+            state = "<div class='state live'>● En direct</div>"
+        else:
+            state = "<div class='state'>Terminé</div>"
+        mid = f"<div class='hid'>? – ?</div><div class='real'>{real}</div>{state}"
+    match = (f"<div class='g-match'>{side_html(a, ta, 'Extérieur')}<div class='mid'>{mid}</div>"
+             f"{side_html(h, th, 'Domicile')}</div>")
+
+    # Les enjeux (toujours visibles, 4 lignes au plus)
+    points = preview_points(g, idx, pre)
+    ai = None
+    if ctx["ai"] and (g["state"] == "pre" or disk_get(f"ai_preview_{gid}.json")):
+        ai = ai_points("preview", g, ai_material(g, summ, points))
+    shown = (ai or points)[:4]
+    pts_html = "<ul class='pts'>" + "".join(f"<li>{esc(p)}</li>" for p in shown) + "</ul>" if shown else ""
+
+    # Boutons
+    acts = []
+    checked = " checked" if ctx["show_all"] else ""
+    if g["state"] == "post":
+        v = nba_video(ctx["nba_vids"], g)
+        x = extra_video(ctx["extra_vids"], g)
+        if v:
+            d = dur(v, ctx["durs"])
+            acts.append(f"<a class='pill main' href='{yt_url(v)}' target='_blank'>▶ Résumé NBA{' <small>' + d + '</small>' if d else ''}</a>")
+        else:
+            acts.append(f"<a class='pill ghost' href='{yt_search_url(g)}' target='_blank' title='Pas encore trouvé : recherche sur YouTube'>🔎 Résumé NBA</a>")
+        if x:
+            d = dur(x, ctx["durs"])
+            acts.append(f"<a class='pill fr' href='{yt_url(x)}' target='_blank'><span class='frf'></span> NBA Extra{' <small>' + d + '</small>' if d else ''}</a>")
+    if g["state"] != "pre":
+        acts.append(f"<label for='s{gid}' class='pill pill-s'><span class='off'>👁 Score</span><span class='on'>🙈 Cacher le score</span></label>")
+    acts.append(f"<label for='f{gid}' class='pill pill-f'><span class='off'>📊 Forme & duels</span><span class='on'>📊 Fermer</span></label>")
+
+    # Panneau du score
+    panel_s = ""
+    if g["state"] != "pre" and summ:
+        parts = [quarters_html(g)]
+        if g["state"] == "post" and g["completed"]:
+            rp = recap_points(g, summ, ctx["idx"])
+            ai_r = ai_points("recap", g, ai_material(g, summ, rp)) if ctx["ai"] and (summ.get("article") or {}).get("type") == "Recap" else None
+            parts.append("<div class='sec'>Ce qu'il faut retenir</div><ul class='pts'>" + "".join(f"<li>{esc(p)}</li>" for p in (ai_r or rp)) + "</ul>"
+                         + ("<div class='ai'>✨ Écrit par Claude d'après le compte rendu AP</div>" if ai_r else ""))
+        elif g["state"] == "in":
+            parts.append(f"<div class='note'>{esc(g['detail'])}</div>")
+        worm = worm_svg(g, summ)
+        if worm:
+            parts.append("<div class='sec'>Le match en un coup d'œil</div>" + worm)
+        parts.append(f"<details class='more'><summary>🧾 Stats des joueurs</summary><div class='in'>{box_html(g, summ)}</div></details>")
+        parts.append(f"<details class='more'><summary>🏀 Tous les paniers</summary><div class='in'>{plays_html(summ)}</div></details>")
+        panel_s = f"<div class='panel panel-s'>{''.join(parts)}</div>"
+    panel_f = f"<div class='panel panel-f'>{form_html(g, idx)}</div>"
+
+    return (f"<div class='g{' fav' if fav else ''}' id='g{gid}'>"
+            f"<input type='checkbox' class='tg tg-s' id='s{gid}'{checked}><input type='checkbox' class='tg tg-f' id='f{gid}'>"
+            f"{top}{match}{pts_html}<div class='acts'>{''.join(acts)}</div>{panel_f}{panel_s}</div>")
+
+
+def night_html(day, games, ctx, today):
+    """En-tête de la nuit : titre clair, état des matchs, NBA Extra et résumé NBA de la nuit, matchs à voir."""
+    zone = ctx["zone"]
+    rel = rel_label(day, zone, today)
+    n = len(games)
+    states = [g["state"] for g in games]
+    if not n:
+        status = "Pas de match"
+    elif all(s == "post" for s in states):
+        status = f"{n} match{'s' if n > 1 else ''} · tous terminés"
+    elif all(s == "pre" for s in states):
+        first = min((parse_dt(g["utc"]) for g in games if g["utc"]), default=None)
+        status = f"{n} match{'s' if n > 1 else ''} · premier coup d'envoi à {fr_hour(first.astimezone(ZONES[zone]))}" if first else f"{n} matchs"
+    else:
+        live = states.count("in")
+        status = f"{n} matchs · {states.count('post')} terminés" + (f" · {live} en cours" if live else "")
+    status += f" · heures de {zone}"
+
+    # NBA Extra : l'émission du lendemain matin parle de cette nuit
+    show_day = day + timedelta(days=1)
+    js = journals(ctx["extra_vids"])
+    show_time = datetime.combine(show_day, datetime.min.time(), ZONES["Paris"]).replace(hour=12, minute=45)
+    show_local = show_time.astimezone(ZONES[zone])
+    label = f"NBA Extra du {JOURS[show_day.weekday()][:3]}. {show_day.day:02d}/{show_day.month:02d}"
+    if show_day in js:
+        v = js[show_day]
+        d = dur(v, ctx["durs"])
+        extra = (f"<a class='media' href='{yt_url(v)}' target='_blank'><div class='ic'><span class='frf big'></span></div><div><b>{label}</b>"
+                 f"<small>L'émission de beIN SPORTS sur cette nuit{' · ' + d if d else ''}</small></div><div class='go'>▶</div></a>")
+    else:
+        now = datetime.now(ZONES["Paris"])
+        if now < show_time:
+            when = f"en direct à {fr_hour(show_local)}{' (heure de Montréal)' if zone != 'Paris' else ''} sur beIN SPORTS, puis replay sur YouTube"
+        elif now < show_time + timedelta(hours=10):
+            when = "replay YouTube en général entre 15h et 17h (heure de Paris) · le lien apparaîtra ici"
+        else:
+            when = "pas trouvé sur YouTube"
+        extra = (f"<div class='media off'><div class='ic'><span class='frf big'></span></div><div><b>{label}</b><small>{when}</small></div>"
+                 f"<div class='go'>⏳</div></div>")
+
+    recap = nightly_recap(ctx["nba_vids"], day)
+    if recap:
+        d = dur(recap, ctx["durs"])
+        nba = (f"<a class='media' href='{yt_url(recap)}' target='_blank'><div class='ic'>🏀</div><div><b>Le résumé de la nuit</b>"
+               f"<small>NBA, en anglais · tous les matchs{' · ' + d if d else ''}</small></div><div class='go'>▶</div></a>")
+    elif n and all(s == "post" for s in states):
+        q = f"NBA nightly recap {MONTHS_EN[day.month - 1].title()} {day.day}, {day.year}"
+        nba = (f"<a class='media off' href='https://www.youtube.com/results?search_query={requests.utils.quote(q)}' target='_blank'>"
+               f"<div class='ic'>🏀</div><div><b>Le résumé de la nuit</b><small>NBA · pas encore trouvé : chercher sur YouTube</small></div><div class='go'>🔎</div></a>")
+    else:
+        nba = ("<div class='media off'><div class='ic'>🏀</div><div><b>Le résumé de la nuit</b>"
+               "<small>NBA · publié après le dernier match</small></div><div class='go'>⏳</div></div>")
+
+    chips = ""
+    ranked = sorted(((ctx["watch"][g["id"]][0], g) for g in games if ctx["watch"].get(g["id"])), key=lambda x: -x[0])
+    top = [(lv, g) for lv, g in ranked if lv >= 2][:6]
+    if top:
+        chips = "<div class='n-chips'><span class='lab'>À voir en priorité :</span>" + "".join(
+            f"<a class='chip' href='#g{g['id']}'>{WATCH_LEVELS[lv][0]} {esc(team(g['away']['id'])['abbr'])} @ {esc(team(g['home']['id'])['abbr'])}</a>"
+            for lv, g in top) + "</div>"
+    return (f"<div class='night'><div class='n-kicker'>🌙 {esc(rel) if rel else ('Nuit NBA' if zone == 'Paris' else 'Soirée NBA')}</div>"
+            f"<div class='n-title'>{esc(night_title(day, zone))}</div><div class='n-sub'>{esc(status)}</div>"
+            f"<div class='n-media'>{extra}{nba}</div>{chips}</div>")
 
 
 def ai_material(g, summ, points):
@@ -1086,157 +1505,24 @@ def ai_material(g, summ, points):
     return "\n".join(lines)
 
 
-def remember_seen():
-    """Garde dans un cookie du navigateur les matchs dont on a déjà regardé le score."""
-    ids = ",".join(sorted(st.session_state.vu)[-300:])
-    components.html(f"<script>parent.document.cookie='nba_vu={ids}; path=/; max-age=31536000; SameSite=Lax';</script>", height=0)
-
-
-def render_game(g, zone, idx, vids, show_all):
-    nba_vids, extra_vids = vids
-    summ = game_summary(g)
-    pre = pre_info(g, summ)
-    revealed = show_all or g["id"] in st.session_state.vu
-    f_rec = {}
-    for side in ("away", "home"):
-        f = team_form(idx, g[side]["id"], g["day"], g["season"])
-        f_rec[g[side]["id"]] = f"{f['w']}-{f['l']}" if f["n"] else ""
-    with st.container(border=True):
-        st.markdown(game_header(g, zone, revealed, f_rec), unsafe_allow_html=True)
-
-        # Vidéos et bouton du score
-        cols = st.columns([1, 1, 1])
-        if g["state"] == "post":
-            v = nba_video(nba_vids, g)
-            if v:
-                cols[0].link_button("▶️ Résumé NBA", yt_url(v), width="stretch")
-            else:
-                cols[0].link_button("🔎 Résumé NBA", yt_search_url(g), width="stretch",
-                                    help="Pas encore trouvé : recherche sur YouTube (les titres de la NBA ne donnent pas le score)")
-            x = extra_video(extra_vids, g)
-            if x:
-                cols[1].link_button("🇫🇷 Résumé NBA Extra", yt_url(x), width="stretch")
-            else:
-                cols[1].button("🇫🇷 Pas de résumé NBA Extra", disabled=True, width="stretch", key=f"nx{g['id']}")
-        if g["state"] != "pre" and not show_all:
-            if revealed:
-                if cols[2].button("🙈 Cacher le score", key=f"hide{g['id']}", width="stretch"):
-                    st.session_state.vu.discard(g["id"])
-                    st.session_state.vu_changed = True
-                    st.rerun()
-            elif cols[2].button("👁️ Voir le score", key=f"show{g['id']}", width="stretch", type="primary"):
-                st.session_state.vu.add(g["id"])
-                st.session_state.vu_changed = True
-                st.rerun()
-
-        # Avant-match
-        points = preview_points(g, idx, pre)
-        ai = ai_points("preview", g, ai_material(g, summ, points)) if (g["state"] == "pre" or disk_get(f"ai_preview_{g['id']}.json")) else None
-        with st.expander("📝 Les enjeux", expanded=g["state"] == "pre"):
-            st.markdown(points_html(ai or points), unsafe_allow_html=True)
-            if ai:
-                st.caption("✨ Écrit par Claude d'après ESPN et l'AP")
-        with st.expander("📊 Forme · face-à-face"):
-            st.markdown(form_html(g, idx), unsafe_allow_html=True)
-
-        # Après le score
-        if revealed and summ and g["state"] != "pre":
-            if g["state"] == "post" and g["completed"]:
-                rp = recap_points(g, summ, idx)
-                ai_r = ai_points("recap", g, ai_material(g, summ, rp)) if (summ.get("article") or {}).get("type") == "Recap" else None
-                with st.expander("🧠 L'analyse", expanded=True):
-                    st.markdown(points_html(ai_r or rp), unsafe_allow_html=True)
-                    if ai_r:
-                        st.caption("✨ Écrit par Claude d'après le compte rendu AP et les stats")
-            with st.expander("🧾 Feuille de match", expanded=g["state"] == "in"):
-                st.markdown(quarters_html(g), unsafe_allow_html=True)
-                tabs = st.tabs([f"{team(g['away']['id'])['name']}", f"{team(g['home']['id'])['name']}", "📈 Écart", "🏀 Paniers"])
-                for tab, side in zip(tabs[:2], ("away", "home")):
-                    with tab:
-                        rows = (summ.get("box") or {}).get(g[side]["id"]) or []
-                        data = box_table(rows)
-                        if data:
-                            st.dataframe(data, hide_index=True, width="stretch")
-                        dnp = [f"{r['name']} ({r['reason'].lower()})" if r["reason"] else r["name"] for r in rows if r["dnp"]]
-                        if dnp:
-                            st.caption("N'ont pas joué : " + ", ".join(dnp))
-                        if not rows:
-                            st.caption("Feuille de match pas encore disponible.")
-                with tabs[2]:
-                    pts, max_h, max_a, changes = flow(summ)
-                    if len(pts) > 2:
-                        th, ta = team(g["home"]["id"]), team(g["away"]["id"])
-                        st.line_chart({"Minute": [p[0] for p in pts], f"Écart (+ = {th['name']})": [p[1] for p in pts]},
-                                      x="Minute", height=220)
-                        st.caption(f"Plus grosse avance : {th['name']} +{max_h}, {ta['name']} +{max_a} · {changes} changements de leader")
-                with tabs[3]:
-                    periods = sorted({p[0] for p in summ.get("plays") or [] if p[0]})
-                    if periods:
-                        labels = {p: (f"Q{p}" if p <= 4 else f"P{p - 4}") for p in periods}
-                        pick = st.segmented_control("Quart-temps", periods, format_func=labels.get, default=periods[-1],
-                                                    key=f"q{g['id']}", label_visibility="collapsed")
-                        st.markdown(plays_html(summ, g, pick or periods[-1]), unsafe_allow_html=True)
-                    else:
-                        st.caption("Pas encore d'actions.")
-
-
-def render_journal(extra_vids, zone):
-    """Le dernier journal NBA Extra (diffusé à 12h45 à Paris, replay sur YouTube dans l'après-midi)."""
-    js = journals(extra_vids)
-    today_paris = datetime.now(ZONES["Paris"]).date()
-    show_time = "12h45" if zone == "Paris" else fr_hour(datetime.combine(today_paris, datetime.min.time(), ZONES["Paris"]).replace(hour=12, minute=45).astimezone(ZONES[zone]))
-    if today_paris in js:
-        v = js[today_paris]
-        c1, c2 = st.columns([3, 1.3])
-        c1.markdown(f"<div class='nb-card'>📺 <b>NBA Extra du jour</b> ({today_paris.day:02d}/{today_paris.month:02d}) est en ligne.</div>", unsafe_allow_html=True)
-        c2.link_button("▶️ Regarder le journal", yt_url(v), width="stretch", type="primary")
-    else:
-        last = max(js) if js else None
-        note = f"Le journal du jour ({show_time}{', heure de Montréal' if zone != 'Paris' else ''}) n'est pas encore en ligne, en général " + ("dans l'après-midi." if zone == "Paris" else "en fin de matinée.")
-        if today_paris.weekday() >= 5:
-            note = "Pas de NBA Extra le week-end (en général)."
-        c1, c2 = st.columns([3, 1.3])
-        c1.markdown(f"<div class='nb-card'>📺 {note}</div>", unsafe_allow_html=True)
-        if last:
-            c2.link_button(f"▶️ Journal du {last.day:02d}/{last.month:02d}", yt_url(js[last]), width="stretch")
+def set_cookie(name, value):
+    components.html(f"<script>parent.document.cookie='{name}={value}; path=/; max-age=31536000; SameSite=Lax';</script>", height=0)
 
 
 def main():
     st.set_page_config(page_title="Bada Bing NBA", page_icon="🏀", layout="centered")
     st.markdown(CSS, unsafe_allow_html=True)
-    if "vu" not in st.session_state:
-        cookie = ""
-        try:
-            cookie = st.context.cookies.get("nba_vu", "") or ""
-        except Exception:
-            pass
-        st.session_state.vu = {x for x in cookie.split(",") if x.isdigit()}
+    try:
+        cookies = st.context.cookies
+    except Exception:
+        cookies = {}
+    if "favs" not in st.session_state:
+        st.session_state.favs = [x for x in (cookies.get("nba_fav", "") or "").split(".") if x]
     zone = user_zone()
     today = datetime.now(NY).date()
     season = season_of(today)
-
-    top_l, top_r = st.columns([3, 1.2], vertical_alignment="center")
-    top_l.markdown("<div class='nb-title'>🏀 Bada Bing <span>NBA</span></div><div class='nb-sub'>Tous les matchs, sans spoil.</div>",
-                   unsafe_allow_html=True)
-    with top_r.popover("⚙️ Réglages", width="stretch"):
-        new_zone = st.radio("Heures affichées", list(ZONES), index=list(ZONES).index(zone), horizontal=True,
-                            help="Choisi automatiquement d'après le navigateur ; gardé dans l'adresse de la page.")
-        if new_zone != zone:
-            st.query_params["tz"] = new_zone
-            st.rerun()
-        show_all = st.toggle("Toujours montrer les scores", value=st.query_params.get("scores") == "1")
-        if show_all != (st.query_params.get("scores") == "1"):
-            if show_all:
-                st.query_params["scores"] = "1"
-            else:
-                st.query_params.pop("scores", None)
-            st.rerun()
-        if st.session_state.vu and st.button("🙈 Recacher tous les scores vus", width="stretch"):
-            st.session_state.vu = set()
-            st.session_state.vu_changed = True
-            st.rerun()
-        st.caption(f"Version {APP_VERSION} · données ESPN et YouTube")
     show_all = st.query_params.get("scores") == "1"
+    interest = st.query_params.get("indice") != "0"
 
     with st.spinner("Chargement du calendrier…"):
         schedule = season_games(season, bucket(3600))
@@ -1246,49 +1532,88 @@ def main():
         st.session_state.day = default_day(days, today)
     day = st.session_state.day
 
-    nba_vids, extra_vids = videos_since(min(day, today - timedelta(days=1)))
-    render_journal(extra_vids, zone)
+    # En-tête : marque à gauche, réglages à droite
+    c1, c2 = st.columns([5, 1.3], vertical_alignment="center")
+    c1.markdown("<div class='bb-brand'>🏀 Bada Bing <span>NBA</span></div><div class='bb-tag'>Les matchs de la nuit, sans spoil.</div>",
+                unsafe_allow_html=True)
+    with c2.popover("⚙️ Réglages", width="stretch"):
+        new_zone = st.radio("Heures affichées", list(ZONES), index=list(ZONES).index(zone), horizontal=True)
+        if new_zone != zone:
+            st.query_params["tz"] = new_zone
+            st.rerun()
+        all_teams = sorted(teams().values(), key=lambda t: t["full"])
+        favs = st.multiselect("⭐ Mes équipes", [t["abbr"] for t in all_teams], default=[f for f in st.session_state.favs if f in {t["abbr"] for t in all_teams}],
+                              format_func=lambda ab: next((t["full"] for t in all_teams if t["abbr"] == ab), ab),
+                              help="Leurs matchs passent en tête de liste, avec une étoile.")
+        if favs != st.session_state.favs:
+            st.session_state.favs = favs
+            st.session_state.fav_changed = True
+        new_interest = st.toggle("🔥 Indice « à voir » (sans dire qui gagne)", value=interest,
+                                 help="Note chaque match terminé (fin serrée, remontée, prolongation, grosse perf) et range les meilleurs en premier.")
+        new_show = st.toggle("👁 Toujours montrer les scores", value=show_all)
+        if new_interest != interest or new_show != show_all:
+            if new_interest:
+                st.query_params.pop("indice", None)
+            else:
+                st.query_params["indice"] = "0"
+            if new_show:
+                st.query_params["scores"] = "1"
+            else:
+                st.query_params.pop("scores", None)
+            st.rerun()
+        other = st.date_input("📅 Aller à une date (jour du match aux États-Unis)", value=day, format="DD/MM/YYYY", key=f"other_{day}")
+        if other != day:
+            st.session_state.day = other
+            st.rerun()
+        st.caption(f"Version {APP_VERSION} · ESPN, YouTube")
 
     # Choix de la nuit
     near = [d for d in days if d < today][-3:] + [d for d in days if d >= today][:3]
     if day not in near:
         near = sorted(set(near) | {day})
     picked = st.segmented_control("Nuit", near, format_func=lambda d: pill_label(d, zone, today), default=day,
-                                  key=f"days_{day}", label_visibility="collapsed")
+                                  key=f"days_{day}", label_visibility="collapsed", width="stretch")
     if picked and picked != day:
         st.session_state.day = picked
         st.rerun()
-    with st.expander("📅 Autre date"):
-        other = st.date_input("Date (jour du match aux États-Unis)", value=day, format="DD/MM/YYYY", key=f"other_{day}")
-        if other != day:
-            st.session_state.day = other
-            st.rerun()
 
-    st.markdown(f"<div class='nb-day'>{esc(night_title(day, zone, today))}</div>", unsafe_allow_html=True)
     games = day_games(day)
-    links = []
-    recap = nightly_recap(nba_vids, day)
-    if recap:
-        links.append(("🎬 Le résumé de la nuit (NBA)", yt_url(recap)))
-    js = journals(extra_vids)
-    if (day + timedelta(days=1)) in js:
-        jd = day + timedelta(days=1)
-        links.append((f"📺 NBA Extra du {jd.day:02d}/{jd.month:02d}", yt_url(js[jd])))
-    if links:
-        cols = st.columns(len(links))
-        for c, (label, url) in zip(cols, links):
-            c.link_button(label, url, width="stretch")
+    with ThreadPoolExecutor(8) as pool:  # fiches ESPN en parallèle (gardées en cache ensuite)
+        summs = dict(zip([g["id"] for g in games], pool.map(game_summary, games)))
+    nba_vids, extra_vids = videos_since(min(day, today - timedelta(days=1)))
+    ai_on = bool(_secret("anthropic", "api_key", ""))
+    watch = {g["id"]: watch_score(g, summs.get(g["id"])) for g in games} if interest else {}
+    watch = {k: v for k, v in watch.items() if v}
+    ranks = {}
+    if games:
+        f0 = team_form(idx, games[0]["home"]["id"], day, games[0]["season"])
+        if f0["n"] >= 8:
+            ranks = conf_ranks(idx, day, games[0]["season"])
+    ctx = {"zone": zone, "idx": idx, "summ": summs, "nba_vids": nba_vids, "extra_vids": extra_vids, "show_all": show_all,
+           "favs": set(st.session_state.favs), "watch": watch, "ranks": ranks, "ai": ai_on, "durs": {}}
+
+    # Affiche de la nuit (matchs à venir) et durées des vidéos trouvées
+    upcoming = [g for g in games if g["state"] == "pre"]
+    if len(upcoming) >= 3:
+        ctx["affiche"] = max(upcoming, key=lambda g: hype(g, idx, pre_info(g, summs.get(g["id"]))))["id"]
+    found = [v for g in games if g["state"] == "post" for v in (nba_video(nba_vids, g), extra_video(extra_vids, g)) if v]
+    found += [v for v in (nightly_recap(nba_vids, day), journals(extra_vids).get(day + timedelta(days=1))) if v]
+    ctx["durs"] = video_durations(tuple(sorted({v["id"] for v in found})))
+
+    st.markdown(night_html(day, games, ctx, today), unsafe_allow_html=True)
     if not games:
         st.info("Pas de match NBA ce jour-là.")
-    else:
-        with ThreadPoolExecutor(8) as pool:  # charger les fiches ESPN en parallèle (gardées en cache ensuite)
-            list(pool.map(game_summary, games))
-        st.caption(f"{len(games)} match{'s' if len(games) > 1 else ''} · heures de {zone}")
-        for g in games:
-            render_game(g, zone, idx, (nba_vids, extra_vids), show_all)
 
-    if st.session_state.pop("vu_changed", False):
-        remember_seen()
+    # Ordre : mes équipes, puis (nuit terminée) les matchs à voir d'abord, sinon l'horaire
+    def order(g):
+        fav = team(g["home"]["id"])["abbr"] in ctx["favs"] or team(g["away"]["id"])["abbr"] in ctx["favs"]
+        lv = watch.get(g["id"], (None,))[0]
+        return (0 if fav else 1, -(lv if lv is not None else -1) if watch else 0, g["utc"] or "")
+    for g in sorted(games, key=order):
+        st.markdown(game_card(g, ctx), unsafe_allow_html=True)
+
+    if st.session_state.pop("fav_changed", False):
+        set_cookie("nba_fav", ".".join(st.session_state.favs))
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ Données : API publique d'ESPN (sans clé) et YouTube (flux public, ou API YouTu
 import html
 import json
 import logging
+import math
 import os
 import re
 import threading
@@ -22,7 +23,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v004"
+APP_VERSION = "2026-10-v005"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -1329,7 +1330,8 @@ label.pl:hover {color:var(--accent);}
 .pm-leg .dot {width:10px; height:10px; border-radius:50%; background:var(--accent);}
 .pm-leg .cross {color:#9aa4b8; font-weight:800;}
 .pm-leg .sq {width:12px; height:12px; border-radius:3px;}
-.pm-leg .sq.hot {background:rgba(239,68,68,.55);} .pm-leg .sq.cold {background:rgba(59,130,246,.55);}
+.pm-leg .sq.hot {background:rgba(239,68,68,.6);} .pm-leg .sq.cold {background:rgba(59,130,246,.6);} .pm-leg .sq.avg {background:rgba(234,179,8,.4);}
+.court .zl {font:800 15px 'Source Sans Pro', sans-serif; fill:#fff; text-anchor:middle; dominant-baseline:middle; paint-order:stroke; stroke:#0b0f17; stroke-width:4px;}
 .zones {display:grid; grid-template-columns:repeat(auto-fit, minmax(90px, 1fr)); gap:6px;}
 .z {background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:6px 8px; text-align:center;}
 .z b {display:block; font-size:1rem;} .z span {display:block; font-size:.68rem; color:var(--muted);} .z small {font-size:.72rem;}
@@ -1526,56 +1528,134 @@ def box_html(g, summ):
             + "".join(modals))
 
 
-# Zones de tir (pieds ; panier en (25, 0), comme les coordonnées d'ESPN) et réussite moyenne en NBA
-SHOT_ZONES = [("rim", "Près du cercle", 0.64), ("mid", "Mi-distance", 0.42), ("corner", "3 pts dans le coin", 0.39), ("arc", "3 pts", 0.36)]
+# Zones de tir à la façon des « hot zones » de la NBA : 14 zones (pieds ; panier en (25, 0), coordonnées d'ESPN).
+# Angle mesuré depuis le panier : 0° = dans l'axe, négatif d'un côté du terrain, positif de l'autre.
+# (clé, famille, bornes d'angle, moyenne NBA de réussite)
+HOT_ZONES = [
+    ("rim", "rim", None, 0.64),
+    ("sm_l", "mid", (-125, -30), 0.43), ("sm_c", "mid", (-30, 30), 0.43), ("sm_r", "mid", (30, 125), 0.43),
+    ("lm_bl", "mid", (-125, -60), 0.41), ("lm_l", "mid", (-60, -20), 0.41), ("lm_c", "mid", (-20, 20), 0.41),
+    ("lm_r", "mid", (20, 60), 0.41), ("lm_br", "mid", (60, 125), 0.41),
+    ("c3_l", "three", None, 0.39), ("w3_l", "three", (-125, -25), 0.355), ("t3", "three", (-25, 25), 0.355),
+    ("w3_r", "three", (25, 125), 0.355), ("c3_r", "three", None, 0.39),
+]
+ZONE_AVG = {k: avg for k, _, _, avg in HOT_ZONES}
+FAMILIES = [("rim", "Près du cercle"), ("mid", "Mi-distance"), ("three", "À 3 points")]
 
 
 def shot_zone(x, y, three):
+    ang = math.degrees(math.atan2(x - 25, y))
+    ang = max(-124.9, min(124.9, ang))
     if three:
-        return "corner" if y <= 9 and abs(x - 25) >= 20 else "arc"
-    return "rim" if (x - 25) ** 2 + y ** 2 <= 8 ** 2 else "mid"
+        if y <= 9 and abs(x - 25) >= 20:
+            return "c3_l" if x < 25 else "c3_r"
+        return "w3_l" if ang < -25 else "t3" if ang <= 25 else "w3_r"
+    dist = math.hypot(x - 25, y)
+    if dist <= 8:
+        return "rim"
+    if dist <= 16:
+        return "sm_l" if ang < -30 else "sm_c" if ang <= 30 else "sm_r"
+    for key, _, (a1, a2), _ in HOT_ZONES[4:9]:
+        if a1 <= ang <= a2:
+            return key
+    return "lm_c"
 
 
 def zone_color(made, att, avg):
-    """Rouge = zone chaude (au-dessus de la moyenne NBA), bleu = zone froide ; plus c'est franc, plus il y a de tirs."""
+    """Rouge = zone chaude (au-dessus de la moyenne NBA de la zone), bleu = froide ; plus franc avec plus de tirs."""
     if not att:
-        return "rgba(120,130,150,.08)"
+        return "rgba(120,130,150,.06)"
     diff = made / att - avg
-    alpha = min(0.6, 0.18 + 0.05 * att) * min(1, abs(diff) / 0.15 + 0.25)
-    return f"rgba(239,68,68,{alpha:.2f})" if diff >= 0 else f"rgba(59,130,246,{alpha:.2f})"
+    strength = min(1.0, abs(diff) / 0.2 + 0.2) * min(1.0, 0.45 + 0.15 * att)
+    alpha = 0.12 + 0.5 * strength
+    if abs(diff) < 0.04:
+        return f"rgba(234,179,8,{0.10 + 0.25 * min(1.0, 0.45 + 0.15 * att):.2f})"  # dans la moyenne : jaune pâle
+    return f"rgba(239,68,68,{alpha:.2f})" if diff > 0 else f"rgba(59,130,246,{alpha:.2f})"
 
 
 def court_svg(shots, uid):
-    """Demi-terrain (10 px par pied, ligne de fond en haut) : zones colorées selon la réussite, tirs réussis ● et ratés ✕."""
-    S, BY = 10, 52.5  # échelle, position du panier depuis la ligne de fond
-    px = lambda x: x * S
-    py = lambda y: BY + y * S
-    stats = {k: [0, 0] for k, _, _ in SHOT_ZONES}
+    """Demi-terrain (10 px par pied, ligne de fond en haut) : 14 zones colorées selon la réussite du joueur,
+    avec « réussis/tentés » dans chaque zone où il a tiré, puis chaque tir (● réussi, ✕ raté)."""
+    BY = 52.5  # panier à 5,25 pieds de la ligne de fond
+    stats = {k: [0, 0] for k, _, _, _ in HOT_ZONES}
     for x, y, made, three in shots:
         z = shot_zone(x, y, three)
         stats[z][1] += 1
         stats[z][0] += 1 if made else 0
-    col = {k: zone_color(stats[k][0], stats[k][1], avg) for k, _, avg in SHOT_ZONES}
-    # Ligne à 3 points : droite dans les coins (à 22 pieds du panier, jusqu'à 14 pieds de la ligne de fond), puis arc de 23,75 pieds
-    cx, r3 = 250, 237.5
-    y_join = 140
-    arc = f"M30,0 L30,{y_join} A{r3},{r3} 0 0 0 470,{y_join} L470,0"
-    three_area = f"M0,{y_join} L30,{y_join} A{r3},{r3} 0 0 0 470,{y_join} L500,{y_join} L500,470 L0,470 Z"
+
+    def pt(r, a):
+        return 250 + r * math.sin(math.radians(a)), BY + r * math.cos(math.radians(a))
+
+    def sector(r1, r2, a1, a2):
+        x1, y1 = pt(r2, a1)
+        x2, y2 = pt(r2, a2)
+        x3, y3 = pt(r1, a2)
+        x4, y4 = pt(r1, a1)
+        big = 1 if a2 - a1 > 180 else 0
+        inner = f"A{r1},{r1} 0 {big} 1 {x4:.1f},{y4:.1f}" if r1 > 0 else f"L{x4:.1f},{y4:.1f}"
+        return f"M{x1:.1f},{y1:.1f} A{r2},{r2} 0 {big} 0 {x2:.1f},{y2:.1f} L{x3:.1f},{y3:.1f} {inner} Z"
+
+    yj, r3 = 140, 237.5  # fin des coins (14 pieds de la ligne de fond), rayon de la ligne à 3 points
+    arc = f"M30,0 L30,{yj} A{r3},{r3} 0 0 0 470,{yj} L470,0"
+    inside = f"{arc} Z"
+    outside = f"M0,{yj} L30,{yj} A{r3},{r3} 0 0 0 470,{yj} L500,{yj} L500,470 L0,470 Z"
+    col = {k: zone_color(stats[k][0], stats[k][1], ZONE_AVG[k]) for k in stats}
+    cin, cout = f"in{uid}", f"out{uid}"
+    shapes, labels = [], []
+
+    def label(k, x, y):
+        m, a = stats[k]
+        if a:
+            labels.append(f'<text x="{x:.0f}" y="{y:.0f}" class="zl">{m}/{a}</text>')
+
+    for k, fam, ang, _ in HOT_ZONES:
+        if k == "rim":
+            shapes.append(f'<circle cx="250" cy="{BY}" r="80" fill="{col[k]}"/>')
+            label(k, 250, BY + 48)
+        elif k.startswith("sm_"):
+            shapes.append(f'<path d="{sector(80, 160, *ang)}" fill="{col[k]}" clip-path="url(#{cin})"/>')
+            mid_a = max(-75, min(75, (ang[0] + ang[1]) / 2))
+            label(k, *pt(122, mid_a))
+        elif k.startswith("lm_"):
+            shapes.append(f'<path d="{sector(160, 420, *ang)}" fill="{col[k]}" clip-path="url(#{cin})"/>')
+            mid_a = max(-80, min(80, (ang[0] + ang[1]) / 2))
+            x, y = pt(200, mid_a)
+            label(k, x, max(y, 24))
+        elif k in ("c3_l", "c3_r"):
+            x0 = 0 if k == "c3_l" else 470
+            shapes.append(f'<rect x="{x0}" y="0" width="30" height="{yj}" fill="{col[k]}"/>')
+            label(k, x0 + 15, 80)
+        else:
+            shapes.append(f'<path d="{sector(0, 700, *ang)}" fill="{col[k]}" clip-path="url(#{cout})"/>')
+            mid_a = max(-50, min(50, (ang[0] + ang[1]) / 2))
+            label(k, *pt(280, mid_a))
+
+    # séparations entre les zones (traits fins)
+    seps = []
+    for a in (-30, 30):
+        (x1, y1), (x2, y2) = pt(80, a), pt(160, a)
+        seps.append(f"M{x1:.1f},{y1:.1f} L{x2:.1f},{y2:.1f}")
+    for a in (-60, -20, 20, 60):
+        (x1, y1), (x2, y2) = pt(160, a), pt(420, a)
+        seps.append(f"M{x1:.1f},{y1:.1f} L{x2:.1f},{y2:.1f}")
+    for a in (-25, 25):
+        (x1, y1), (x2, y2) = pt(r3, a), pt(700, a)
+        seps.append(f"M{x1:.1f},{y1:.1f} L{x2:.1f},{y2:.1f}")
+    sep_paths = (f'<path d="{" ".join(seps[:6])}" stroke="#0b0f17" stroke-width="2" clip-path="url(#{cin})"/>'
+                 f'<path d="{" ".join(seps[6:])}" stroke="#0b0f17" stroke-width="2" clip-path="url(#{cout})"/>')
+
     parts = [
         '<svg viewBox="0 0 500 470" class="court" role="img" aria-label="Carte de tirs">',
+        f'<defs><clipPath id="{cin}"><path d="{inside}"/></clipPath><clipPath id="{cout}"><path d="{outside}"/></clipPath></defs>',
         '<rect x="0" y="0" width="500" height="470" fill="#141c2a"/>',
-        # zones colorées
-        f'<path d="{three_area}" fill-rule="evenodd" fill="{col["arc"]}"/>',
-        f'<rect x="0" y="0" width="30" height="{y_join}" fill="{col["corner"]}"/>',
-        f'<rect x="470" y="0" width="30" height="{y_join}" fill="{col["corner"]}"/>',
-        f'<path d="{arc} Z" fill="{col["mid"]}"/>',
-        f'<circle cx="{cx}" cy="{BY}" r="80" fill="{col["rim"]}"/>',
-        # lignes du terrain
+        *shapes,
+        sep_paths,
+        f'<circle cx="250" cy="{BY}" r="160" fill="none" stroke="#0b0f17" stroke-width="2" clip-path="url(#{cin})"/>',
+        f'<circle cx="250" cy="{BY}" r="80" fill="none" stroke="#0b0f17" stroke-width="2"/>',
         '<g fill="none" stroke="#3a4760" stroke-width="2">',
         f'<path d="{arc}"/>',
-        '<rect x="170" y="0" width="160" height="190"/>',
-        '<circle cx="250" cy="190" r="60"/>',
-        f'<path d="M210,{BY} A40,40 0 0 0 290,{BY}"/>',
+        '<rect x="170" y="0" width="160" height="190" stroke-opacity=".6"/>',
+        '<circle cx="250" cy="190" r="60" stroke-opacity=".6"/>',
         '<line x1="220" y1="40" x2="280" y2="40"/>',
         f'<circle cx="250" cy="{BY}" r="7.5" stroke="#F58426"/>',
         '<path d="M190,470 A60,60 0 0 1 310,470"/>',
@@ -1583,16 +1663,21 @@ def court_svg(shots, uid):
         '</g>',
     ]
     for x, y, made, three in shots:
-        X, Y = px(x), py(y)
+        X, Y = x * 10, BY + y * 10
         if Y > 465:
             continue
         if made:
-            parts.append(f'<circle cx="{X:.0f}" cy="{Y:.0f}" r="8" fill="#F58426" stroke="#0b0f17" stroke-width="2"/>')
+            parts.append(f'<circle cx="{X:.0f}" cy="{Y:.0f}" r="7" fill="#F58426" stroke="#0b0f17" stroke-width="2"/>')
         else:
-            parts.append(f'<path d="M{X - 6:.0f},{Y - 6:.0f} L{X + 6:.0f},{Y + 6:.0f} M{X + 6:.0f},{Y - 6:.0f} L{X - 6:.0f},{Y + 6:.0f}" '
-                         f'stroke="#9aa4b8" stroke-width="2.6" stroke-linecap="round"/>')
+            parts.append(f'<path d="M{X - 5:.0f},{Y - 5:.0f} L{X + 5:.0f},{Y + 5:.0f} M{X + 5:.0f},{Y - 5:.0f} L{X - 5:.0f},{Y + 5:.0f}" '
+                         f'stroke="#c3cad8" stroke-width="2.4" stroke-linecap="round"/>')
+    parts += labels
     parts.append("</svg>")
-    return "".join(parts), stats
+    fam = {f: [0, 0] for f, _ in FAMILIES}
+    for k, f, _, _ in HOT_ZONES:
+        fam[f][0] += stats[k][0]
+        fam[f][1] += stats[k][1]
+    return "".join(parts), fam
 
 
 def shot_modal(g, r, tid, shots, mid):
@@ -1600,7 +1685,8 @@ def shot_modal(g, r, tid, shots, mid):
     made = sum(1 for s in shots if s[2])
     t = team(tid)
     zones = []
-    for k, label, avg in SHOT_ZONES:
+    for k, label in FAMILIES:
+        avg = {"rim": 0.64, "mid": 0.42, "three": 0.36}[k]
         m, a = stats[k]
         if not a:
             continue
@@ -1614,9 +1700,9 @@ def shot_modal(g, r, tid, shots, mid):
             f"<label for='{mid}' class='pm-x'>✕</label></div>"
             f"{svg}"
             f"<div class='pm-leg'><span><i class='dot'></i> réussi</span><span><i class='cross'>✕</i> raté</span>"
-            f"<span><i class='sq hot'></i> zone chaude</span><span><i class='sq cold'></i> zone froide</span></div>"
+            f"<span><i class='sq hot'></i> chaude</span><span><i class='sq avg'></i> dans la moyenne</span><span><i class='sq cold'></i> froide</span></div>"
             f"<div class='zones'>{''.join(zones)}</div>"
-            f"<div class='note'>{made} tirs réussis sur {len(shots)} (hors lancers francs) · chaud / froid : par rapport à la moyenne NBA de chaque zone.</div>"
+            f"<div class='note'>{made} tirs réussis sur {len(shots)} (hors lancers francs) · dans chaque zone : tirs réussis / tentés, couleur comparée à la moyenne NBA de la zone.</div>"
             f"</div></div>")
 
 

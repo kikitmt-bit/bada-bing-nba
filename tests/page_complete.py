@@ -59,4 +59,4 @@ for vue in ("nuit", "semaine"):
     app["main"]()
     html = "\n".join(o for o in out if isinstance(o, str))
     print(vue, "OK", len(html), "car. ·", [o for o in out if str(o).startswith("COOKIE")], "· carte(s):", html.count("class='gc'"),
-          "· semaine:", "meilleurs matchs de la semaine" in html, "· titre:", [x for x in out if "wk-t" in str(x)][0][:90])
+          "· semaine:", "meilleurs matchs de la semaine" in html, "· barre de nuit:", "nbar" in html)

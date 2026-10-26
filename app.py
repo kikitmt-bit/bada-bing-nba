@@ -23,7 +23,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v010"
+APP_VERSION = "2026-10-v011"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -40,6 +40,7 @@ YOUTUBE_PLAYLIST_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
 
 JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+MOIS_COURT = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
 MONTHS_EN = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
 
 # Surnoms utilisés dans les titres YouTube, en plus du nom officiel
@@ -1481,193 +1482,163 @@ label.pl:hover {color:var(--accent);}
   .dt {width:17px; height:17px; font-size:.6rem;}
 }
 
-/* ===== Design v009 : cartes à collectionner (style « Holo ») ===== */
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap');
-.block-container {max-width:1240px; padding-top:3.2rem;}
+
+/* ===== Design v011 : cartes à collectionner, afficheur « play clock », raretés ===== */
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=Orbitron:wght@700;800&display=swap');
+.block-container {max-width:1240px; padding-top:2.6rem;}
 .stApp, .stApp p, .stApp li, .stApp label, .stApp button {font-family:'Barlow', 'Source Sans Pro', sans-serif;}
-.bb-brand {font-family:'Barlow Condensed', sans-serif; font-size:2rem; font-weight:800; text-transform:uppercase; letter-spacing:.02em;}
+.bb-brand {font-family:'Barlow Condensed', sans-serif; font-size:1.9rem; font-weight:800; text-transform:uppercase; letter-spacing:.02em; line-height:1;}
 .bb-brand span {color:#ffc75a;}
 
-/* Bandeau des semaines et des nuits */
-.st-key-wk [data-testid="stHorizontalBlock"] {flex-wrap:wrap; gap:8px; align-items:center;}
-.st-key-wk [data-testid="stColumn"] {width:auto !important; flex:0 1 auto !important; min-width:0 !important;}
-.st-key-wk button {min-height:44px; border-radius:12px;}
-.wk-t {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.35rem; line-height:1.1; text-transform:uppercase; padding:0 4px;}
-.wk-t small {display:block; font-family:'Barlow', sans-serif; font-weight:500; font-size:.8rem; color:var(--muted); text-transform:none;}
-.st-key-nuits [data-testid="stHorizontalBlock"] {flex-wrap:nowrap; overflow-x:auto; gap:8px; padding-bottom:4px; scroll-snap-type:x proximity;}
-.st-key-nuits [data-testid="stColumn"] {flex:1 0 128px !important; min-width:128px !important; scroll-snap-align:center;}
-.st-key-nuits button {min-height:46px; border-radius:12px 12px 4px 4px; font-family:'Barlow Condensed', sans-serif;}
-.st-key-nuits button p {font-family:'Barlow Condensed', sans-serif; font-weight:700; font-size:1.02rem; white-space:nowrap;}
-.st-key-nuits button[kind="primary"], .st-key-nuits button[data-testid="stBaseButton-primary"] {background:#ffc75a; border-color:#ffc75a; color:#1a1205;}
-.st-key-nuits button[kind="primary"] p, .st-key-nuits button[data-testid="stBaseButton-primary"] p {color:#1a1205;}
-.ns {font-size:.76rem; font-weight:600; text-align:center; margin-top:-10px; padding:4px 2px; border-radius:4px 4px 10px 10px; background:#131824; border:1px solid var(--line); border-top:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-.ns-done {color:#8a94a8;} .ns-done b {color:#6ee7a0; font-weight:700;}
-.ns-new {color:#ffc75a; background:rgba(255,199,90,.08); border-color:rgba(255,199,90,.45);}
-.ns-live {color:#ff8a8a;} .ns-next, .ns-none {color:#6b7590;}
+/* En-tête : marque | 📅 | ⚙️ */
+.st-key-hdr [data-testid="stHorizontalBlock"] {flex-wrap:nowrap; align-items:center; gap:8px;}
+.st-key-hdr [data-testid="stColumn"] {width:auto !important; flex:0 0 auto !important; min-width:0 !important;}
+.st-key-hdr [data-testid="stColumn"]:first-child {flex:1 1 auto !important;}
+.st-key-hdr button {min-height:42px; min-width:46px; border-radius:12px;}
 
-/* En-tête de la nuit */
-.night {background:#10141e; border:1px solid #1e2533; border-radius:18px; padding:18px 20px 16px; margin:.4rem 0 1.2rem;}
-.n-kicker {font-weight:700; font-size:.8rem; letter-spacing:.1em; text-transform:uppercase; color:#ffc75a;}
-.n-kicker.k-live {color:#ff8a8a;} .n-kicker.k-next, .n-kicker.k-none {color:var(--muted);}
-.n-title {font-family:'Barlow Condensed', sans-serif; font-size:2.3rem; font-weight:800; text-transform:uppercase; line-height:1.05; margin:.15rem 0 .2rem;}
-.ess {margin-top:14px; padding-top:12px; border-top:1px solid #1e2533;}
-.ess .tg {display:none;}
-.ess-head {display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;}
-.ess-t {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.25rem; text-transform:uppercase;}
-.ess-safe {color:var(--muted); font-size:.9rem;}
-.ess-head .cbtn {flex:0 0 auto;}
-.ess-hid {display:none; margin-top:8px;}
+/* Bandeau sur une ligne : ‹ | Semaine | 7 nuits | › */
+.st-key-nav [data-testid="stHorizontalBlock"] {flex-wrap:nowrap; overflow-x:auto; gap:6px; align-items:stretch; padding-bottom:4px; scrollbar-width:thin;}
+.st-key-nav [data-testid="stColumn"] {flex:1 0 104px !important; min-width:104px !important;}
+.st-key-nav [data-testid="stColumn"]:first-child, .st-key-nav [data-testid="stColumn"]:last-child {flex:0 0 42px !important; min-width:42px !important;}
+.st-key-nav button {min-height:46px; height:100%; border-radius:12px; position:relative; padding:4px 6px;}
+.st-key-nav button p {font-family:'Barlow Condensed', sans-serif; font-weight:700; font-size:1.02rem; white-space:nowrap; overflow:visible;}
+.st-key-nav button[kind="primary"], .st-key-nav button[data-testid="stBaseButton-primary"] {background:#ffc75a; border-color:#ffc75a;}
+.st-key-nav button[kind="primary"] p, .st-key-nav button[data-testid="stBaseButton-primary"] p {color:#1a1205;}
+
+/* Barre de la nuit */
+.nbar {margin:.5rem 0 1.1rem; padding:12px 16px; border-radius:16px; background:#10141e; border:1px solid #1e2533;}
+.nbar .tg {display:none;}
+.nb-row {display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;}
+.nb-t {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.45rem; text-transform:uppercase; line-height:1.05;}
+.nb-s {font-size:.82rem; font-weight:600; color:#6ee7a0; margin-top:2px;}
+.nb-s.k-live {color:#ff8a8a;} .nb-s.k-next, .nb-s.k-none {color:var(--muted);}
+.nb-r {display:flex; gap:6px; flex-wrap:wrap;}
+.ess-hid {display:none; margin-top:10px; padding-top:10px; border-top:1px solid #1e2533;}
 .tg-n:checked ~ .ess-hid {display:block;}
-.tg-n:checked ~ .ess-head .pill-n .on {display:inline;} .tg-n:checked ~ .ess-head .pill-n .off {display:none;}
-.chip {cursor:pointer;}
+.tg-n:checked ~ * .pill-n {border-color:#ffc75a; background:rgba(255,199,90,.12);}
+.tg-n:checked ~ * .pill-n .on {display:inline;} .tg-n:checked ~ * .pill-n .off {display:none;}
+
+/* Boutons discrets */
+.cbtn {display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:34px; padding:0 12px; border-radius:9px;
+       border:1px solid #2f3848; background:rgba(15,19,28,.6); color:#eef1f6 !important; text-decoration:none !important; font-weight:600; font-size:.82rem; cursor:pointer; user-select:none; white-space:nowrap;}
+.cbtn:hover {border-color:#ffc75a;}
+.cbtn.main {background:#ffc75a; border-color:#ffc75a; color:#1a1205 !important; font-weight:700;}
+.cbtn.ghost {color:#9aa3b5 !important; border-style:dashed;}
+.cbtn.fr {background:#16233d; border-color:#2a3f66;}
+.cbtn.off {opacity:.55; cursor:default; border-style:dashed;}
+.cbtn .on {display:none;}
 
 /* Grille de cartes */
 .cards {display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:22px; margin-bottom:2rem;}
 .gc {position:relative; scroll-margin-top:80px;}
 .gc .tg {display:none;}
-.card {padding:3px; border-radius:20px; background:#2a3242; box-shadow:0 14px 30px rgba(0,0,0,.35); height:100%; box-sizing:border-box;}
-.card.r3 {padding:6px; background:conic-gradient(from 210deg, #f7d774, #fff4c2, #c9962b, #ffe9a3, #9fdcff, #f5b8ff, #f7d774); box-shadow:0 0 0 1px rgba(255,220,130,.5), 0 20px 50px rgba(247,200,80,.22);}
-.card.r2 {padding:6px; background:linear-gradient(135deg, #f2f5f8, #98a2ae, #ffffff, #7a8491);}
-.card.r1 {padding:6px; background:linear-gradient(135deg, #e6a874, #8a5228, #f3c495, #7a4520);}
-.card.r0 {background:#343d4e;}
-.card.rm1 {background:#1c222d;} .card.rm1 .ci {filter:saturate(.35); opacity:.8;}
-.card.rm2 {background:#1a1d23;} .card.rm2 .ci {filter:grayscale(1); opacity:.55;}
-.card.raff {padding:5px; background:linear-gradient(135deg, #ffd770, #a8781f, #ffe9a3);}
-.card.rlive {padding:4px; background:linear-gradient(135deg, #ff5a5a, #8a1c1c, #ff8a8a);}
-.ci {height:100%; border-radius:17px; overflow:hidden; display:flex; flex-direction:column;
+.card {padding:5px; border-radius:20px; height:100%; box-sizing:border-box; background:#2a3242; box-shadow:0 14px 30px rgba(0,0,0,.35);}
+/* Raretés (même largeur de cadre partout) : commune → légendaire */
+.card.Lm2 {background:#585e68;}
+.card.Lm1 {background:#8a939f;}
+.card.L0 {background:#3fae5a;}
+.card.L1 {background:linear-gradient(135deg, #1d4ed8, #60a5fa 50%, #1e40af);}
+.card.L2 {background:linear-gradient(135deg, #7c3aed, #e879f9 45%, #a855f7 70%, #6d28d9); box-shadow:0 0 22px rgba(168,85,247,.35), 0 14px 30px rgba(0,0,0,.35);}
+.card.L3 {background:linear-gradient(115deg, #b8860b, #ffe9a3, #f7c948, #fff8dc, #d4a017, #9fdcff, #f5b8ff, #ffe9a3, #b8860b); background-size:300% 100%;
+          animation:holo 6s linear infinite; box-shadow:0 0 0 1px rgba(255,220,130,.6), 0 0 34px rgba(247,200,80,.35), 0 14px 30px rgba(0,0,0,.35);}
+.card.Laff {background:linear-gradient(135deg, #a8781f, #ffd770 50%, #a8781f);}
+.card.Llive {background:linear-gradient(135deg, #b91c1c, #ff6b6b 50%, #b91c1c);}
+@keyframes holo {to {background-position:300% 0;}}
+@media (prefers-reduced-motion: reduce) {.card.L3 {animation:none;}}
+.ci {height:100%; border-radius:15px; overflow:hidden; display:flex; flex-direction:column;
      background:repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 10px), linear-gradient(115deg, var(--ca) 0%, var(--ca) 49%, var(--ch) 51%, var(--ch) 100%);}
-.card.r3 .ci, .card.r2 .ci, .card.r1 .ci {border-radius:15px;}
-.ctop {display:flex; justify-content:space-between; align-items:center; gap:6px; padding:12px 12px 0;}
+.ctop {display:flex; justify-content:space-between; align-items:center; gap:6px; padding:11px 11px 0; min-height:26px;}
 .chips {display:flex; gap:5px; flex-wrap:wrap;}
-.lvl {display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; background:rgba(8,10,16,.78); color:#fff; font-weight:700; font-size:.8rem; white-space:nowrap;}
-.card.r3 .lvl {background:conic-gradient(from 210deg, #f7d774, #fff4c2, #c9962b, #ffe9a3, #f7d774); color:#2a1e00;}
-.card.r2 .lvl {background:linear-gradient(135deg, #f2f5f8, #b6bec8); color:#121820;}
-.card.r1 .lvl {background:linear-gradient(135deg, #f3c495, #c27a45); color:#1f1206;}
-.lvl.live {background:#d93636; color:#fff;}
-.cpill {display:inline-flex; align-items:center; padding:3px 9px; border-radius:999px; background:rgba(8,10,16,.72); color:#eef1f6; font-weight:600; font-size:.78rem; white-space:nowrap;}
+.lvl {display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; background:rgba(8,10,16,.8); color:#fff; font-weight:700; font-size:.8rem; white-space:nowrap;}
+.L3 .lvl {background:linear-gradient(135deg, #f7c948, #fff4c2, #d4a017); color:#2a1e00;}
+.L2 .lvl {background:linear-gradient(135deg, #a855f7, #e879f9); color:#fff;}
+.L1 .lvl {background:#2563eb; color:#fff;}
+.L0 .lvl {background:#2f8f48; color:#fff;}
+.Lm1 .lvl {background:#5f6773; color:#fff;}
+.Lm2 .lvl {background:#3d424a; color:#d6dae0;}
+.Llive .lvl {background:#d93636;}
+.Laff .lvl {background:#ffd770; color:#2a1e00;}
+.cpill {display:inline-flex; align-items:center; padding:3px 9px; border-radius:999px; background:rgba(8,10,16,.75); color:#eef1f6; font-weight:700; font-size:.8rem; white-space:nowrap;}
 .cpill.star {color:#ffc75a;}
-.cart {position:relative; height:150px; flex:none;}
-.disc {width:92px; height:92px; border-radius:50%; background:rgba(8,10,16,.55); box-shadow:0 10px 24px rgba(0,0,0,.45), inset 0 0 0 2px rgba(255,255,255,.18); display:flex; align-items:center; justify-content:center;}
-.disc img {width:70px; height:70px; object-fit:contain; filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));}
-.disc b {font-family:'Barlow Condensed', sans-serif; font-size:1.4rem; color:#fff;}
-.disc.fd b {font-size:1.15rem;}
-.cart .da {position:absolute; left:26px; top:12px;}
-.cart .dh {position:absolute; right:26px; bottom:6px;}
-.cart .at {position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:40px; height:40px; border-radius:50%; background:#0a0d14; color:#eef1f6; display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.15rem; box-shadow:0 0 0 3px rgba(255,255,255,.18);}
-.plate {margin:auto 10px 10px; padding:12px 12px 10px; border-radius:12px; background:rgba(8,10,16,.9); display:flex; flex-direction:column; gap:9px;}
-.crow {display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:6px;}
-.tn b {display:block; font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.6rem; line-height:1; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-.tn small {display:block; color:#9aa3b5; font-size:.78rem; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-.tn.r {text-align:right;}
-.cm {text-align:center;}
-.cm-time {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.55rem; line-height:1;}
-.cm-sub {font-size:.68rem; text-transform:uppercase; letter-spacing:.08em; color:#9aa3b5; margin-top:3px; white-space:nowrap;}
-.cm-sub.live {color:#ff6b6b; font-weight:800;}
-.cm-score {cursor:pointer; display:inline-block; font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.45rem; line-height:1.1; white-space:nowrap;}
-.sc-hid {display:inline-block; letter-spacing:.1em; color:#6f7a8f; padding:1px 9px; border-radius:8px; border:1px dashed #353f52;}
-.sc-real {display:none;} .sc-real .w {color:#fff;} .sc-real .l {color:#6f7a8f;}
+.cart {position:relative; display:block; height:150px; flex:none;}
+label.cart {cursor:pointer;}
+.disc {width:96px; height:96px; border-radius:50%; background:rgba(8,10,16,.5); box-shadow:0 10px 24px rgba(0,0,0,.45), inset 0 0 0 2px rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center;}
+.disc img {width:72px; height:72px; object-fit:contain; filter:drop-shadow(0 2px 4px rgba(0,0,0,.45));}
+.disc b {font-family:'Barlow Condensed', sans-serif; font-size:1.3rem; color:#fff;}
+.cart .da {position:absolute; left:24px; top:8px;}
+.cart .dh {position:absolute; right:24px; bottom:4px;}
+.cart .at {position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:38px; height:38px; border-radius:50%; background:rgba(8,10,16,.85); color:#eef1f6; display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.1rem; box-shadow:0 0 0 3px rgba(255,255,255,.18);}
+/* Noms + afficheur */
+.cname {display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:8px; padding:8px 12px; background:linear-gradient(180deg, rgba(8,10,16,.0), rgba(8,10,16,.55));}
+.cname b {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.2rem; line-height:1; text-transform:uppercase; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 2px 6px rgba(0,0,0,.6);}
+.cname b.r {text-align:right;}
+.clock {display:flex; flex-direction:column; align-items:center; gap:2px; padding:5px 10px 6px; border-radius:9px; background:#050505;
+        box-shadow:inset 0 0 0 1px #2b2b2b, inset 0 0 12px rgba(0,0,0,.9), 0 4px 12px rgba(0,0,0,.5); min-width:86px;}
+.clock.tap {cursor:pointer;}
+.ck-l {font-size:.6rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#ff4d3d; white-space:nowrap;}
+.ck-l i {font-style:normal; letter-spacing:0;}
+.ck-d {font-family:'Orbitron', 'Barlow Condensed', monospace; font-weight:800; font-size:1.15rem; color:#ffb000; letter-spacing:.06em;
+       text-shadow:0 0 6px rgba(255,176,0,.75), 0 0 14px rgba(255,120,0,.35); white-space:nowrap; line-height:1.1;}
+.clock.tap:hover {box-shadow:inset 0 0 0 1px #ffb000, 0 0 14px rgba(255,176,0,.35);}
+.sc-real {display:none;}
 .tg-s:checked ~ * .sc-hid {display:none;} .tg-s:checked ~ * .sc-real {display:inline;}
-.cline {font-size:.9rem; font-weight:600; color:#dfe4ec; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
-.cacts {display:flex; gap:6px; flex-wrap:wrap;}
-.cbtn {flex:1 1 auto; display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:40px; padding:0 12px; border-radius:10px;
-       border:1px solid #2f3848; background:transparent; color:#eef1f6 !important; text-decoration:none !important; font-weight:600; font-size:.86rem; cursor:pointer; user-select:none; white-space:nowrap;}
-.cbtn:hover {border-color:#ffc75a;}
-.cbtn.main {background:#ffc75a; border-color:#ffc75a; color:#1a1205 !important; font-weight:700;}
-.cbtn.ghost {color:#9aa3b5 !important; border-style:dashed;}
-.cbtn.fr {background:#16233d; border-color:#2a3f66;}
-.cbtn .on {display:none;}
-.tg-s:checked ~ * .pill-s, .tg-f:checked ~ * .pill-f, .tg-n:checked ~ * .pill-n {border-color:#ffc75a; background:rgba(255,199,90,.12);}
-.tg-s:checked ~ * .pill-s .on, .tg-f:checked ~ * .pill-f .on {display:inline;}
-.tg-s:checked ~ * .pill-s .off, .tg-f:checked ~ * .pill-f .off {display:none;}
+.tg-s:checked ~ * .ck-l i {display:none;}
+.clock.big {padding:8px 16px 10px; min-width:150px;} .clock.big .ck-d {font-size:2rem;} .clock.big .ck-l {font-size:.7rem;}
+/* Avant-match et pied */
+.info {flex:1; padding:10px 12px 11px; background:linear-gradient(180deg, rgba(10,13,20,.86), rgba(10,13,20,.95)); border-top:1px solid rgba(255,255,255,.08);
+       display:flex; flex-direction:column; gap:8px; backdrop-filter:blur(6px);}
+.cprev {list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px;}
+.cprev li {font-size:.82rem; line-height:1.3; color:#d3d9e3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+.cfoot {display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+.lnk {margin-left:auto; cursor:pointer; font-size:.86rem; font-weight:700; color:#ffc75a; padding:6px 2px; white-space:nowrap;}
+.lnk:hover {text-decoration:underline;}
 
-/* Fiche du match (s'ouvre en grand) */
+/* Fiche du match */
 .fiche {display:none; position:fixed; inset:0; z-index:999990; justify-content:center; align-items:flex-start; padding:3vh 14px; overflow-y:auto; box-sizing:border-box;}
 .tg-o:checked ~ .fiche {display:flex;}
-.fbg {position:fixed; inset:0; background:rgba(4,7,12,.84); cursor:pointer;}
+.fbg {position:fixed; inset:0; background:rgba(4,7,12,.86); cursor:pointer;}
 .fbox {position:relative; width:100%; max-width:980px; background:#0f131c; border:1px solid #232b3a; border-radius:20px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.6); margin-bottom:3vh;}
 .fhead {position:relative; padding:22px 22px 16px; background:repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 10px), linear-gradient(115deg, var(--ca) 0%, var(--ca) 49%, var(--ch) 51%, var(--ch) 100%);}
-.fhead.r3 {box-shadow:inset 0 0 0 5px #f7d774;}
-.fx {position:absolute; right:14px; top:14px; width:44px; height:44px; border-radius:50%; background:rgba(8,10,16,.7); border:1px solid rgba(255,255,255,.3); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1.1rem; z-index:2;}
-.frow {display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:12px; padding-right:40px;}
+.fx {position:absolute; right:14px; top:14px; width:44px; height:44px; border-radius:50%; background:rgba(8,10,16,.75); border:1px solid rgba(255,255,255,.3); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1.1rem; z-index:2;}
+.frow {display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:12px; padding-right:44px;}
 .fteam {display:flex; align-items:center; gap:14px; min-width:0;}
 .fteam.r {justify-content:flex-end; text-align:right;}
-.fteam b {display:block; font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:2.2rem; line-height:1; text-transform:uppercase;}
-.fteam small {display:block; color:#e6e9f0; font-size:.85rem; margin-top:4px;}
-.disc.fd {width:80px; height:80px; flex:none;} .disc.fd img {width:60px; height:60px;}
-.cm.fm {padding:10px 16px; border-radius:14px; background:rgba(8,10,16,.88);}
-.cm.fm .cm-score {font-size:2.4rem;}
+.fteam b {display:block; font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:2.1rem; line-height:1; text-transform:uppercase; text-shadow:0 2px 6px rgba(0,0,0,.5);}
+.fteam small {display:inline-block; color:#eef1f6; font-size:.8rem; margin-top:5px; background:rgba(8,10,16,.55); padding:2px 8px; border-radius:999px;}
+.disc.fd {width:84px; height:84px; flex:none;} .disc.fd img {width:62px; height:62px;}
 .fchips {display:flex; flex-wrap:wrap; gap:6px; margin-top:14px;}
 .fbody {padding:16px 22px 24px;}
-.facts {display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;}
-.facts .cbtn {flex:0 1 auto; min-height:44px;}
-.fbody .panel {display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--line);}
-.tg-s:checked ~ .fiche .panel-s, .tg-f:checked ~ .fiche .panel-f {display:block;}
+.facts {display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px;}
+.facts .cbtn {min-height:42px; font-size:.9rem;}
 .fbody .in {overflow-x:auto;}
+.pf {margin-top:8px;}
 
 /* Vue Semaine */
-.wk {display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:18px; margin-bottom:2rem;}
+.wk {display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:18px; margin:.6rem 0 2rem;}
 .wbox {background:#10141e; border:1px solid #1e2533; border-radius:18px; padding:16px 18px;}
 .wbox h3 {margin:0 0 10px; font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.4rem; text-transform:uppercase;}
-.wrow {display:grid; grid-template-columns:96px minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 0; border-top:1px solid #1e2533; font-size:.9rem;}
+.wrow {display:grid; grid-template-columns:110px minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 0; border-top:1px solid #1e2533; font-size:.9rem;}
 .wrow:first-of-type {border-top:none;}
 .wrow .d {color:var(--muted); font-size:.8rem;}
 .wrow .m {display:flex; align-items:center; gap:6px; font-weight:700; min-width:0;}
 .wrow .m img {width:24px; height:24px;}
 .wbox .tg {display:none;}
-.wbox .ess-hid {display:none;} .tg-w:checked ~ .ess-hid {display:block;}
-.tg-w:checked ~ .ess-head .pill-n .on {display:inline;} .tg-w:checked ~ .ess-head .pill-n .off {display:none;}
+.ess-head {display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;}
+.tg-w:checked ~ .ess-hid {display:block; border-top:none; padding-top:0;}
+.tg-w:checked ~ * .pill-n .on {display:inline;} .tg-w:checked ~ * .pill-n .off {display:none;}
 
 @media (max-width: 640px) {
-  .block-container {padding-top:2.6rem;}
-  .n-title {font-size:1.6rem;}
+  .block-container {padding-top:2.2rem;}
+  .bb-brand {font-size:1.5rem;}
+  .st-key-nav [data-testid="stColumn"] {flex:1 0 108px !important; min-width:108px !important;}
+  .nb-t {font-size:1.2rem;}
   .cards {grid-template-columns:1fr; gap:16px;}
-  .st-key-nuits [data-testid="stColumn"] {flex:1 0 152px !important; min-width:152px !important;}
-  .cart {height:128px;} .disc {width:80px; height:80px;} .disc img {width:60px; height:60px;}
-  .tn b {font-size:1.35rem;}
+  .cart {height:132px;} .disc {width:84px; height:84px;} .disc img {width:62px; height:62px;}
   .fiche {padding:0;} .fbox {border-radius:0; min-height:100vh; margin:0;}
   .fhead {padding:16px 14px 12px;} .fbody {padding:12px 14px 20px;}
   .frow {grid-template-columns:1fr; gap:8px; padding-right:44px;}
   .fteam b {font-size:1.6rem;} .fteam.r {justify-content:flex-start; flex-direction:row-reverse; text-align:left;}
-  .cm.fm {justify-self:start;}
-}
-
-/* v010 : carte plus pratique */
-.cart2 {display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:6px; padding:12px 10px 10px;}
-.tcol {display:flex; flex-direction:column; align-items:center; text-align:center; gap:5px; cursor:pointer; min-width:0;}
-.tcol b {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.15rem; line-height:1; text-transform:uppercase; color:#fff; text-shadow:0 2px 6px rgba(0,0,0,.55); max-width:100%; overflow-wrap:anywhere;}
-.tcol small {font-size:.74rem; color:#eef1f6; background:rgba(8,10,16,.6); padding:1px 7px; border-radius:999px; white-space:nowrap;}
-.disc.dc {width:86px; height:86px;} .disc.dc img {width:64px; height:64px;}
-.cart2 .cm {background:rgba(8,10,16,.82); border-radius:12px; padding:8px 10px; min-width:84px;}
-.sc-tip {display:block; font-family:'Barlow', sans-serif; font-size:.68rem; font-weight:700; letter-spacing:0; color:#ffc75a; margin-top:4px;}
-.tg-s:checked ~ * .sc-tip {display:none;}
-.cm-score:hover .sc-hid {border-color:#ffc75a; color:#ffc75a;}
-.plate {gap:7px; padding:10px 12px;}
-.cline {font-size:.92rem; font-weight:700; color:#fff;}
-.cprev {list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px;}
-.cprev li {font-size:.8rem; line-height:1.3; color:#c9d0dc; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
-.cfoot {display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:2px;}
-.cfoot .cbtn {flex:0 0 auto; min-height:32px; padding:0 10px; font-size:.8rem; border-radius:8px;}
-.lnk {margin-left:auto; cursor:pointer; font-size:.84rem; font-weight:700; color:#ffc75a; padding:6px 2px; white-space:nowrap;}
-.lnk:hover {text-decoration:underline;}
-.reveal {display:block; cursor:pointer; text-align:center; padding:14px; margin:6px 0 4px; border-radius:14px; border:1px dashed #ffc75a; background:rgba(255,199,90,.08); color:#ffc75a; font-weight:800; font-size:1.05rem;}
-.reveal small {display:block; color:#9aa3b5; font-weight:500; font-size:.8rem; margin-top:3px;}
-.tg-s:checked ~ .fiche .reveal {display:none;}
-.fbody .panel-s {border-top:none; padding-top:0;}
-.pf {margin-top:8px;}
-/* Bandeau sur une ligne : ‹ Semaine | 7 nuits | › */
-.st-key-nav [data-testid="stHorizontalBlock"] {flex-wrap:nowrap; overflow-x:auto; gap:6px; align-items:stretch; padding-bottom:4px;}
-.st-key-nav [data-testid="stColumn"] {flex:1 0 118px !important; min-width:118px !important;}
-.st-key-nav [data-testid="stColumn"]:first-child, .st-key-nav [data-testid="stColumn"]:last-child {flex:0 0 44px !important; min-width:44px !important;}
-.st-key-nav button {min-height:48px; height:100%; border-radius:12px; position:relative; padding:4px 8px;}
-.st-key-nav button p {font-family:'Barlow Condensed', sans-serif; font-weight:700; font-size:1rem; white-space:nowrap;}
-.st-key-nav button[kind="primary"], .st-key-nav button[data-testid="stBaseButton-primary"] {background:#ffc75a; border-color:#ffc75a;}
-.st-key-nav button[kind="primary"] p, .st-key-nav button[data-testid="stBaseButton-primary"] p {color:#1a1205;}
-.st-key-hdr [data-testid="stHorizontalBlock"] {flex-wrap:nowrap; align-items:center; gap:8px;}
-.st-key-hdr [data-testid="stColumn"] {width:auto !important; flex:0 0 auto !important; min-width:0 !important;}
-.st-key-hdr [data-testid="stColumn"]:first-child {flex:1 1 auto !important;}
-@media (max-width: 640px) {
-  .st-key-nav [data-testid="stColumn"] {flex:1 0 140px !important; min-width:140px !important;}
-  .disc.dc {width:72px; height:72px;} .disc.dc img {width:54px; height:54px;}
+  .frow .clock {justify-self:start;}
 }
 </style>
 """
@@ -2129,11 +2100,11 @@ def form_html(g, idx):
     return f"<div class='cmp'>{head}{body}</div>{note}{h2h}"
 
 
-RARITY = {3: "r3", 2: "r2", 1: "r1", 0: "r0", -1: "rm1", -2: "rm2"}
+RARITY = {3: "L3", 2: "L2", 1: "L1", 0: "L0", -1: "Lm1", -2: "Lm2"}
 
 
 def card_point(points):
-    """La phrase d'avant-match la plus parlante pour la face de la carte (favori ou star), sinon la première."""
+    """La phrase d'avant-match la plus parlante (favori ou star), sinon la première."""
     for p in points:
         if p.startswith(("💰", "⭐", "🏆")):
             return p
@@ -2141,8 +2112,9 @@ def card_point(points):
 
 
 def game_card(g, ctx):
-    """Une carte de match façon carte à collectionner (HTML pur). Face : couleurs des deux équipes, logos, note ;
-    un clic sur « Fiche » ouvre la fiche du match en grand (cases à cocher cachées, sans recharger la page)."""
+    """Une carte de match façon carte à collectionner (HTML pur).
+    Face : grands logos en diagonale sur les couleurs des équipes, noms, afficheur façon « play clock » (clic = score), avant-match.
+    Cadre = rareté selon la note (gris → légendaire doré). « Stats et détails » ouvre la fiche avec le score."""
     gid, zone, idx = g["id"], ctx["zone"], ctx["idx"]
     h, a = g["home"], g["away"]
     th, ta = team(h["id"]), team(a["id"])
@@ -2152,65 +2124,52 @@ def game_card(g, ctx):
     local = tip.astimezone(ZONES[zone]) if tip else None
     fav = th["abbr"] in ctx["favs"] or ta["abbr"] in ctx["favs"]
     w = ctx["watch"].get(gid)
+    played = g["state"] != "pre"
 
-    # Rareté de la carte : la note pour un match terminé, « affiche » ou « direct » sinon
     if w:
         rar = RARITY[w[0]]
     elif g["state"] == "in":
-        rar = "rlive"
+        rar = "Llive"
     elif gid == ctx.get("affiche"):
-        rar = "raff"
+        rar = "Laff"
     else:
-        rar = "rpre"
+        rar = "Lpre"
 
-    # Étiquettes du haut
     chips = []
     if w:
-        icon, label, advice = WATCH_LEVELS[w[0]]
+        icon, label, _ = WATCH_LEVELS[w[0]]
         chips.append(f"<span class='lvl'>{icon} {esc(label)}</span>")
     elif gid == ctx.get("affiche"):
-        chips.append("<span class='lvl'>⭐ L'affiche de la nuit</span>")
+        chips.append("<span class='lvl'>⭐ L'affiche</span>")
     if g["state"] == "in":
-        chips.append("<span class='lvl live'>● En direct</span>")
+        chips.append("<span class='lvl'>● En direct</span>")
     if g["season_type"] == 3:
         chips.append("<span class='cpill'>🏆 Play-offs</span>")
     if fav:
-        chips.append("<span class='cpill star'>⭐ Mon équipe</span>")
+        chips.append("<span class='cpill star'>⭐</span>")
     when = fr_hour(local) if local else ""
     if local and zone != "Paris" and local.date() != g["day"]:
         when += " · " + fr_short(local.date())
 
-    # Bilans d'avant-match (jamais ceux d'ESPN, qui incluent le résultat)
-    def rec(s, t):
-        f = team_form(idx, s["id"], g["day"], g["season"])
-        rank = ctx["ranks"].get(s["id"])
-        txt = f"{f['w']}-{f['l']}" if f["n"] else f"{f['prev_w']}-{f['prev_l']} (2025-26)"
-        return txt + (f" · {rank}e {t['conf']}" if rank else "")
-
-    # Centre : heure, ou score caché (un clic sur « ? – ? » le révèle)
-    if g["state"] == "pre":
-        if g["status"] == "STATUS_POSTPONED":
-            mid = "<div class='cm-time'>Reporté</div>"
-        else:
-            mid = f"<div class='cm-time'>{esc(fr_hour(local)) if local else '?'}</div><div class='cm-sub'>{esc(g['tv'])}</div>"
+    # Afficheur façon « play clock » : heure avant le match, score caché ensuite (un clic le révèle)
+    hs, as_ = h["score"], a["score"]
+    if not played:
+        clock = ("<div class='clock'><span class='ck-l'>Reporté</span><span class='ck-d'>– –</span></div>" if g["status"] == "STATUS_POSTPONED"
+                 else f"<div class='clock'><span class='ck-l'>Coup d'envoi</span><span class='ck-d'>{esc(when) or '?'}</span></div>")
+        real_big = ""
     else:
-        hs, as_ = h["score"], a["score"]
-        if hs is not None and as_ is not None:
-            cw = lambda me, other: "w" if g["state"] != "post" or me >= other else "l"
-            real = f"<span class='{cw(as_, hs)}'>{as_}</span> – <span class='{cw(hs, as_)}'>{hs}</span>"
-        else:
-            real = "–"
-        sub = "● En direct" if g["state"] == "in" else "Terminé"
-        mid = (f"<label for='s{gid}' class='cm-score' title='Afficher / cacher le score'><span class='sc-hid'>? – ?</span>"
-               f"<span class='sc-real'>{real}</span><span class='sc-tip'>👁 voir le score</span></label>"
-               f"<div class='cm-sub{' live' if g['state'] == 'in' else ''}'>{sub}</div>")
+        real = f"{as_} – {hs}" if hs is not None and as_ is not None else "–"
+        lab = "● En direct" if g["state"] == "in" else "Score"
+        clock = (f"<label for='s{gid}' class='clock tap' title='Afficher / cacher le score'><span class='ck-l'>{lab} <i>👁</i></span>"
+                 f"<span class='ck-d'><span class='sc-hid'>? – ?</span><span class='sc-real'>{esc(real)}</span></span></label>")
+        real_big = f"<div class='clock big'><span class='ck-l'>{lab if g['state'] == 'in' else 'Final'}</span><span class='ck-d'>{esc(real)}</span></div>"
 
-    def logo_disc(tid, cls):
+    def disc(tid, cls):
         url = team(tid)["logo"]
-        img = f"<img src='{esc(url)}' alt='' loading='lazy'>" if url else f"<b>{esc(team(tid)['abbr'])}</b>"
+        img = f"<img src='{esc(url)}' alt='{esc(team(tid)['name'])}' loading='lazy'>" if url else f"<b>{esc(team(tid)['abbr'])}</b>"
         return f"<div class='disc {cls}'>{img}</div>"
 
-    # Avant-match (sans spoil : visible directement sur la carte)
+    # Avant-match : sans spoil, donc sur la carte
     points = preview_points(g, idx, pre)
     ai = None
     if ctx["ai"] and (g["state"] == "pre" or disk_get(f"ai_preview_{gid}.json")):
@@ -2230,34 +2189,35 @@ def game_card(g, ctx):
             d = dur(x, ctx["durs"])
             vid_btns.append(f"<a class='cbtn fr' href='{yt_url(x)}' target='_blank'><span class='frf'></span> NBA Extra{' · ' + d if d else ''}</a>")
 
-    def team_col(s, t, where):
-        return (f"<label for='o{gid}' class='tcol' title='Ouvrir la fiche du match'>{logo_disc(s['id'], 'dc')}"
-                f"<b>{esc(t['name'])}</b><small>{esc(rec(s, t))} · {where}</small></label>")
-
-    advice = f"<div class='cline'>{esc(WATCH_LEVELS[w[0]][2])}</div>" if w else ""
+    art = f"{disc(a['id'], 'da')}<div class='at'>@</div>{disc(h['id'], 'dh')}"
+    art = f"<label for='o{gid}' class='cart' title='Avant-match complet'>{art}</label>" if not played else f"<div class='cart'>{art}</div>"
     prev = "<ul class='cprev'>" + "".join(f"<li>{esc(p)}</li>" for p in shown[:3]) + "</ul>" if shown else ""
-    more = "Stats et détails ›" if g["state"] != "pre" else "Avant-match complet ›"
+    more = "Stats et détails ›" if played else "Avant-match complet ›"
     face = (f"<div class='card {rar}'><div class='ci' style='--ca:{esc(ta['color'])};--ch:{esc(th['color'])}'>"
-            f"<div class='ctop'><div class='chips'>{''.join(chips)}</div><span class='cpill'>{esc(when)}</span></div>"
-            f"<div class='cart2'>{team_col(a, ta, 'ext.')}<div class='cm'>{mid}</div>{team_col(h, th, 'dom.')}</div>"
-            f"<div class='plate'>{advice}{prev}"
-            f"<div class='cfoot'>{''.join(vid_btns[:2])}<label for='o{gid}' class='lnk'>{more}</label></div></div></div></div>")
+            f"<div class='ctop'><div class='chips'>{''.join(chips)}</div>"
+            + (f"<span class='cpill'>{esc(when)}</span>" if played and when else "") + "</div>"
+            f"{art}"
+            f"<div class='cname'><b>{esc(ta['name'])}</b>{clock}<b class='r'>{esc(th['name'])}</b></div>"
+            f"<div class='info'>{prev}<div class='cfoot'>{''.join(vid_btns[:2])}"
+            f"<label for='o{gid}' class='lnk'>{more}</label></div></div></div></div>")
 
-    # Fiche du match (s'ouvre en grand) : stats tout de suite si le score est révélé, avant-match toujours visible
+    # Fiche du match. Après le match, l'ouvrir = vouloir le score : il y est directement.
+    def rec(s):
+        f = team_form(idx, s["id"], g["day"], g["season"])
+        rank = ctx["ranks"].get(s["id"])
+        return (f"{f['w']}-{f['l']}" if f["n"] else f"{f['prev_w']}-{f['prev_l']} en 2025-26") + (f", {rank}e de conf." if rank else "")
+
     pts_html = "<ul class='pts'>" + "".join(f"<li>{esc(p)}</li>" for p in shown) + "</ul>" if shown else ""
     venue = esc(g["venue"]) + (f", {esc(g['city'])}" if g["neutral"] and g["city"] else "")
-    reveal = (f"<label for='s{gid}' class='reveal'>👁 Voir le score et les stats<small>Le score, le déroulé du match et la feuille de match"
-              f" avec les cartes de tirs des joueurs.</small></label>") if g["state"] != "pre" else ""
-
-    panel_s = ""
-    if g["state"] != "pre" and summ:
+    stats = ""
+    if played and summ:
         parts = [quarters_html(g)]
         if g["state"] == "post" and g["completed"]:
             rp = recap_points(g, summ, ctx["idx"])
             ai_r = ai_points("recap", g, ai_material(g, summ, rp)) if ctx["ai"] and (summ.get("article") or {}).get("type") == "Recap" else None
             parts.append("<div class='sec'>Ce qu'il faut retenir</div><ul class='pts'>" + "".join(f"<li>{esc(p)}</li>" for p in (ai_r or rp)) + "</ul>"
                          + ("<div class='ai'>✨ Écrit par Claude d'après le compte rendu AP</div>" if ai_r else ""))
-            if w and w[1]:  # les raisons de la note, seulement une fois le score révélé
+            if w and w[1]:
                 icon, label, _ = WATCH_LEVELS[w[0]]
                 parts.append(f"<div class='note'>{icon} {esc(label)} : {esc(', '.join(w[1]))}.</div>")
         elif g["state"] == "in":
@@ -2266,17 +2226,16 @@ def game_card(g, ctx):
         if worm:
             parts.append("<div class='sec'>Le match en un coup d'œil</div>" + worm)
         parts.append(f"<div class='sec'>Feuille de match</div><div class='in'>{box_html(g, summ)}</div>")
-        panel_s = f"<div class='panel panel-s'>{''.join(parts)}</div>"
-
-    fiche = (f"<div class='fiche'><label for='o{gid}' class='fbg' title='Fermer'></label><div class='fbox'>"
+        stats = f"<div class='panel-s'>{''.join(parts)}</div>"
+    fiche = (f"<div class='fiche{' post' if played else ''}'><label for='o{gid}' class='fbg' title='Fermer'></label><div class='fbox'>"
              f"<div class='fhead {rar}' style='--ca:{esc(ta['color'])};--ch:{esc(th['color'])}'>"
              f"<label for='o{gid}' class='fx' title='Fermer'>✕</label>"
-             f"<div class='frow'><div class='fteam'>{logo_disc(a['id'], 'fd')}<div><b>{esc(ta['name'])}</b><small>{esc(rec(a, ta))} · à l'extérieur</small></div></div>"
-             f"<div class='cm fm'>{mid}</div>"
-             f"<div class='fteam r'><div><b>{esc(th['name'])}</b><small>à domicile · {esc(rec(h, th))}</small></div>{logo_disc(h['id'], 'fd')}</div></div>"
+             f"<div class='frow'><div class='fteam'>{disc(a['id'], 'fd')}<div><b>{esc(ta['name'])}</b><small>{esc(rec(a))} · extérieur</small></div></div>"
+             f"{real_big or clock}"
+             f"<div class='fteam r'><div><b>{esc(th['name'])}</b><small>domicile · {esc(rec(h))}</small></div>{disc(h['id'], 'fd')}</div></div>"
              f"<div class='fchips'>{''.join(chips)}<span class='cpill'>{esc(when)}{' · ' + venue if venue else ''}</span></div></div>"
              f"<div class='fbody'>" + (f"<div class='facts'>{''.join(vid_btns)}</div>" if vid_btns else "")
-             + f"{reveal}{panel_s}<div class='sec'>Avant le match</div>{pts_html}<div class='pf'>{form_html(g, idx)}</div></div></div></div>")
+             + f"{stats}<div class='sec'>Avant le match</div>{pts_html}<div class='pf'>{form_html(g, idx)}</div></div></div></div>")
 
     checked = " checked" if ctx["show_all"] else ""
     return (f"<div class='gc' id='g{gid}'>"
@@ -2381,69 +2340,51 @@ def night_essentials(day, games, ctx):
     return safe, facts[:7]
 
 
+def night_short_title(day, zone):
+    """« Nuit du sam. 24 au dim. 25 oct. » (Paris) ou « Samedi 24 octobre » (Montréal)."""
+    if zone != "Paris":
+        return fr_long(day).capitalize()
+    nxt = day + timedelta(days=1)
+    return f"Nuit du {JOURS[day.weekday()][:3]}. {day.day} au {JOURS[nxt.weekday()][:3]}. {'1er' if nxt.day == 1 else nxt.day} {MOIS_COURT[nxt.month - 1]}"
+
+
 def night_html(day, games, ctx, today):
-    """En-tête de la nuit : titre, état, vidéos de la nuit, puis l'essentiel (sans spoil, et le reste caché)."""
+    """Barre fine de la nuit : titre et état à gauche ; vidéos de la nuit et « Infos de la nuit » (cachées) à droite."""
     zone = ctx["zone"]
     key, state = night_state(games, zone)
     n = len(games)
-    kicker = {"done": f"Nuit terminée · {n} matchs", "live": state, "next": f"À venir · {n} matchs", "none": "Pas de match"}[key]
-    if zone != "Paris":
-        kicker = kicker.replace("Nuit terminée", "Soirée terminée")
+    sub = {"done": f"Terminée · {n} matchs", "live": state, "next": f"{state} · {n} matchs" if state.startswith("À venir") else f"À venir · {state}",
+           "none": "Pas de match"}[key]
 
-    # NBA Extra : l'émission du lendemain matin parle de cette nuit
+    pills = []
     show_day = day + timedelta(days=1)
     show_time = datetime.combine(show_day, datetime.min.time(), ZONES["Paris"]).replace(hour=12, minute=45)
-    show_local = show_time.astimezone(ZONES[zone])
-    label = f"NBA Extra du {JOURS[show_day.weekday()][:3]}. {show_day.day:02d}/{show_day.month:02d}"
     v = ctx["show"]
     if v:
         d = dur(v, ctx["durs"])
-        extra = (f"<a class='media' href='{yt_url(v)}' target='_blank'><div class='ic'><span class='frf big'></span></div><div><b>{label}</b>"
-                 f"<small>L'émission de beIN SPORTS sur cette nuit{' · ' + d if d else ''}</small></div><div class='go'>▶</div></a>")
-    else:
+        pills.append(f"<a class='cbtn fr' href='{yt_url(v)}' target='_blank' title=\"L'émission de beIN SPORTS sur cette nuit\"><span class='frf'></span> NBA Extra{' · ' + d if d else ''}</a>")
+    elif key != "none":
         now = datetime.now(ZONES["Paris"])
-        if now < show_time:
-            when = f"en direct à {fr_hour(show_local)}{' (heure de Montréal)' if zone != 'Paris' else ''} sur beIN SPORTS, puis replay sur YouTube"
-        elif now < show_time + timedelta(hours=10):
-            when = "replay YouTube en général entre 15h et 17h (heure de Paris)"
-        else:
-            when = "pas trouvé sur YouTube"
-        extra = (f"<div class='media off'><div class='ic'><span class='frf big'></span></div><div><b>{label}</b><small>{when}</small></div>"
-                 f"<div class='go'>⏳</div></div>")
+        tipx = (f"En direct à {fr_hour(show_time.astimezone(ZONES[zone]))} sur beIN SPORTS, replay vers 15h-17h (Paris)" if now < show_time
+                else "Replay YouTube en général entre 15h et 17h (Paris)" if now < show_time + timedelta(hours=10) else "Pas trouvé sur YouTube")
+        pills.append(f"<span class='cbtn off' title='{esc(tipx)}'><span class='frf'></span> NBA Extra · bientôt</span>")
     recap = ctx["recap"]
     if recap:
         d = dur(recap, ctx["durs"])
-        nba = (f"<a class='media' href='{yt_url(recap)}' target='_blank'><div class='ic'>🏀</div><div><b>Le résumé de la nuit</b>"
-               f"<small>NBA, en anglais · tous les matchs{' · ' + d if d else ''}</small></div><div class='go'>▶</div></a>")
+        pills.append(f"<a class='cbtn' href='{yt_url(recap)}' target='_blank' title='Tous les matchs, NBA, en anglais'>▶ Résumé de la nuit{' · ' + d if d else ''}</a>")
     elif key == "done":
         q = f"NBA nightly recap {MONTHS_EN[day.month - 1].title()} {day.day}, {day.year}"
-        nba = (f"<a class='media off' href='https://www.youtube.com/results?search_query={requests.utils.quote(q)}' target='_blank'>"
-               f"<div class='ic'>🏀</div><div><b>Le résumé de la nuit</b><small>NBA · pas encore trouvé : chercher sur YouTube</small></div><div class='go'>🔎</div></a>")
-    else:
-        nba = ("<div class='media off'><div class='ic'>🏀</div><div><b>Le résumé de la nuit</b>"
-               "<small>NBA · publié après le dernier match</small></div><div class='go'>⏳</div></div>")
+        pills.append(f"<a class='cbtn ghost' href='https://www.youtube.com/results?search_query={requests.utils.quote(q)}' target='_blank'>🔎 Résumé de la nuit</a>")
 
-    # L'essentiel de la nuit
-    safe, facts = night_essentials(day, games, ctx)
-    ranked = sorted(((ctx["watch"][g["id"]][0], ctx["watch"][g["id"]][2], g) for g in games if ctx["watch"].get(g["id"])), key=lambda x: -x[1])
-    top = [(lv, g) for lv, _, g in ranked if lv >= 2][:6]
-    chips = ""
-    if top:
-        chips = "<div class='n-chips'><span class='lab'>À voir en priorité :</span>" + "".join(
-            f"<label for='o{g['id']}' class='chip'>{WATCH_LEVELS[lv][0]} {esc(team(g['away']['id'])['abbr'])} @ {esc(team(g['home']['id'])['abbr'])}</label>"
-            for lv, g in top) + "</div>"
-    ess = ""
-    if safe or facts:
-        checked = " checked" if ctx["show_all"] else ""
-        hidden = ("<div class='ess-hid'><ul class='pts'>" + "".join(f"<li>{esc(f)}</li>" for f in facts) + "</ul></div><!--fin-ess-->") if facts else ""
-        ess = (f"<div class='ess'><input type='checkbox' class='tg tg-n' id='n{day.isoformat()}'{checked}>"
-               f"<div class='ess-head'><div><div class='ess-t'>L'essentiel de la nuit</div>"
-               + (f"<div class='ess-safe'>{esc(safe)}</div>" if safe else "") + "</div>"
-               + (f"<label for='n{day.isoformat()}' class='cbtn pill-n'><span class='off'>👁 Révéler l'essentiel</span><span class='on'>🙈 Cacher</span></label>" if facts else "")
-               + f"</div>{chips}{hidden}</div>")
-    return (f"<div class='night'><div class='n-kicker k-{key}'>{esc(kicker)}</div>"
-            f"<div class='n-title'>{esc(night_title(day, zone))}</div>"
-            f"<div class='n-media'>{extra}{nba}</div>{ess}</div>")
+    _, facts = night_essentials(day, games, ctx)
+    nid = f"n{day.isoformat()}"
+    checked = " checked" if ctx["show_all"] else ""
+    if facts:
+        pills.append(f"<label for='{nid}' class='cbtn pill-n'><span class='off'>👁 Infos de la nuit</span><span class='on'>🙈 Cacher les infos</span></label>")
+    hidden = ("<div class='ess-hid'><ul class='pts'>" + "".join(f"<li>{esc(f)}</li>" for f in facts) + "</ul></div><!--fin-ess-->") if facts else ""
+    return (f"<div class='nbar'><input type='checkbox' class='tg tg-n' id='{nid}'{checked}>"
+            f"<div class='nb-row'><div class='nb-l'><div class='nb-t'>{esc(night_short_title(day, zone))}</div>"
+            f"<div class='nb-s k-{key}'>{esc(sub)}</div></div><div class='nb-r'>{''.join(pills)}</div></div>{hidden}</div>")
 
 
 def ai_material(g, summ, points):
@@ -2474,16 +2415,16 @@ def week_of(d, opening):
 
 
 def night_label(d, zone):
-    """« Dim. 25 → lun. 26 » à Paris (la nuit), « Dim. 25 oct. » à Montréal (le soir)."""
+    """« Dim. 25 → 26 » à Paris (la nuit du dimanche au lundi), « Dim. 25 » à Montréal (le soir) : court, pour tenir dans le bouton."""
     j = JOURS[d.weekday()][:3].capitalize()
     if zone != "Paris":
-        return f"{j}. {d.day} {MOIS[d.month - 1][:4].rstrip('.')}."
+        return f"{j}. {d.day}"
     nxt = d + timedelta(days=1)
-    return f"{j}. {d.day} → {JOURS[nxt.weekday()][:3]}. {nxt.day}"
+    return f"{j}. {d.day} → {'1er' if nxt.day == 1 else nxt.day}"
 
 
 def short_date(d):
-    return f"{JOURS[d.weekday()][:3]}. {'1er' if d.day == 1 else d.day} {MOIS[d.month - 1][:4].rstrip('.')}."
+    return f"{JOURS[d.weekday()][:3]}. {'1er' if d.day == 1 else d.day} {MOIS_COURT[d.month - 1]}"
 
 
 def read_seen(cookies):
@@ -2617,8 +2558,7 @@ def main():
     week_days = [monday + timedelta(days=i) for i in range(7)]
     with st.container(key="hdr"):
         c1, c2, c3 = st.columns(3, vertical_alignment="center")
-        c1.markdown("<div class='bb-brand'>Bada Bing <span>NBA</span></div><div class='bb-tag'>Les matchs de la nuit, sans spoil.</div>",
-                    unsafe_allow_html=True)
+        c1.markdown("<div class='bb-brand'>Bada Bing <span>NBA</span></div>", unsafe_allow_html=True)
         with c2.popover("📅", help="Aller à une date"):
             if st.button("↩ Revenir à la dernière nuit", key="last_night", width="stretch"):
                 go(default_day(days, today))

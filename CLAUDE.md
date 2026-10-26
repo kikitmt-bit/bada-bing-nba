@@ -11,23 +11,23 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - **Mise à jour automatique** (`auto_refresh`) : Streamlit ne rafraîchit pas une page ouverte, donc la page se recharge quand on revient
   sur l'onglet après plus de 3 min, et toutes les 90 s pendant les matchs (sauf si un panneau est ouvert). Si ESPN ne répond pas,
   `day_games` reprend la dernière liste reçue (`.cache/sb_<jour>.json`) au lieu d'effacer les scores.
-- **Design v009 « Holo »** (maquettes validées : https://claude.ai/artifact/7jMTkzCrBiNwHBem7c9m1b) : grille de cartes à collectionner (`game_card`),
-  coupées en diagonale aux couleurs des 2 équipes, logos ESPN dans des disques, cadre selon la note (`RARITY` : holo doré, argent, bronze,
-  simple, mat, grisé ; affiche = doré, direct = rouge). Tout en HTML pur, une seule `st.markdown` pour la grille.
-  v010 (retours de Kiki : moins de clics) : logo + NOM + bilan de chaque équipe, score au centre ; un clic sur « ? – ? » révèle le
-  score (`.tg-s`, indice « 👁 voir le score ») ; avant-match (3 lignes) directement sur la carte (pas de spoil) ; pied discret :
-  vidéos + lien « Stats et détails › ». Fiche (`.tg-o`, clic sur un logo ou le lien) : vidéos, gros bouton « Voir le score et
-  les stats » si caché, sinon stats tout de suite (quarts-temps, à retenir, graphique, feuille de match), puis avant-match + forme.
-  Polices Barlow / Barlow Condensed. Mise en page `wide`, 1240 px max.
-- **En-tête (`main`, v010)** : marque à gauche, 📅 (dernière nuit / date) et ⚙️ en petits boutons à droite (`st.container(key="hdr")`).
-  Bandeau sur UNE ligne (`key="nav"`, défile au doigt sur mobile) : ‹ | « Semaine N » (ouvre la vue Semaine, `?vue=semaine`) | 7 nuits
-  « Dim. 25 → lun. 26 » (`night_label`) | ›. Semaines NBA lundi → dimanche (comme le joueur de la semaine ; semaine 1 = ouverture,
-  `season_opening`, `week_of`). État de chaque nuit (`night_state`) en infobulle seulement.
+- **Design « Holo » (v011, après 2 tours de retours de Kiki)** : grille de cartes à collectionner (`game_card`), une seule `st.markdown`.
+  Face : grands logos en diagonale sur les couleurs des 2 équipes (le point fort, ne pas les recouvrir), noms en entier sur une ligne,
+  afficheur façon « play clock » NBA entre les noms (`.clock`, police Orbitron ambre) : heure avant le match, « ? – ? » ensuite, un clic
+  le révèle (`.tg-s`). Pas de bilans sur la face (jugé moche), pas de titre de conseil (doublon avec l'étiquette en haut). Bas : avant-match
+  (3 lignes, sans spoil), bouton résumé vidéo, lien « Stats et détails › ». Heure en haut à droite (appréciée).
+  Cadre de même largeur pour tous, rareté façon jeux vidéo selon la note (`RARITY`) : ⛔ gris uni, 💤 acier, 😐 vert, 🔥 bleu,
+  🔥🔥 violet épique, 🔥🔥🔥 doré légendaire animé ; affiche = doré, direct = rouge. Les couleurs d'équipe restent intactes partout.
+  Fiche (`.tg-o`) : pour un match joué, l'ouvrir = vouloir le score → score (afficheur « Final ») et stats directement ; avant un match :
+  avant-match + forme. Polices Barlow / Barlow Condensed / Orbitron. Mise en page `wide`, 1240 px max.
+- **En-tête (`main`)** : marque seule (pas de sous-titre), 📅 (dernière nuit / date) et ⚙️ en icônes (`key="hdr"`). Bandeau sur UNE ligne
+  (`key="nav"`, défile au doigt) : ‹ | « Semaine N » (vue Semaine, `?vue=semaine`) | 7 nuits courtes « Jeu. 22 → 23 » (`night_label`,
+  doivent tenir en entier) | ›. Semaines NBA lundi → dimanche (`season_opening`, `week_of`). État de la nuit en infobulle.
+- **Barre de la nuit (`night_html`)** : fine, sur une ligne : « Nuit du dim. 25 au lun. 26 oct. » + état ; à droite NBA Extra, résumé de la
+  nuit, « 👁 Infos de la nuit » (`.tg-n`, faits de `night_essentials` : perfs, surprise, serré/prolongations, remontée, correction, séries,
+  résultats). Plus de comptage par niveau ni « À voir en priorité » (jugés inutiles : le tri par flammes suffit).
 - **Nuits vues** : cookie `nba_vues` (AAMMJJ) ; une nuit commencée qu'on ouvre devient « vue ». Pastille dorée sur le bouton = nuit
   terminée pas encore ouverte ; rouge = en cours (CSS `.st-key-n_<date> button::after`). Pas de pastille = vue ou à venir.
-- **En-tête de la nuit (`night_html`)** : état, titre, NBA Extra et résumé NBA, puis « L'essentiel de la nuit » (`night_essentials`) : nombre de
-  matchs par niveau (sans spoil), « À voir en priorité » (ouvre la fiche), et 5 à 7 infos cachées derrière « Révéler » (`.tg-n`) :
-  grosses perfs, surprise (favori battu), plus serré / prolongations, remontée, correction, séries, tous les résultats.
 - **Vue Semaine (`week_html`)** : meilleurs matchs de la semaine (sans spoil) ; bilan caché (`.tg-w`) : perfs, notre joueur de la semaine
   (calcul maison, moyenne du « game score » sur 2 matchs ou plus), équipe de la semaine, surprise, match le plus fou.
   Indice « à voir » sans dire qui gagne (`watch_score`, `interest_parts`) : 6 niveaux (🔥🔥🔥 Immanquable, 🔥🔥, 🔥, 😐 Sans plus, 💤, ⛔ À fuir),

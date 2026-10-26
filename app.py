@@ -25,7 +25,7 @@ import streamlit.components.v1 as components
 
 import fantasy as F
 
-APP_VERSION = "2026-10-v016"
+APP_VERSION = "2026-10-v017"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -415,6 +415,7 @@ def game_summary(g):
         # Garder ce qu'on sait avant le match : la preview sans spoil s'en servira une fois le match joué
         disk_put(f"pre_{g['id']}.json", {"injuries": s["injuries"], "line": s["line"], "home_pct": s["home_pct"],
                                          "leaders": s["leaders"], "article": s["article"]})
+        remember_outs(g, s)
     return s
 
 
@@ -857,14 +858,7 @@ def preview_points(g, idx, pre):
     elif fh["n"] == 0 and fa["n"] == 0:
         points.append(f"🏁 Premier match de la saison pour les deux équipes. La saison passée : "
                       f"{th['name']} {fh['prev_w']}-{fh['prev_l']}, {ta['name']} {fa['prev_w']}-{fa['prev_l']}.")
-    else:
-        ranks = conf_ranks(idx, g["day"], g["season"]) if min(fh["n"], fa["n"]) >= 8 else {}
-        def label(t, f):
-            r = ranks.get(t["id"])
-            return f"{t['name']} ({rec(f) if f['n'] else '1er match'}" + (f", {r}e à l'{t['conf']})" if r else ")")
-        same = th["conf"] and th["conf"] == ta["conf"]
-        intro = f"Duel de l'{th['conf']}" if same else "Est contre Ouest"
-        points.append(f"🏀 {intro} : {label(ta, fa)} chez {label(th, fh)}.")
+    # (v017 : plus de phrase « Duel de l'Ouest : X (2-0) chez Y (2-0) », jugée inutile : le bilan est à côté du nom)
     notes = [n for n in g["notes"] if n and "series" not in norm(n) and "leads" not in norm(n)]
     if notes or g["neutral"]:
         where = f" à {g['city']}" if g["neutral"] and g["city"] else ""
@@ -928,6 +922,157 @@ def preview_points(g, idx, pre):
         if len(stars) == 2 and g["state"] == "pre":
             points.append(f"⭐ À suivre : {stars[0]} contre {stars[1]}.")
     return points
+
+
+def team_record(idx, tid, day, season):
+    """Bilan AVANT le jour du match (« 2-0 »), vide avant le 1er match de la saison."""
+    f = team_form(idx, tid, day, season)
+    return f"{f['w']}-{f['l']}" if f["n"] else ""
+
+
+def remember_outs(g, pre):
+    """Garde, équipe par équipe, qui était absent avant chaque match : sert à repérer un retour de blessure."""
+    for side in ("home", "away"):
+        tid = g[side]["id"]
+        out = [i["name"] for i in (pre.get("injuries") or {}).get(tid) or [] if "out" in norm(i.get("status"))]
+        mem = disk_get(f"outs_{tid}.json") or {}
+        if mem.get(g["day"].isoformat()) == out:
+            continue
+        mem[g["day"].isoformat()] = out
+        disk_put(f"outs_{tid}.json", dict(sorted(mem.items())[-12:]))
+
+
+KF_TOPIC = {"🔥": "📈", "🧊": "📈", "📉": "📈", "😮": "📈", "🔁": "🆚", "🎲": "💰", "⚠": "🩹", "💪": "🩹"}
+
+
+def same_topic(point, fact):
+    """Vrai si une puce de l'avant-match parle du même sujet que l'info clé (pour ne pas la répéter juste en dessous)."""
+    if not fact:
+        return False
+    def topic(t):
+        c = t[:1]
+        return KF_TOPIC.get(c, c)
+    return topic(point) == topic(fact)
+
+
+def key_fact(g, idx, pre):
+    """L'info d'avant-match la plus importante à connaître (une seule), choisie parmi : play-offs, star absente, retour de
+    blessure, joueur incertain, série en cours, choc au sommet, revanche, face-à-face, fatigue, favori… Rien qui dépende du résultat."""
+    h, a = g["home"]["id"], g["away"]["id"]
+    th, ta = team(h), team(a)
+    day, season = g["day"], g["season"]
+    fh, fa = team_form(idx, h, day, season), team_form(idx, a, day, season)
+    cands = []  # (importance, texte)
+
+    def last(name):
+        return name.split(" ", 1)[-1] if " " in name else name
+
+    # Play-offs : l'état de la série prime sur tout
+    if g["season_type"] == 3:
+        series = [m for m in head_to_head(idx, h, a, day) if m[5] == season and m[6] == "P"]
+        wh = sum(1 for m in series if m[2] > m[3])
+        wa = len(series) - wh
+        if not series:
+            txt = "Match 1 de la série"
+        elif wh == wa:
+            txt = f"Match {len(series) + 1}, série à égalité {wh}-{wa}"
+        else:
+            lead, n1, n2 = (th, wh, wa) if wh > wa else (ta, wa, wh)
+            txt = f"Match {len(series) + 1} : {lead['name']} à {n1}-{n2}" + (" et une balle de qualification" if n1 == 3 else "")
+            if n1 == 3 and n2 == 3:
+                txt = "Match 7 : qualification ou élimination"
+        cands.append((100 if max(wh, wa) == 3 else 95, f"🏆 {txt}"))
+    notes = [n for n in g["notes"] if n and "series" not in norm(n) and "leads" not in norm(n)]
+    if notes:
+        cands.append((70, f"📍 {notes[0]}"))
+    if fh["n"] == 0 and fa["n"] == 0 and g["season_type"] != 3:
+        cands.append((60, "🏁 Premier match de la saison pour les deux équipes"))
+
+    # Joueurs : absents, retours, incertains (les « stars » = meneurs de l'équipe en points, rebonds ou passes)
+    if pre:
+        lead = pre.get("leaders") or {}
+        for t in (ta, th):
+            stars = {v[0] for v in (lead.get(t["id"]) or {}).values() if v and v[0]}
+            inj = (pre.get("injuries") or {}).get(t["id"]) or []
+            out = [i for i in inj if any(k in norm(i.get("status")) for k in ("out", "doubtful"))]
+            unsure = [i for i in inj if any(k in norm(i.get("status")) for k in ("questionable", "day-to-day", "day to day"))]
+
+            def what(i):
+                w = INJURY_FR.get(norm(i.get("what")), (i.get("what") or "").lower())
+                return f" ({w})" if w else ""
+            big = [i for i in out if i["name"] in stars]
+            if big:
+                cands.append((92, f"🩹 {t['name']} sans {' ni '.join(last(i['name']) + what(i) for i in big[:2])}"))
+            elif len(out) >= 3:
+                cands.append((55, f"🩹 {t['name']} privés de {len(out)} joueurs ({', '.join(last(i['name']) for i in out[:3])})"))
+            elif out:
+                cands.append((35, f"🩹 {t['name']} sans {', '.join(last(i['name']) for i in out[:2])}"))
+            shaky = [i for i in unsure if i["name"] in stars]
+            if shaky:
+                cands.append((72, f"⚠️ {last(shaky[0]['name'])} incertain{what(shaky[0])} côté {t['name']}"))
+            # Retour : absent au match précédent de l'équipe (si le site l'a vu), plus dans la liste aujourd'hui
+            mem = disk_get(f"outs_{t['id']}.json") or {}
+            past = [d for d in mem if d < day.isoformat()]
+            prev_games = [m for m in idx.get(t["id"], []) if m[0] < day]
+            if past and prev_games and max(past) == prev_games[-1][0].isoformat():
+                now_out = {i["name"] for i in inj}
+                back = [n for n in mem[max(past)] if n not in now_out]
+                if back:
+                    star = [n for n in back if n in stars]
+                    cands.append((90 if star else 64, f"💪 Retour de {last((star or back)[0])} côté {t['name']}"))
+
+    # Séries en cours, invaincus, toujours sans succès
+    for t, f in ((ta, fa), (th, fh)):
+        s = f["streak"]
+        if f["n"] >= 3 and f["l"] == 0:
+            cands.append((84, f"🔥 {t['name']} encore invaincus ({f['w']}-0)"))
+        elif f["n"] >= 4 and f["w"] == 0:
+            cands.append((68, f"🧊 {t['name']} toujours sans succès cette saison (0-{f['l']})"))
+        elif abs(s) >= 3:
+            n = abs(s)
+            imp = 88 if n >= 8 else 80 if n >= 5 else 56
+            cands.append((imp, f"{'📈' if s > 0 else '📉'} {t['name']} sur {n} {'succès' if s > 0 else 'revers'} de suite"))
+    # Choc au sommet
+    if min(fh["n"], fa["n"]) >= 8:
+        ranks = conf_ranks(idx, day, season)
+        rh, ra = ranks.get(h), ranks.get(a)
+        if rh and ra and th["conf"] == ta["conf"] and max(rh, ra) <= 3:
+            cands.append((78, f"⚔️ Choc au sommet de l'{th['conf']} : {min(rh, ra)}{'er' if min(rh, ra) == 1 else 'e'} contre {max(rh, ra)}e"))
+        elif rh == 1 and ra == 1:
+            cands.append((82, "⚔️ Les deux premiers de chaque conférence"))
+    # Fatigue : 2e match en 2 soirs face à une équipe reposée
+    for t, f, o in ((ta, fa, fh), (th, fh, fa)):
+        if f["b2b"] and not o["b2b"]:
+            cands.append((42, f"😮‍💨 {t['name']} jouent leur 2e match en 2 soirs"))
+    # Face-à-face : revanche des play-offs, domination, ou simple bilan
+    h2h = head_to_head(idx, h, a, day)
+    po = [m for m in h2h if m[5] == season - 1 and m[6] == "P"]
+    if po and g["season_type"] != 3:
+        wh = sum(1 for m in po if m[2] > m[3])
+        winner, loser = (th, ta) if wh * 2 > len(po) else (ta, th)
+        cands.append((74, f"🔁 Revanche : les {winner['name']} avaient sorti les {loser['name']} en play-offs l'an dernier"))
+    recent = h2h[-5:]
+    if recent:
+        wh = sum(1 for m in recent if m[2] > m[3])
+        n = len(recent)
+        if n >= 4 and wh in (0, n):
+            dom, other = (th, ta) if wh else (ta, th)
+            cands.append((62, f"🆚 {dom['name']} : {n} succès de suite contre les {other['name']}"))
+        else:
+            lead, n1, n2 = (th, wh, n - wh) if wh * 2 >= n else (ta, n - wh, wh)
+            txt = f"{n1}-{n2} sur les {n} derniers face-à-face" if n1 == n2 else f"{n1}-{n2} pour les {lead['name']} sur les {n} derniers face-à-face"
+            cands.append((45, f"🆚 {txt}"))
+    # Cote figée avant le match
+    if pre:
+        pct = pre.get("home_pct")
+        if (pre.get("line") or "").upper() == "EVEN" or (pct is not None and 46 <= pct <= 54):
+            cands.append((48, "🎲 Pile ou face selon les pronostics"))
+        elif pct is not None and (pct >= 82 or pct <= 18):
+            fav = th if pct >= 82 else ta
+            cands.append((40, f"💰 {fav['name']} grands favoris ({fr_num(max(pct, 100 - pct), 0)} %)"))
+    if not cands:
+        return ""
+    return max(cands, key=lambda c: c[0])[1]
 
 
 # =========================================================================
@@ -1735,6 +1880,10 @@ label.mt {cursor:pointer;}
 .mt-n small {display:block; font-size:.68rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#9aa3b5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .mt-n b {display:block; font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.5rem; line-height:1; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .mt-n b.sm {font-size:1.3rem;} .mt-n b.xs {font-size:1.12rem;}
+.mt-l {display:flex; flex-wrap:wrap; align-items:baseline; column-gap:6px; row-gap:1px; min-width:0;} .mt-l b {flex:0 1 auto; min-width:0; max-width:100%;}
+.mt-n .rec, .hero-t .rec {flex:none; font-style:normal; font-family:'Barlow Condensed', sans-serif; font-weight:600; font-size:1rem; color:#9aa3b5; letter-spacing:.02em;}
+.hero-t .rec {font-size:.8em;}
+.mr-prev.kf {color:#e6e9ef; font-weight:500;}
 .disc.dr {width:58px; height:58px; flex:none; background:var(--c, rgba(8,10,16,.5));}
 .mt.a .disc.dr {background:var(--ca); box-shadow:0 0 0 3px rgba(255,255,255,.12), 0 0 26px var(--ta), 0 0 34px var(--ta);}
 .mt.h .disc.dr {background:var(--ch); box-shadow:0 0 0 3px rgba(255,255,255,.12), 0 0 26px var(--th), 0 0 34px var(--th);}
@@ -2488,26 +2637,33 @@ def game_card(g, ctx, hero=False):
         r, g_, b = _rgb(c)
         return f"rgba({r},{g_},{b},{al})"
 
+    recs = {s_["id"]: team_record(idx, s_["id"], g["day"], g["season"]) for s_ in (a, h)}
+
     def side(s_, t, cls):
-        inner = f"{disc(s_['id'], 'dr')}<div class='mt-n'><small>{esc(city(t))}</small><b class='{name_cls(t)}'>{esc(t['name'])}</b></div>"
+        r = recs[s_["id"]]
+        rec_html = f"<i class='rec'>({esc(r)})</i>" if r else ""
+        inner = (f"{disc(s_['id'], 'dr')}<div class='mt-n'><small>{esc(city(t))}</small>"
+                 f"<span class='mt-l'><b class='{name_cls(t)}'>{esc(t['name'])}</b>{rec_html}</span></div>")
         return (f"<label for='o{gid}' class='mt {cls}' title='Avant-match complet'>{inner}</label>" if not played
                 else f"<div class='mt {cls}'>{inner}</div>")
-    short = " · ".join(shown[:2])
+    short = key_fact(g, idx, pre)
     row = (f"<div class='mrow {rar}' style='--ta:{rgba(ca, .3)};--th:{rgba(ch, .3)};--ca:{esc(ca)};--ch:{esc(ch)}'><div class='strip'></div><div class='mr-in'>"
            f"<div class='mr-top'><div class='chips'>{''.join(chips)}</div><span class='mr-t'>{esc(when) if played else esc(g['tv'])}</span></div>"
            f"<div class='mr-main'>{side(a, ta, 'a')}{sa}{sm}{sh}{side(h, th, 'h')}</div>"
-           f"<div class='mr-foot'><span class='mr-prev' title='{esc(short)}'>{esc(short)}</span>{''.join(vid_btns[:1])}"
+           f"<div class='mr-foot'><span class='mr-prev kf' title='{esc(short)}'>{esc(short)}</span>{''.join(vid_btns[:1])}"
            f"<label for='o{gid}' class='lnk'>{'Stats ›' if played else 'Avant-match ›'}</label></div></div></div>")
 
     # « La carte de la nuit » : le meilleur match en grande carte (ou l'affiche avant les matchs)
     hero_html = ""
     if hero:
+        def hrec(s_):
+            return f" <i class='rec'>({esc(recs[s_['id']])})</i>" if recs[s_["id"]] else ""
         kick = "La carte de la nuit" if w else "L'affiche de la nuit"
         sub = WATCH_LEVELS[w[0]][2] if w else card_point(shown)
         hero_html = (f"<div class='hero'><div class='hero-card'>{face_head}</div></div></div>"
                      f"<div class='hero-txt'><div class='hero-k'>{kick}</div>"
-                     f"<div class='hero-t'>{esc(ta['full'] or ta['name'])} <span>@</span> {esc(th['full'] or th['name'])}</div>"
-                     f"<div class='hero-a'>{esc(sub)}</div><ul class='pts'>" + "".join(f"<li>{esc(p)}</li>" for p in shown[:4]) + "</ul>"
+                     f"<div class='hero-t'>{esc(ta['full'] or ta['name'])}{hrec(a)} <span>@</span> {esc(th['full'] or th['name'])}{hrec(h)}</div>"
+                     f"<div class='hero-a'>{esc(sub)}</div><ul class='pts'>" + "".join(f"<li>{esc(p)}</li>" for p in ([short] if short else []) + [p for p in shown if not same_topic(p, short)][:3]) + "</ul>"
                      f"<div class='cfoot'>{''.join(vid_btns)}<label for='o{gid}' class='lnk'>{'Stats et détails ›' if played else 'Avant-match complet ›'}</label></div></div></div>")
 
     # Fiche du match. Après le match, l'ouvrir = vouloir le score : il y est directement.

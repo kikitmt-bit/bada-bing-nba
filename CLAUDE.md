@@ -14,7 +14,10 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - **Interface (v002)** : chaque carte de match est du HTML pur (`game_card`) ; « 👁 Score » et « 📊 Forme & duels » sont des cases à cocher
   cachées (`.tg-s`, `.tg-f`) qui ouvrent les panneaux en CSS, sans recharger la page. Visiteurs à gauche, domicile à droite, enjeux toujours visibles.
   En-tête de la nuit (`night_html`) : NBA Extra du lendemain (12h45, replay vers 15h-17h) et résumé de la nuit NBA, puis « À voir en priorité ».
-  Indice « à voir » sans dire qui gagne (`watch_score` : écart final, fin serrée, remontée, prolongation, grosse perf) qui range les matchs terminés ;
+  Indice « à voir » sans dire qui gagne (`watch_score`, `interest_parts`) : 6 niveaux (🔥🔥🔥 Immanquable, 🔥🔥, 🔥, 😐 Sans plus, 💤, ⛔ À fuir),
+  note globale mêlant beaucoup d'ingrédients qui se compensent (fin serrée, prolongation, retournements, leaders, équilibre, panier décisif,
+  perf individuelle, spectacle, enjeu, pénalité « plié tôt ») : voulu FLOU, pour qu'une note ne trahisse pas le scénario (demande de Kiki).
+  Avant le score : seulement icône + nom + conseil ; les raisons s'affichent dans le panneau du score. Range les matchs terminés ;
   « L'affiche de la nuit » pour les matchs à venir (`hype`). Équipes favorites (cookie `nba_fav`) en tête. Durées des vidéos via l'API YouTube.
 - **No spoil** : score caché par défaut (rien n'est retenu d'une visite à l'autre), ou ⚙️ « Toujours montrer les scores » (`?scores=1`). Tant que c'est caché : pas de score, pas de « prolongation », bilans et séries calculés
   AVANT le match (`team_form`, `head_to_head` sur `team_index`), jamais ceux d'ESPN (qui incluent le résultat).
@@ -43,5 +46,9 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   `python data/build_nba_history.py`.
 
 ## Tester en local
+
+- `python tests/test_sans_spoil.py` : vérifie qu'une carte au score caché ne trahit rien (score, « prolongation », « remontée »…). À lancer avant chaque envoi.
+- `python tests/scenarios.py` : note d'intérêt de matchs inventés, pour régler les seuils.
+
 
 `python -m streamlit run app.py --server.port 8531`, puis vérifier à l'écran (PC et téléphone). Incrémenter `APP_VERSION` à chaque changement.

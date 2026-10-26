@@ -23,7 +23,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v007"
+APP_VERSION = "2026-10-v008"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -1090,47 +1090,150 @@ def ai_points(kind, g, material):
 # =========================================================================
 # INDICE « À VOIR » (sans dire qui gagne) ET AFFICHE DE LA NUIT
 # =========================================================================
-WATCH_LEVELS = [("💤", "Sans suspense"), ("🔥", "Correct"), ("🔥🔥", "Bon match"), ("🔥🔥🔥", "À ne pas rater")]
+# Échelle à 6 niveaux : (icône, nom, conseil). Avant le score, seuls l'icône, le nom et le conseil sont affichés.
+WATCH_LEVELS = {
+    3: ("🔥🔥🔥", "Immanquable", "Regarde le match en entier"),
+    2: ("🔥🔥", "Très bon match", "Match complet ou long résumé"),
+    1: ("🔥", "Bon match", "Le résumé vaut le coup"),
+    0: ("😐", "Sans plus", "Le résumé suffit"),
+    -1: ("💤", "Sans suspense", "Résumé si c'est ton équipe"),
+    -2: ("⛔", "À fuir", "Passe ton chemin"),
+}
+WATCH_CUTS = ((58, 3), (40, 2), (26, 1), (12, 0))  # note globale -> niveau ; en dessous : 💤, ou ⛔ si plié tôt
 
 
-def watch_score(g, summ):
-    """Intérêt d'un match terminé, sans dire qui a gagné : (niveau 0-3, mots-clés). None si on ne sait pas."""
-    if not summ or g["state"] != "post" or not g["completed"] or g["home"]["score"] is None:
-        return None
-    h, a = g["home"]["score"], g["away"]["score"]
-    margin = abs(h - a)
+def _clamp(x):
+    return max(0.0, min(1.0, x))
+
+
+def interest_parts(g, summ, idx=None):
+    """Note d'intérêt d'un match terminé, faite de nombreux ingrédients qui se compensent, pour qu'une même note puisse
+    venir de scénarios très différents (fin serrée, prolongation, remontée, tir au buzzer, perf XXL, festival offensif,
+    enjeu...). Rien ici ne dépend du camp du vainqueur. Renvoie (ingrédients {nom: points}, pénalité « plié tôt »,
+    raisons lisibles, à n'afficher qu'une fois le score révélé)."""
     pts, max_h, max_a, changes = flow(summ)
-    if len(pts) < 20:
-        return None
-    ot = max(len(g["home"]["lines"]), len(g["away"]["lines"])) > 4
-    comeback = max_a if h > a else max_h
-    tight_end = any(abs(d) <= 4 for m, d in pts if m >= 46)
-    top_pts, triple = 0, False
+    h, a = g["home"]["score"], g["away"]["score"]
+    end = max(48.0, pts[-1][0])
+    n_ot = max(0, max(len(g["home"]["lines"]), len(g["away"]["lines"])) - 4)
+
+    def diff_at(t):
+        d = 0
+        for m, v in pts:
+            if m > t:
+                break
+            d = v
+        return d
+
+    grid = [i / 2 for i in range(int(end * 2) + 1)]
+    series = [diff_at(t) for t in grid]
+    reg = series[: 48 * 2 + 1]
+    parts, why = {}, []
+
+    # Suspense en fin de temps réglementaire
+    last5 = [abs(d) for t, d in zip(grid, reg) if t >= 43]
+    avg5 = sum(last5) / len(last5) if last5 else 99
+    parts["fin"] = 18 * _clamp((10 - avg5) / 10) + 16 * _clamp((6 - abs(reg[-1])) / 6)
+    if parts["fin"] >= 15:
+        why.append("fin de match serrée")
+    # Prolongation(s)
+    parts["prolong"] = min(24, 12 + 6 * (n_ot - 1)) if n_ot else 0
+    if n_ot:
+        why.append("prolongation" if n_ot == 1 else f"{n_ot} prolongations")
+    # Retournements : plus gros retard rattrapé (même par le perdant), et retard effacé par le vainqueur
+    swing, lo, hi = 0, 0, 0
+    for d in series:
+        lo, hi = min(lo, d), max(hi, d)
+        swing = max(swing, -lo - max(0, -d), hi - max(0, d))
+    deficit = max_a if h > a else max_h
+    parts["retournement"] = 16 * _clamp((swing - 12) / 20) + 10 * _clamp((deficit - 8) / 17)
+    if deficit >= 12:
+        why.append(f"retard de {deficit} points effacé")
+    elif swing >= 18:
+        why.append("gros retournement de situation")
+    # Changements de leader et équilibre général
+    parts["leader"] = 10 * _clamp(changes / 20)
+    mean_gap = sum(abs(d) for d in series) / len(series)
+    parts["equilibre"] = 8 * _clamp((14 - mean_gap) / 10)
+    if changes >= 12:
+        why.append(f"{changes} changements de leader")
+    # Fin dramatique : le vainqueur passe devant pour de bon dans les 30 dernières secondes (ou au buzzer)
+    final_sign = (h > a) - (h < a)
+    took = 0.0
+    for t, d in zip(grid, series):
+        if (d > 0) - (d < 0) != final_sign:
+            took = t + 0.5
+    took = min(took, end)
+    period_end = 48.0 if end <= 48 else end
+    parts["dernier_tir"] = 14 if took >= period_end - 0.1 else 9 if took >= period_end - 0.5 else 0
+    for p in summ.get("plays") or []:  # plus précis avec les actions : panier qui donne l'avance dans les 5 dernières secondes
+        period, clock, aw, hm, scoring, _, _ = p
+        if scoring and period >= 4 and _clock_secs(clock) <= 5 and elapsed_min(period, clock) >= period_end - 0.1:
+            if (int(hm) > int(aw)) - (int(hm) < int(aw)) == final_sign and final_sign != 0:
+                parts["dernier_tir"] = 14
+    if parts["dernier_tir"]:
+        why.append("panier décisif dans les dernières secondes")
+    # Grosse performance individuelle
+    best_gs, top_pts, triple, best_name = 0.0, 0, False, ""
+    threes, dunks = 0, 0
     for rows in (summ.get("box") or {}).values():
         for r in rows:
-            if r["dnp"]:
+            if r["dnp"] or not r["stats"]:
                 continue
+            gs = game_score(r["stats"])
+            if gs > best_gs:
+                best_gs, best_name = gs, r["name"]
             top_pts = max(top_pts, _num(r["stats"], "PTS"))
             triple = triple or sum(1 for k in ("PTS", "REB", "AST", "STL", "BLK") if _num(r["stats"], k) >= 10) >= 3
-    s = (3 if ot else 0) + (3 if margin <= 3 else 2 if margin <= 6 else 1 if margin <= 10 else 0)
-    s += 2 if tight_end else 0
-    s += 2 if comeback >= 18 else 1 if comeback >= 12 else 0
-    s += 1 if changes >= 15 else 0
-    s += 2 if top_pts >= 50 else 1 if top_pts >= 40 else 0
-    s += 1 if triple else 0
-    level = 3 if s >= 7 else 2 if s >= 4 else 1 if s >= 2 else 0
-    tags = []
-    if ot:
-        tags.append("Prolongation")
-    elif tight_end:
-        tags.append("Fin serrée")
-    if comeback >= 12:
-        tags.append("Remontée")
-    if changes >= 15:
-        tags.append("Rebondissements")
-    if top_pts >= 40 or triple:
-        tags.append("Perf XXL")
-    return level, tags, s
+            try:
+                threes += int(str(r["stats"].get("3PT", "0-0")).split("-")[0])
+            except ValueError:
+                pass
+    parts["perf"] = min(22, 12 * _clamp((best_gs - 30) / 25) + (10 if top_pts >= 50 else 3 if top_pts >= 40 else 0) + (3 if triple else 0))
+    if parts["perf"] >= 8:
+        why.append(f"grosse perf de {best_name}")
+    # Spectacle : festival offensif, adresse à 3 points, dunks
+    dunks = sum(1 for p in summ.get("plays") or [] if p[4] and re.search(r"\b(dunk|alley oop)\b", p[5] or "", re.I))
+    total = (h or 0) + (a or 0)
+    parts["spectacle"] = 4 * _clamp((threes - 28) / 16) + 3 * _clamp((total - 215) / 50) + 3 * _clamp((dunks - 8) / 14)
+    if parts["spectacle"] >= 5:
+        why.append("festival offensif")
+    # Enjeu : play-offs, deux équipes en forme
+    stake = 6 if g.get("season_type") == 3 else 0
+    if idx:
+        good = 0
+        for side in ("home", "away"):
+            f = team_form(idx, g[side]["id"], g["day"], g["season"])
+            if f["n"] >= 5 and f["w"] / f["n"] >= 0.6:
+                good += 1
+        stake += 3 if good == 2 else 0
+    parts["enjeu"] = stake
+    # Match plié tôt : gagné de 15 ou plus, et à partir de quand l'écart n'est plus jamais redescendu sous 12 points
+    decided = None
+    if abs(series[-1]) >= 15:
+        sign = (series[-1] > 0) - (series[-1] < 0)
+        decided = end
+        for t, d in reversed(list(zip(grid, series))):
+            if d * sign >= 12:
+                decided = t
+            else:
+                break
+    penalty = 20 * _clamp((40 - decided) / 28) if decided is not None else 0.0
+    return parts, penalty, why
+
+
+def watch_score(g, summ, idx=None):
+    """Intérêt d'un match terminé, sans dire qui a gagné : (niveau -2 à 3, raisons à montrer APRÈS le score, note).
+    None si on ne sait pas encore."""
+    if not summ or g["state"] != "post" or not g["completed"] or g["home"]["score"] is None:
+        return None
+    if len(flow(summ)[0]) < 20:
+        return None
+    parts, penalty, why = interest_parts(g, summ, idx)
+    note = sum(parts.values()) - penalty
+    level = next((lv for cut, lv in WATCH_CUTS if note >= cut), None)
+    if level is None:  # ⛔ seulement si le match a été plié tôt ET que rien ne le sauve (perf, spectacle)
+        level = -2 if penalty >= 12 and parts["perf"] < 8 and parts["spectacle"] < 5 else -1
+    return level, why, round(note, 1)
 
 
 def hype(g, idx, pre):
@@ -1222,6 +1325,7 @@ a.chip:hover {border-color:var(--accent);}
 .tag.star {background:rgba(251,191,36,.12); border-color:rgba(251,191,36,.4); color:var(--gold); font-weight:700;}
 .tag.live {background:rgba(239,68,68,.15); border-color:rgba(239,68,68,.5); color:#ff8a8a; font-weight:700;}
 .tag.cold {opacity:.75;}
+.tag.advice {background:transparent; border-color:transparent; color:var(--muted); padding-left:2px;}
 .g-match {display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; margin:8px 0 4px;}
 .tm {display:flex; align-items:center; gap:10px; min-width:0;}
 .tm.home {flex-direction:row-reverse; text-align:right;}
@@ -1848,10 +1952,10 @@ def game_card(g, ctx):
         tags.append("<span class='tag star'>⭐ Mon équipe</span>")
     w = ctx["watch"].get(gid)
     if w:
-        level, words, _ = w
-        icon, label = WATCH_LEVELS[level]
-        tags.append(f"<span class='tag {'hot' if level >= 2 else 'cold' if level == 0 else ''}'>{icon} {label}</span>")
-        tags += [f"<span class='tag'>{esc(x)}</span>" for x in words[:2]]
+        level = w[0]
+        icon, label, advice = WATCH_LEVELS[level]
+        tags.append(f"<span class='tag {'hot' if level >= 2 else 'cold' if level <= -1 else ''}' title='{esc(advice)}'>{icon} {label}</span>"
+                    f"<span class='tag advice'>{esc(advice)}</span>")
     if gid == ctx.get("affiche"):
         tags.append("<span class='tag star'>⭐ L'affiche de la nuit</span>")
     if g["state"] == "in":
@@ -1933,6 +2037,9 @@ def game_card(g, ctx):
             ai_r = ai_points("recap", g, ai_material(g, summ, rp)) if ctx["ai"] and (summ.get("article") or {}).get("type") == "Recap" else None
             parts.append("<div class='sec'>Ce qu'il faut retenir</div><ul class='pts'>" + "".join(f"<li>{esc(p)}</li>" for p in (ai_r or rp)) + "</ul>"
                          + ("<div class='ai'>✨ Écrit par Claude d'après le compte rendu AP</div>" if ai_r else ""))
+            if w and w[1]:  # les raisons de la note, seulement une fois le score révélé
+                icon, label, _ = WATCH_LEVELS[w[0]]
+                parts.append(f"<div class='note'>{icon} {esc(label)} : {esc(', '.join(w[1]))}.</div>")
         elif g["state"] == "in":
             parts.append(f"<div class='note'>{esc(g['detail'])}</div>")
         worm = worm_svg(g, summ)
@@ -2113,7 +2220,7 @@ def main():
         summs = dict(zip([g["id"] for g in games], pool.map(game_summary, games)))
     nba_vids, extra_vids = videos_since(min(day, today - timedelta(days=1)))
     ai_on = bool(_secret("anthropic", "api_key", ""))
-    watch = {g["id"]: watch_score(g, summs.get(g["id"])) for g in games} if interest else {}
+    watch = {g["id"]: watch_score(g, summs.get(g["id"]), idx) for g in games} if interest else {}
     watch = {k: v for k, v in watch.items() if v}
     ranks = {}
     if games:

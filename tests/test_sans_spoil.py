@@ -10,9 +10,10 @@ MOTS_INTERDITS = ["prolongation", "remontée", "serrée", "retard", "décisif", 
 
 
 def partie_visible(html):
-    """Ce que voit quelqu'un qui n'a PAS cliqué sur « Score » : sans le panneau du score ni le score réel."""
-    html = html.split("<div class='panel panel-s'>")[0]
-    return re.sub(r"<div class='real'>.*?</div>", "", html, flags=re.S)
+    """Ce que voit quelqu'un qui n'a rien révélé : sans le panneau du score, le score réel ni l'essentiel caché."""
+    html = re.sub(r"<div class='panel panel-s'>.*?(?=<div class='gc'|$)", "", html, flags=re.S)
+    html = re.sub(r"<span class='sc-real'>(?:<span[^>]*>[^<]*</span>|[^<])*</span>", "", html)
+    return re.sub(r"<div class='ess-hid'>.*?<!--fin-ess-->", "", html, flags=re.S)
 
 
 def verifier(app, nom, cles, **extra):
@@ -20,7 +21,10 @@ def verifier(app, nom, cles, **extra):
     w = app["watch_score"](g, summ)
     ctx = {"zone": "Paris", "idx": {}, "summ": {g["id"]: summ}, "watch": {g["id"]: w}, "vids": {g["id"]: (None, None)}, "durs": {},
            "favs": set(), "ranks": {}, "ai": False, "show_all": False, "nba_vids": [], "extra_vids": [], "recap": None, "show": None}
-    vue = partie_visible(app["game_card"](g, ctx)) + app["night_html"](g["day"], [g], ctx, g["day"])
+    ctx["summ"][g["id"]] = summ
+    vue = (partie_visible(app["game_card"](g, ctx)) + partie_visible(app["night_html"](g["day"], [g], ctx, g["day"]))
+           + partie_visible(app["week_html"]([g["day"]], {g["day"]: [g]}, ctx["summ"], ctx["watch"], ctx)))
+    assert "essentiel de la nuit" in vue.lower() and "meilleurs matchs de la semaine" in vue.lower(), f"{nom} : en-tête ou semaine absents"
     texte = re.sub(r"<[^>]+>", " ", vue).lower()
     for mot in MOTS_INTERDITS:
         assert mot not in texte, f"{nom} : le mot « {mot} » est visible avant le score"
@@ -29,6 +33,8 @@ def verifier(app, nom, cles, **extra):
     # Une fois le score révélé, les raisons de la note sont bien là
     if w and w[1]:
         assert w[1][0] in app["game_card"](g, ctx), f"{nom} : raisons absentes du panneau du score"
+    # Et l'essentiel de la nuit révélé contient bien les résultats
+    assert str(g["home"]["score"]) in app["night_html"](g["day"], [g], ctx, g["day"]), f"{nom} : résultats absents de l'essentiel"
 
 
 def test_aucun_spoil():

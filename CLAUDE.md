@@ -11,9 +11,20 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - **Mise à jour automatique** (`auto_refresh`) : Streamlit ne rafraîchit pas une page ouverte, donc la page se recharge quand on revient
   sur l'onglet après plus de 3 min, et toutes les 90 s pendant les matchs (sauf si un panneau est ouvert). Si ESPN ne répond pas,
   `day_games` reprend la dernière liste reçue (`.cache/sb_<jour>.json`) au lieu d'effacer les scores.
-- **Interface (v002)** : chaque carte de match est du HTML pur (`game_card`) ; « 👁 Score » et « 📊 Forme & duels » sont des cases à cocher
-  cachées (`.tg-s`, `.tg-f`) qui ouvrent les panneaux en CSS, sans recharger la page. Visiteurs à gauche, domicile à droite, enjeux toujours visibles.
-  En-tête de la nuit (`night_html`) : NBA Extra du lendemain (12h45, replay vers 15h-17h) et résumé de la nuit NBA, puis « À voir en priorité ».
+- **Design v009 « Holo »** (maquettes validées : https://claude.ai/artifact/7jMTkzCrBiNwHBem7c9m1b) : grille de cartes à collectionner (`game_card`),
+  coupées en diagonale aux couleurs des 2 équipes, logos ESPN dans des disques, cadre selon la note (`RARITY` : holo doré, argent, bronze,
+  simple, mat, grisé ; affiche = doré, direct = rouge). Tout en HTML pur, une seule `st.markdown` pour la grille. Cases à cocher cachées :
+  `.tg-s` (score), `.tg-o` (fiche du match en grand : avant-match, forme, score, graphique, feuille de match), `.tg-f` (forme & duels).
+  Polices Barlow / Barlow Condensed. Mise en page `wide`, 1240 px max.
+- **Bandeau (`main`)** : semaines NBA lundi → dimanche (comme le joueur de la semaine ; semaine 1 = jour d'ouverture, `season_opening`,
+  `week_of`), flèches ‹ ›, « Dernière nuit », calendrier, choix Nuit / Semaine (`?vue=semaine`). 7 boutons de nuit (`st.container(key="nuits")`,
+  défile au doigt sur mobile) nommés « Dim. 25 → lun. 26 » (`night_label`) avec leur état (`night_state`) : terminée, en cours, à venir.
+- **Nuits vues** : cookie `nba_vues` (AAMMJJ) ; une nuit commencée qu'on ouvre devient « vue ». Nuit terminée jamais ouverte = « ● Pas encore vue ».
+- **En-tête de la nuit (`night_html`)** : état, titre, NBA Extra et résumé NBA, puis « L'essentiel de la nuit » (`night_essentials`) : nombre de
+  matchs par niveau (sans spoil), « À voir en priorité » (ouvre la fiche), et 5 à 7 infos cachées derrière « Révéler » (`.tg-n`) :
+  grosses perfs, surprise (favori battu), plus serré / prolongations, remontée, correction, séries, tous les résultats.
+- **Vue Semaine (`week_html`)** : meilleurs matchs de la semaine (sans spoil) ; bilan caché (`.tg-w`) : perfs, notre joueur de la semaine
+  (calcul maison, moyenne du « game score » sur 2 matchs ou plus), équipe de la semaine, surprise, match le plus fou.
   Indice « à voir » sans dire qui gagne (`watch_score`, `interest_parts`) : 6 niveaux (🔥🔥🔥 Immanquable, 🔥🔥, 🔥, 😐 Sans plus, 💤, ⛔ À fuir),
   note globale mêlant beaucoup d'ingrédients qui se compensent (fin serrée, prolongation, retournements, leaders, équilibre, panier décisif,
   perf individuelle, spectacle, enjeu, pénalité « plié tôt ») : voulu FLOU, pour qu'une note ne trahisse pas le scénario (demande de Kiki).
@@ -49,6 +60,7 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 
 - `python tests/test_sans_spoil.py` : vérifie qu'une carte au score caché ne trahit rien (score, « prolongation », « remontée »…). À lancer avant chaque envoi.
 - `python tests/scenarios.py` : note d'intérêt de matchs inventés, pour régler les seuils.
+- `python tests/page_complete.py` : exécute toute la page (Nuit et Semaine) avec un faux Streamlit, pour attraper les erreurs.
 
 
 `python -m streamlit run app.py --server.port 8531`, puis vérifier à l'écran (PC et téléphone). Incrémenter `APP_VERSION` à chaque changement.

@@ -22,7 +22,7 @@ def verifier(app, nom, cles, **extra):
     ctx = {"zone": "Paris", "idx": {}, "summ": {g["id"]: summ}, "watch": {g["id"]: w}, "vids": {g["id"]: (None, None)}, "durs": {},
            "favs": set(), "ranks": {}, "ai": False, "show_all": False, "nba_vids": [], "extra_vids": [], "recap": None, "show": None}
     ctx["summ"][g["id"]] = summ
-    vue = (partie_visible(app["game_card"](g, ctx)) + partie_visible(app["night_html"](g["day"], [g], ctx, g["day"]))
+    vue = (partie_visible(app["game_card"](g, ctx)) + partie_visible(app["game_card"](g, ctx, hero=True)) + partie_visible(app["night_html"](g["day"], [g], ctx, g["day"]))
            + partie_visible(app["week_html"]([g["day"]], {g["day"]: [g]}, ctx["summ"], ctx["watch"], ctx)))
     assert "infos de la nuit" in vue.lower() and "meilleurs matchs de la semaine" in vue.lower(), f"{nom} : en-tête ou semaine absents"
     texte = re.sub(r"<[^>]+>", " ", vue).lower()

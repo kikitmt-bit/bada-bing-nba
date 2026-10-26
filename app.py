@@ -23,7 +23,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v012"
+APP_VERSION = "2026-10-v013"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -1688,6 +1688,79 @@ label.cart {cursor:pointer;}
   .fteam b {font-size:1.6rem;} .fteam.r {justify-content:flex-start; flex-direction:row-reverse; text-align:left;}
   .frow .clock {justify-self:start;}
 }
+
+/* ===== v013 : tableau des scores + carte de la nuit ===== */
+.rows {display:grid; grid-template-columns:repeat(auto-fill, minmax(540px, 1fr)); gap:12px; margin-bottom:2rem;}
+.mrow {display:grid; grid-template-columns:7px minmax(0,1fr); border-radius:14px; overflow:hidden; border:1px solid #1e2533; height:100%; box-sizing:border-box;
+       background:linear-gradient(90deg, var(--ta) 0%, #121722 34%, #121722 66%, var(--th) 100%);}
+.mrow .strip {background:#2a3242;}
+.mrow.L3 {border-color:rgba(255,220,130,.45); box-shadow:0 0 22px rgba(247,200,80,.16);}
+.mrow.L2 {border-color:rgba(235,240,245,.28);}
+.mrow.L3 .strip {background:linear-gradient(180deg, #b8860b, #ffe9a3, #f7c948, #fff8dc, #d4a017, #ffe9a3, #b8860b); background-size:100% 300%; animation:holo2 6s linear infinite;}
+.mrow.L2 .strip {background:linear-gradient(180deg, #7d8894, #e9eef3, #b9c2cc, #ffffff, #8e99a5, #dfe5ec, #7d8894); background-size:100% 300%; animation:holo2 9s linear infinite;}
+.mrow.L1 .strip {background:linear-gradient(180deg, #6e3417, #c4743f, #f0b58a, #b0602d, #6e3417);}
+.mrow.L0 .strip {background:#4b5a6e;} .mrow.Lm1 .strip {background:#7c838d;} .mrow.Lm2 .strip {background:#2a2d33;}
+.mrow.Laff .strip {background:linear-gradient(180deg, #a8781f, #ffd770, #a8781f);} .mrow.Llive .strip {background:#e03b3b;}
+@keyframes holo2 {to {background-position:0 300%;}}
+@media (prefers-reduced-motion: reduce) {.mrow .strip {animation:none !important;}}
+.mr-in {display:flex; flex-direction:column; gap:8px; padding:10px 14px 10px 12px; min-width:0;}
+.mr-top {display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:22px;}
+.mr-t {font-size:.8rem; font-weight:600; color:#9aa3b5; white-space:nowrap;}
+.mrow .lvl {font-size:.76rem; padding:2px 9px;}
+.mrow.L3 .lvl {background:linear-gradient(135deg, #f7c948, #fff4c2, #d4a017); color:#2a1e00;}
+.mrow.L2 .lvl {background:linear-gradient(135deg, #dfe5ec, #ffffff, #aeb8c3); color:#16191d;}
+.mrow.L1 .lvl {background:linear-gradient(135deg, #b0602d, #f0b58a); color:#2a1206;}
+.mrow.L0 .lvl {background:#4b5a6e;} .mrow.Lm1 .lvl {background:#7c838d;} .mrow.Lm2 .lvl {background:#1b1d21; color:#c3c8cf; box-shadow:inset 0 0 0 1px #3a3e45;}
+.mrow.Laff .lvl {background:#ffd770; color:#2a1e00;} .mrow.Llive .lvl {background:#d93636;}
+.mr-main {display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); grid-template-areas:"a c h"; align-items:center; gap:12px;}
+.mr-main .a {grid-area:a;} .mr-main .clock {grid-area:c;} .mr-main .h {grid-area:h; flex-direction:row-reverse; text-align:right;}
+.mt {display:flex; align-items:center; gap:12px; min-width:0;}
+label.mt {cursor:pointer;}
+.mt-n {min-width:0;}
+.mt-n small {display:block; font-size:.68rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#9aa3b5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.mt-n b {display:block; font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.5rem; line-height:1; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.mt-n b.sm {font-size:1.3rem;} .mt-n b.xs {font-size:1.12rem;}
+.disc.dr {width:58px; height:58px; flex:none; background:var(--c, rgba(8,10,16,.5));}
+.mt.a .disc.dr {background:var(--ca); box-shadow:0 0 0 3px rgba(255,255,255,.12), 0 0 26px var(--ta), 0 0 34px var(--ta);}
+.mt.h .disc.dr {background:var(--ch); box-shadow:0 0 0 3px rgba(255,255,255,.12), 0 0 26px var(--th), 0 0 34px var(--th);}
+.disc.dr img {width:42px; height:42px;}
+.disc.dr b {font-size:1rem;}
+.mr-main .clock {min-width:92px;}
+.mr-foot {display:flex; align-items:center; gap:10px; padding-top:8px; border-top:1px solid rgba(255,255,255,.07);}
+.mr-prev {flex:1; min-width:0; font-size:.84rem; color:#c3cad6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.mr-foot .cbtn {flex:none; min-height:30px; padding:0 10px; font-size:.8rem; border-radius:8px;}
+.mr-foot .lnk {margin-left:0;}
+/* Carte de la nuit */
+.hero {display:grid; grid-template-columns:400px minmax(0,1fr); gap:26px; align-items:center; margin:0 0 18px; padding:18px; border-radius:20px;
+       background:radial-gradient(600px 220px at 20% 0%, rgba(247,200,80,.10), transparent 70%), #10141e; border:1px solid #1e2533;}
+.hero-card .card {height:auto;} .hero-card .ci {height:auto;}
+.hero-card .cname {padding-bottom:14px;}
+.hero-k {font-size:.78rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#ffc75a;}
+.hero-t {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:2.1rem; line-height:1.05; text-transform:uppercase; margin:4px 0 6px;}
+.hero-t span {color:#6f7a8f; font-size:1.5rem;}
+.hero-a {font-weight:700; color:#fff; margin-bottom:6px;}
+.hero .pts li {font-size:.92rem;}
+.hero .cfoot {margin-top:10px;} .hero .cfoot .lnk {margin-left:auto;}
+/* Bandeau des nuits : un seul bloc, boutons discrets, nuit choisie en doré */
+.st-key-nav {background:#10141e; border:1px solid #1e2533; border-radius:16px; padding:6px;}
+.st-key-nav [data-testid="stHorizontalBlock"] {padding-bottom:0;}
+.st-key-nav button {background:transparent; border-color:transparent; min-height:44px;}
+.st-key-nav button:hover {border-color:#2f3848; background:#161c29;}
+.st-key-wk_view button {border-color:#2a3242 !important; background:#161c29 !important;}
+.st-key-nav button p {font-size:1.05rem;}
+@media (max-width: 760px) {
+  .rows {grid-template-columns:1fr;}
+  .mr-main {grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"a c" "h c"; gap:6px 10px;}
+  .mr-main .h {flex-direction:row; text-align:left;}
+  .disc.dr {width:42px; height:42px;} .disc.dr img {width:30px; height:30px;}
+  .mt {gap:10px;} .mt-n small {display:none;} .mt-n b {font-size:1.25rem;} .mt-n b.sm {font-size:1.15rem;} .mt-n b.xs {font-size:1.05rem;}
+  .mr-prev {white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;}
+  .mr-foot {flex-wrap:wrap;}
+  .hero {grid-template-columns:1fr; gap:14px; padding:12px;}
+  .hero-t {font-size:1.5rem;}
+  .disc.dr b {font-size:.72rem;}
+  .hero-card .cname b {font-size:1.02rem;} .hero-card .cname b.sm, .hero-card .cname b.xs {font-size:.88rem;}
+}
 </style>
 """
 
@@ -2193,7 +2266,7 @@ def card_point(points):
     return points[0] if points else ""
 
 
-def game_card(g, ctx):
+def game_card(g, ctx, hero=False):
     """Une carte de match façon carte à collectionner (HTML pur).
     Face : grands logos en diagonale sur les couleurs des équipes, noms, afficheur façon « play clock » (clic = score), avant-match.
     Cadre = rareté selon la note (gris → légendaire doré). « Stats et détails » ouvre la fiche avec le score."""
@@ -2276,13 +2349,42 @@ def game_card(g, ctx):
     art = f"<label for='o{gid}' class='cart' title='Avant-match complet'>{art}</label>" if not played else f"<div class='cart'>{art}</div>"
     prev = "<ul class='cprev'>" + "".join(f"<li>{esc(p)}</li>" for p in shown[:3]) + "</ul>" if shown else ""
     more = "Stats et détails ›" if played else "Avant-match complet ›"
-    face = (f"<div class='card {rar}'><div class='ci' style='--ca:{esc(ca)};--ch:{esc(ch)}'>"
-            f"<div class='ctop'><div class='chips'>{''.join(chips)}</div>"
-            + (f"<span class='cpill'>{esc(when)}</span>" if played and when else "") + "</div>"
-            f"{art}"
-            f"<div class='cname'><b class='{name_cls(ta)}'>{esc(ta['name'])}</b>{clock}<b class='r {name_cls(th)}'>{esc(th['name'])}</b></div>"
-            f"<div class='info'>{prev}<div class='cfoot'>{''.join(vid_btns[:2])}"
-            f"<label for='o{gid}' class='lnk'>{more}</label></div></div></div></div>")
+    face_head = (f"<div class='card {rar}'><div class='ci' style='--ca:{esc(ca)};--ch:{esc(ch)}'>"
+                 f"<div class='ctop'><div class='chips'>{''.join(chips)}</div>"
+                 + (f"<span class='cpill'>{esc(when)}</span>" if played and when else "") + "</div>"
+                 f"{art}"
+                 f"<div class='cname'><b class='{name_cls(ta)}'>{esc(ta['name'])}</b>{clock}<b class='r {name_cls(th)}'>{esc(th['name'])}</b></div>")
+
+    # Ligne du tableau des scores : bandeau de rareté, logos avec halo, ville + nom, afficheur, avant-match, résumé, stats
+    def city(t):
+        full, name = t.get("full") or "", t["name"]
+        return full[: -len(name)].strip() if full.endswith(name) and full != name else ""
+
+    def rgba(c, al):
+        r, g_, b = _rgb(c)
+        return f"rgba({r},{g_},{b},{al})"
+
+    def side(s_, t, cls):
+        inner = f"{disc(s_['id'], 'dr')}<div class='mt-n'><small>{esc(city(t))}</small><b class='{name_cls(t)}'>{esc(t['name'])}</b></div>"
+        return (f"<label for='o{gid}' class='mt {cls}' title='Avant-match complet'>{inner}</label>" if not played
+                else f"<div class='mt {cls}'>{inner}</div>")
+    short = " · ".join(shown[:2])
+    row = (f"<div class='mrow {rar}' style='--ta:{rgba(ca, .3)};--th:{rgba(ch, .3)};--ca:{esc(ca)};--ch:{esc(ch)}'><div class='strip'></div><div class='mr-in'>"
+           f"<div class='mr-top'><div class='chips'>{''.join(chips)}</div><span class='mr-t'>{esc(when) if played else esc(g['tv'])}</span></div>"
+           f"<div class='mr-main'>{side(a, ta, 'a')}{clock}{side(h, th, 'h')}</div>"
+           f"<div class='mr-foot'><span class='mr-prev' title='{esc(short)}'>{esc(short)}</span>{''.join(vid_btns[:1])}"
+           f"<label for='o{gid}' class='lnk'>{'Stats ›' if played else 'Avant-match ›'}</label></div></div></div>")
+
+    # « La carte de la nuit » : le meilleur match en grande carte (ou l'affiche avant les matchs)
+    hero_html = ""
+    if hero:
+        kick = "La carte de la nuit" if w else "L'affiche de la nuit"
+        sub = WATCH_LEVELS[w[0]][2] if w else card_point(shown)
+        hero_html = (f"<div class='hero'><div class='hero-card'>{face_head}</div></div></div>"
+                     f"<div class='hero-txt'><div class='hero-k'>{kick}</div>"
+                     f"<div class='hero-t'>{esc(ta['full'] or ta['name'])} <span>@</span> {esc(th['full'] or th['name'])}</div>"
+                     f"<div class='hero-a'>{esc(sub)}</div><ul class='pts'>" + "".join(f"<li>{esc(p)}</li>" for p in shown[:4]) + "</ul>"
+                     f"<div class='cfoot'>{''.join(vid_btns)}<label for='o{gid}' class='lnk'>{'Stats et détails ›' if played else 'Avant-match complet ›'}</label></div></div></div>")
 
     # Fiche du match. Après le match, l'ouvrir = vouloir le score : il y est directement.
     def rec(s):
@@ -2321,9 +2423,9 @@ def game_card(g, ctx):
              + f"{stats}<div class='sec'>Avant le match</div>{pts_html}<div class='pf'>{form_html(g, idx)}</div></div></div></div>")
 
     checked = " checked" if ctx["show_all"] else ""
-    return (f"<div class='gc' id='g{gid}'>"
+    return (f"<div class='gc{' gh' if hero else ''}' id='g{gid}'>"
             f"<input type='checkbox' class='tg tg-s' id='s{gid}'{checked}><input type='checkbox' class='tg tg-o' id='o{gid}'>"
-            f"{face}{fiche}</div>")
+            f"{hero_html or row}{fiche}</div>")
 
 
 def night_state(games, zone, now=None):
@@ -2791,7 +2893,13 @@ def main():
         sc = watch[g["id"]][2] if g["id"] in watch else -99
         return (0 if fav else 1, -sc if watch else 0, g["utc"] or "")
     if games:
-        st.markdown("<div class='cards'>" + "".join(game_card(g, ctx) for g in sorted(games, key=order)) + "</div>", unsafe_allow_html=True)
+        ordered = sorted(games, key=order)
+        best = max((g for g in games if watch.get(g["id"]) and watch[g["id"]][0] >= 2), key=lambda g: watch[g["id"]][2], default=None)
+        if not best and ctx.get("affiche"):
+            best = next((g for g in games if g["id"] == ctx["affiche"]), None)
+        hero = game_card(best, ctx, hero=True) if best else ""
+        rows = "".join(game_card(g, ctx) for g in ordered if not best or g["id"] != best["id"])
+        st.markdown(hero + (f"<div class='rows'>{rows}</div>" if rows else ""), unsafe_allow_html=True)
 
     if st.session_state.pop("seen_changed", False):
         write_seen(seen)

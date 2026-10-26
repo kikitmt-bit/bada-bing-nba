@@ -25,7 +25,7 @@ import streamlit.components.v1 as components
 
 import fantasy as F
 
-APP_VERSION = "2026-10-v015"
+APP_VERSION = "2026-10-v016"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -1784,6 +1784,101 @@ label.mt {cursor:pointer;}
 .fx-t {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:2.2rem; text-transform:uppercase; line-height:1.05;}
 .fx-s {color:#c3cad6; font-size:.95rem; margin-top:4px;}
 .st-key-fx_go button, .st-key-fx_back button {border-color:#ffc75a; color:#ffc75a;}
+
+/* ===== v016 : le score en grands chiffres, la carte du joueur ===== */
+.sn {display:flex; align-items:center; justify-content:center; min-width:62px; height:54px; padding:0 6px; box-sizing:border-box; cursor:pointer;
+     font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:2.5rem; line-height:1; letter-spacing:-.01em; color:#fff;
+     font-variant-numeric:tabular-nums;}
+.sn.empty {cursor:default;}
+.sn .sc-hid {display:flex; align-items:center; justify-content:center; width:58px; height:50px; border-radius:12px; color:rgba(255,255,255,.55); font-size:1.9rem;
+             background:repeating-linear-gradient(135deg, rgba(255,255,255,.07) 0 6px, rgba(255,255,255,.02) 6px 12px); border:1px solid rgba(255,255,255,.16);
+             box-shadow:inset 0 1px 0 rgba(255,255,255,.08); transition:border-color .15s, color .15s;}
+.sn:hover .sc-hid, .sm:hover ~ .sn .sc-hid {border-color:#ffc75a; color:#ffc75a;}
+.sc-real.l {color:rgba(255,255,255,.42);}
+.sm {display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-width:70px; cursor:pointer; text-align:center;}
+.sm small {font-size:.66rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#9aa3b5; white-space:nowrap;}
+.sm.live small {color:#ff6b6b;}
+.sm .sc-tip {font-size:.7rem; font-weight:700; color:#ffc75a; white-space:nowrap; margin:0;}
+.sm.pre {cursor:default;} .sm.pre b {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.7rem; line-height:1; color:#fff;}
+.sm.pre small {letter-spacing:.06em; text-transform:none; font-weight:600;}
+.tg-s:checked ~ * .sc-tip {display:none;}
+.mr-main {grid-template-columns:minmax(0,1fr) auto auto auto minmax(0,1fr); grid-template-areas:"a sa sm sh h"; gap:8px;}
+.mr-main .sn.a {grid-area:sa;} .mr-main .sm {grid-area:sm;} .mr-main .sn.h {grid-area:sh;}
+.cname .score {display:flex; align-items:center; gap:2px; background:rgba(8,10,16,.72); border-radius:14px; padding:2px 4px;}
+.cname .score .sn {min-width:48px; height:46px; font-size:2rem;} .cname .score .sn .sc-hid {width:44px; height:40px; font-size:1.5rem;}
+.cname .score .sm {min-width:56px;}
+.fsc {display:flex; align-items:center; gap:6px; padding:6px 14px; border-radius:16px; background:rgba(8,10,16,.82);}
+.fsc .sn {font-size:3.3rem; height:64px; min-width:76px; cursor:default;} .fsc .sc-real {display:inline;}
+@media (max-width: 760px) {
+  .mr-main {grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"a sa" "h sh"; gap:6px 10px;}
+  .mr-main .sm {display:none;}
+  .sn {height:44px; min-width:54px; font-size:2rem;} .sn .sc-hid {width:50px; height:40px; font-size:1.5rem;}
+  .fsc .sn {font-size:2.4rem; height:52px; min-width:60px;}
+  .cname .score .sm {display:none;}
+}
+/* Carte du joueur (zones chaudes) */
+.pm {display:none; position:fixed; inset:0; z-index:1000000; align-items:flex-start; justify-content:center; padding:4vh 14px; overflow-y:auto; box-sizing:border-box;}
+.tgp:checked + .pm {display:flex;}
+.pm-bg {position:fixed; inset:0; background:rgba(4,7,12,.86); cursor:pointer;}
+.pm-box {position:relative; width:100%; max-width:480px; max-height:none; overflow:hidden; padding:0; border-radius:22px; background:#0f131c;
+         border:1px solid rgba(255,255,255,.1); box-shadow:0 30px 80px rgba(0,0,0,.6), 0 0 0 4px var(--tk);}
+.pm-top {position:relative; display:flex; align-items:center; gap:14px; padding:18px 18px 16px;
+         background:radial-gradient(260px 160px at 85% 0%, rgba(255,255,255,.18), transparent 70%), linear-gradient(150deg, var(--tk), #0f131c 115%);}
+.pm-x {position:absolute; right:12px; top:12px; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+       background:rgba(8,10,16,.55); border:1px solid rgba(255,255,255,.3); color:#fff; cursor:pointer; margin:0;}
+.pm-ph {flex:none; width:88px; height:88px; border-radius:50%; overflow:hidden; background:rgba(8,10,16,.4); border:3px solid rgba(255,255,255,.85); display:flex; align-items:flex-end; justify-content:center;}
+.pm-ph img {width:120%; height:auto;}
+.pm-id {min-width:0; padding-right:40px;}
+.pm-team {display:flex; align-items:center; gap:6px; font-size:.78rem; font-weight:700; color:rgba(255,255,255,.85); text-transform:uppercase; letter-spacing:.06em;}
+.pm-team img {width:18px; height:18px;}
+.pm-name {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:2.1rem; line-height:.95; text-transform:uppercase; color:#fff; margin-top:4px;}
+.pm-min {font-size:.82rem; color:rgba(255,255,255,.75); margin-top:4px;}
+.pm-tiles {display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; padding:14px 16px 4px;}
+.pm-tiles div {text-align:center; padding:8px 4px; border-radius:12px; background:#171c28; border:1px solid #232b3a;}
+.pm-tiles b {display:block; font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.9rem; line-height:1; color:#fff;}
+.pm-tiles div:first-child b {color:#ffc75a;}
+.pm-tiles span {font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#9aa3b5;}
+.pm-sec {display:flex; align-items:baseline; justify-content:space-between; gap:8px; padding:14px 16px 8px;}
+.pm-sec span {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.25rem; text-transform:uppercase;}
+.pm-sec small {color:#9aa3b5; font-size:.76rem;}
+.pm-court {padding:0 16px;}
+.court {width:100%; height:auto; display:block; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.35);}
+.court .zp {font:800 21px 'Barlow Condensed', sans-serif; fill:#fff; text-anchor:middle; paint-order:stroke; stroke:rgba(20,12,4,.6); stroke-width:4px;}
+.court .zm {font:700 13px 'Barlow Condensed', sans-serif; fill:#fff; text-anchor:middle; paint-order:stroke; stroke:rgba(20,12,4,.6); stroke-width:3.5px;}
+.pm-leg {display:flex; flex-wrap:wrap; gap:6px 12px; padding:10px 16px 2px; font-size:.74rem; color:#c3cad6; margin:0;}
+.pm-leg span {display:inline-flex; align-items:center; gap:5px;}
+.pm-leg i {display:inline-block; font-style:normal;}
+.pm-leg .dot {width:10px; height:10px; border-radius:50%; background:#1d1a16; box-shadow:0 0 0 2px #fffaf0;}
+.pm-leg .x {font-weight:800; color:#c3cad6;}
+.pm-leg .sq {width:12px; height:12px; border-radius:3px;}
+.pm-leg .sq.hot {background:rgba(214,78,40,.85);} .pm-leg .sq.cold {background:rgba(58,104,186,.85);} .pm-leg .sq.low {background:#b9a888;}
+.pm-bars {display:flex; flex-direction:column; gap:10px; padding:14px 16px 18px;}
+.pb {display:grid; grid-template-columns:110px minmax(0,1fr) 78px; align-items:center; gap:10px; font-size:.86rem;}
+.pb-l {color:#c3cad6;}
+.pb-t {position:relative; height:12px; border-radius:6px; background:#1c2230;}
+.pb-t i {position:absolute; left:0; top:0; bottom:0; border-radius:6px; background:#d9aa3c;}
+.pb-t i.hot {background:#e0562c;} .pb-t i.cold {background:#4a78c2;}
+.pb-t b {position:absolute; top:-3px; bottom:-3px; width:2px; background:#fff; border-radius:1px;}
+.pb-v {text-align:right; font-weight:800; font-variant-numeric:tabular-nums;} .pb-v small {display:block; font-weight:500; color:#9aa3b5; font-size:.72rem;}
+.pb-v.hot {color:#ff9a73;} .pb-v.cold {color:#8ab4ff;}
+.pm-note {font-size:.72rem; color:#6f7a8f;}
+@media (max-width: 640px) {
+  .pm {padding:0;} .pm-box {border-radius:0; min-height:100vh; box-shadow:none;}
+  .pm-name {font-size:1.7rem;} .pm-ph {width:72px; height:72px;}
+}
+
+/* v016 : place pour les noms */
+.cname.two {grid-template-columns:minmax(0,1fr) minmax(0,1fr); padding-bottom:4px;}
+.cscore {display:flex; justify-content:center; padding:0 12px 12px; background:rgba(8,10,16,.55);}
+.cscore .score {display:flex; align-items:center; gap:4px; background:rgba(8,10,16,.75); border-radius:14px; padding:3px 6px;}
+.mr-main {gap:6px;}
+.mr-main .disc.dr {width:48px; height:48px;} .mr-main .disc.dr img {width:36px; height:36px;}
+.mr-main .mt {gap:9px;}
+.mr-main .mt-n b {font-size:1.32rem;} .mr-main .mt-n b.sm {font-size:1.16rem;} .mr-main .mt-n b.xs {font-size:.92rem; letter-spacing:-.02em;}
+.mr-main .sn {min-width:52px;} .mr-main .sn .sc-hid {width:50px;}
+.mr-main .sm {min-width:58px;}
+@media (max-width: 760px) {.mr-main .mt-n b {font-size:1.25rem;} .mr-main .disc.dr {width:42px; height:42px;}
+  .mr-main .sm.pre {display:flex; grid-area:sa; grid-row:1 / span 2; align-self:center;} .mr-main .sn.empty {display:none;}}
 </style>
 """
 
@@ -2007,21 +2102,21 @@ def shot_zone(x, y, three):
 
 
 def zone_color(made, att, avg):
-    """Rouge = zone chaude (au-dessus de la moyenne NBA de la zone), bleu = froide ; plus franc avec plus de tirs."""
-    if not att:
-        return "rgba(120,130,150,.06)"
+    """Couleur d'une zone : rouge = au-dessus de la moyenne NBA de la zone, bleu = en dessous, ocre = dans la moyenne.
+    Moins de 3 tirs : pas de couleur (trop peu pour juger)."""
+    if att < 3:
+        return "rgba(110,95,70,0.10)"
     diff = made / att - avg
-    strength = min(1.0, abs(diff) / 0.2 + 0.2) * min(1.0, 0.45 + 0.15 * att)
-    alpha = 0.12 + 0.5 * strength
     if abs(diff) < 0.04:
-        return f"rgba(234,179,8,{0.10 + 0.25 * min(1.0, 0.45 + 0.15 * att):.2f})"  # dans la moyenne : jaune pâle
-    return f"rgba(239,68,68,{alpha:.2f})" if diff > 0 else f"rgba(59,130,246,{alpha:.2f})"
+        return "rgba(217,170,60,0.42)"
+    s = min(1.0, abs(diff) / 0.25)
+    return f"rgba(214,78,40,{0.30 + 0.42 * s:.2f})" if diff > 0 else f"rgba(58,104,186,{0.30 + 0.42 * s:.2f})"
 
 
 def court_svg(shots, uid):
-    """Demi-terrain (10 px par pied, ligne de fond en haut) : 14 zones colorées selon la réussite du joueur,
-    avec « réussis/tentés » dans chaque zone où il a tiré, puis chaque tir (● réussi, ✕ raté)."""
-    BY = 52.5  # panier à 5,25 pieds de la ligne de fond
+    """Demi-terrain façon parquet clair (10 px par pied, ligne de fond en haut) : 14 zones colorées seulement à partir de 3 tirs,
+    pourcentage + réussis/tentés dans chaque zone, et chaque tir (● réussi, ✕ raté) pour voir où le joueur tire."""
+    BY, H = 52.5, 400
     stats = {k: [0, 0] for k, _, _, _ in HOT_ZONES}
     for x, y, made, three in shots:
         z = shot_zone(x, y, three)
@@ -2032,123 +2127,116 @@ def court_svg(shots, uid):
         return 250 + r * math.sin(math.radians(a)), BY + r * math.cos(math.radians(a))
 
     def sector(r1, r2, a1, a2):
-        x1, y1 = pt(r2, a1)
-        x2, y2 = pt(r2, a2)
-        x3, y3 = pt(r1, a2)
-        x4, y4 = pt(r1, a1)
-        big = 1 if a2 - a1 > 180 else 0
-        inner = f"A{r1},{r1} 0 {big} 1 {x4:.1f},{y4:.1f}" if r1 > 0 else f"L{x4:.1f},{y4:.1f}"
-        return f"M{x1:.1f},{y1:.1f} A{r2},{r2} 0 {big} 0 {x2:.1f},{y2:.1f} L{x3:.1f},{y3:.1f} {inner} Z"
+        (x1, y1), (x2, y2), (x3, y3), (x4, y4) = pt(r2, a1), pt(r2, a2), pt(r1, a2), pt(r1, a1)
+        inner = f"A{r1},{r1} 0 0 1 {x4:.1f},{y4:.1f}" if r1 > 0 else f"L{x4:.1f},{y4:.1f}"
+        return f"M{x1:.1f},{y1:.1f} A{r2},{r2} 0 0 0 {x2:.1f},{y2:.1f} L{x3:.1f},{y3:.1f} {inner} Z"
 
-    yj, r3 = 140, 237.5  # fin des coins (14 pieds de la ligne de fond), rayon de la ligne à 3 points
+    yj, r3 = 140, 237.5
     arc = f"M30,0 L30,{yj} A{r3},{r3} 0 0 0 470,{yj} L470,0"
-    inside = f"{arc} Z"
-    outside = f"M0,{yj} L30,{yj} A{r3},{r3} 0 0 0 470,{yj} L500,{yj} L500,470 L0,470 Z"
-    col = {k: zone_color(stats[k][0], stats[k][1], ZONE_AVG[k]) for k in stats}
     cin, cout = f"in{uid}", f"out{uid}"
     shapes, labels = [], []
 
     def label(k, x, y):
         m, a = stats[k]
-        if a:
-            labels.append(f'<text x="{x:.0f}" y="{y:.0f}" class="zl">{m}/{a}</text>')
+        if not a:
+            return
+        x = min(455, max(45, x))                      # jamais coupé au bord du terrain
+        if a >= 3:
+            labels.append(f'<text x="{x:.0f}" y="{y - 3:.0f}" class="zp">{round(m / a * 100)}%</text>'
+                          f'<text x="{x:.0f}" y="{y + 13:.0f}" class="zm">{m}/{a}</text>')
+        else:
+            labels.append(f'<text x="{x:.0f}" y="{y + 5:.0f}" class="zm">{m}/{a}</text>')
 
-    for k, fam, ang, _ in HOT_ZONES:
+    for k, fam, ang, avg in HOT_ZONES:
+        c = zone_color(stats[k][0], stats[k][1], avg)
         if k == "rim":
-            shapes.append(f'<circle cx="250" cy="{BY}" r="80" fill="{col[k]}"/>')
-            label(k, 250, BY + 48)
+            shapes.append(f'<circle cx="250" cy="{BY}" r="80" fill="{c}"/>')
+            label(k, 250, BY + 52)
         elif k.startswith("sm_"):
-            shapes.append(f'<path d="{sector(80, 160, *ang)}" fill="{col[k]}" clip-path="url(#{cin})"/>')
-            mid_a = max(-75, min(75, (ang[0] + ang[1]) / 2))
-            label(k, *pt(122, mid_a))
+            shapes.append(f'<path d="{sector(80, 160, *ang)}" fill="{c}" clip-path="url(#{cin})"/>')
+            label(k, *pt(122, max(-75, min(75, sum(ang) / 2))))
         elif k.startswith("lm_"):
-            shapes.append(f'<path d="{sector(160, 420, *ang)}" fill="{col[k]}" clip-path="url(#{cin})"/>')
-            mid_a = max(-80, min(80, (ang[0] + ang[1]) / 2))
-            x, y = pt(200, mid_a)
-            label(k, x, max(y, 24))
+            shapes.append(f'<path d="{sector(160, 420, *ang)}" fill="{c}" clip-path="url(#{cin})"/>')
+            x, y = pt(205, max(-80, min(80, sum(ang) / 2)))
+            label(k, x, max(y, 30))
         elif k in ("c3_l", "c3_r"):
             x0 = 0 if k == "c3_l" else 470
-            shapes.append(f'<rect x="{x0}" y="0" width="30" height="{yj}" fill="{col[k]}"/>')
-            label(k, x0 + 15, 80)
+            shapes.append(f'<rect x="{x0}" y="0" width="30" height="{yj}" fill="{c}"/>')
+            m, a = stats[k]
+            if a:
+                labels.append(f'<text x="{x0 + 15}" y="70" class="zm" transform="rotate(-90 {x0 + 15} 70)">{m}/{a}</text>')
         else:
-            shapes.append(f'<path d="{sector(0, 700, *ang)}" fill="{col[k]}" clip-path="url(#{cout})"/>')
-            mid_a = max(-50, min(50, (ang[0] + ang[1]) / 2))
-            label(k, *pt(280, mid_a))
+            shapes.append(f'<path d="{sector(0, 700, *ang)}" fill="{c}" clip-path="url(#{cout})"/>')
+            label(k, *pt(300, max(-50, min(50, sum(ang) / 2))))
 
-    # séparations entre les zones (traits fins)
-    seps = []
-    for a in (-30, 30):
-        (x1, y1), (x2, y2) = pt(80, a), pt(160, a)
-        seps.append(f"M{x1:.1f},{y1:.1f} L{x2:.1f},{y2:.1f}")
-    for a in (-60, -20, 20, 60):
-        (x1, y1), (x2, y2) = pt(160, a), pt(420, a)
-        seps.append(f"M{x1:.1f},{y1:.1f} L{x2:.1f},{y2:.1f}")
-    for a in (-25, 25):
-        (x1, y1), (x2, y2) = pt(r3, a), pt(700, a)
-        seps.append(f"M{x1:.1f},{y1:.1f} L{x2:.1f},{y2:.1f}")
-    sep_paths = (f'<path d="{" ".join(seps[:6])}" stroke="#0b0f17" stroke-width="2" clip-path="url(#{cin})"/>'
-                 f'<path d="{" ".join(seps[6:])}" stroke="#0b0f17" stroke-width="2" clip-path="url(#{cout})"/>')
-
-    parts = [
-        '<svg viewBox="0 0 500 470" class="court" role="img" aria-label="Carte de tirs">',
-        f'<defs><clipPath id="{cin}"><path d="{inside}"/></clipPath><clipPath id="{cout}"><path d="{outside}"/></clipPath></defs>',
-        '<rect x="0" y="0" width="500" height="470" fill="#141c2a"/>',
-        *shapes,
-        sep_paths,
-        f'<circle cx="250" cy="{BY}" r="160" fill="none" stroke="#0b0f17" stroke-width="2" clip-path="url(#{cin})"/>',
-        f'<circle cx="250" cy="{BY}" r="80" fill="none" stroke="#0b0f17" stroke-width="2"/>',
-        '<g fill="none" stroke="#3a4760" stroke-width="2">',
-        f'<path d="{arc}"/>',
-        '<rect x="170" y="0" width="160" height="190" stroke-opacity=".6"/>',
-        '<circle cx="250" cy="190" r="60" stroke-opacity=".6"/>',
-        '<line x1="220" y1="40" x2="280" y2="40"/>',
-        f'<circle cx="250" cy="{BY}" r="7.5" stroke="#F58426"/>',
-        '<path d="M190,470 A60,60 0 0 1 310,470"/>',
-        '<rect x="1" y="1" width="498" height="468"/>',
-        '</g>',
-    ]
+    seps = [f"M{pt(80, a)[0]:.1f},{pt(80, a)[1]:.1f} L{pt(160, a)[0]:.1f},{pt(160, a)[1]:.1f}" for a in (-30, 30)]
+    seps += [f"M{pt(160, a)[0]:.1f},{pt(160, a)[1]:.1f} L{pt(420, a)[0]:.1f},{pt(420, a)[1]:.1f}" for a in (-60, -20, 20, 60)]
+    seps2 = [f"M{pt(r3, a)[0]:.1f},{pt(r3, a)[1]:.1f} L{pt(700, a)[0]:.1f},{pt(700, a)[1]:.1f}" for a in (-25, 25)]
+    marks = []
     for x, y, made, three in shots:
         X, Y = x * 10, BY + y * 10
-        if Y > 465:
+        if Y > H - 6:
             continue
         if made:
-            parts.append(f'<circle cx="{X:.0f}" cy="{Y:.0f}" r="7" fill="#F58426" stroke="#0b0f17" stroke-width="2"/>')
+            marks.append(f'<circle cx="{X:.0f}" cy="{Y:.0f}" r="6.5" fill="#1d1a16" stroke="#fffaf0" stroke-width="2"/>')
         else:
-            parts.append(f'<path d="M{X - 5:.0f},{Y - 5:.0f} L{X + 5:.0f},{Y + 5:.0f} M{X + 5:.0f},{Y - 5:.0f} L{X - 5:.0f},{Y + 5:.0f}" '
-                         f'stroke="#c3cad8" stroke-width="2.4" stroke-linecap="round"/>')
-    parts += labels
-    parts.append("</svg>")
+            marks.append(f'<path d="M{X - 5:.0f},{Y - 5:.0f} L{X + 5:.0f},{Y + 5:.0f} M{X + 5:.0f},{Y - 5:.0f} L{X - 5:.0f},{Y + 5:.0f}" '
+                         f'stroke="#3b2f22" stroke-width="2.6" stroke-linecap="round"/>')
+    svg = (f'<svg viewBox="0 0 500 {H}" class="court" role="img" aria-label="Carte de tirs : 14 zones et chaque tir">'
+           f'<defs><clipPath id="{cin}"><path d="{arc} Z"/></clipPath>'
+           f'<clipPath id="{cout}"><path d="M0,{yj} L30,{yj} A{r3},{r3} 0 0 0 470,{yj} L500,{yj} L500,{H} L0,{H} Z"/></clipPath>'
+           f'<pattern id="pq{uid}" width="500" height="40" patternUnits="userSpaceOnUse"><rect width="500" height="40" fill="#ead3a6"/>'
+           f'<rect y="20" width="500" height="20" fill="#e4cb9b"/></pattern></defs>'
+           f'<rect x="0" y="0" width="500" height="{H}" fill="url(#pq{uid})"/>'
+           + "".join(shapes)
+           + f'<path d="{" ".join(seps)}" stroke="#fffaf0" stroke-width="1.5" stroke-opacity=".75" clip-path="url(#{cin})"/>'
+           f'<path d="{" ".join(seps2)}" stroke="#fffaf0" stroke-width="1.5" stroke-opacity=".75" clip-path="url(#{cout})"/>'
+           f'<circle cx="250" cy="{BY}" r="160" fill="none" stroke="#fffaf0" stroke-width="1.5" stroke-opacity=".75" clip-path="url(#{cin})"/>'
+           f'<circle cx="250" cy="{BY}" r="80" fill="none" stroke="#fffaf0" stroke-width="1.5" stroke-opacity=".75"/>'
+           f'<g fill="none" stroke="#fffaf0" stroke-width="3"><path d="{arc}"/><rect x="170" y="0" width="160" height="190"/>'
+           f'<path d="M190,190 A60,60 0 0 0 310,190"/><line x1="220" y1="40" x2="280" y2="40"/><rect x="1.5" y="1.5" width="497" height="{H - 3}"/></g>'
+           f'<circle cx="250" cy="{BY}" r="7.5" fill="none" stroke="#c4461a" stroke-width="3"/>'
+           + "".join(marks) + "".join(labels) + "</svg>")
     fam = {f: [0, 0] for f, _ in FAMILIES}
     for k, f, _, _ in HOT_ZONES:
         fam[f][0] += stats[k][0]
         fam[f][1] += stats[k][1]
-    return "".join(parts), fam
+    return svg, fam
 
 
 def shot_modal(g, r, tid, shots, mid):
-    svg, stats = court_svg(shots, mid)
-    made = sum(1 for s in shots if s[2])
+    """Carte du joueur : en-tête aux couleurs de l'équipe, grosses stats, carte de tirs, barres comparées à la moyenne NBA."""
+    svg, fam = court_svg(shots, mid)
     t = team(tid)
-    zones = []
+    st_ = r["stats"]
+    tiles = [(st_.get("PTS", "0"), "Points"), (st_.get("REB", "0"), "Rebonds"), (st_.get("AST", "0"), "Passes"),
+             (st_.get("FG", "0-0").replace("-", "/"), "Au tir")]
+    bars = []
     for k, label in FAMILIES:
         avg = {"rim": 0.64, "mid": 0.42, "three": 0.36}[k]
-        m, a = stats[k]
+        m, a = fam[k]
         if not a:
             continue
-        pct = m / a
-        cls = "hot" if pct >= avg + 0.05 else "cold" if pct <= avg - 0.05 else ""
-        zones.append(f"<div class='z {cls}'><b>{m}/{a}</b><span>{label}</span><small>{round(pct * 100)} %</small></div>")
+        p = m / a
+        cls = "hot" if p >= avg + 0.05 else "cold" if p <= avg - 0.05 else ""
+        bars.append(f"<div class='pb'><span class='pb-l'>{label}</span><span class='pb-t'><i class='{cls}' style='width:{max(p * 100, 2):.0f}%'></i>"
+                    f"<b style='left:{avg * 100:.0f}%' title='Moyenne NBA {round(avg * 100)} %'></b></span>"
+                    f"<span class='pb-v {cls}'>{round(p * 100)} %<small>{m}/{a}</small></span></div>")
     photo = f"https://a.espncdn.com/i/headshots/nba/players/full/{r['id']}.png"
-    return (f"<div class='pm'><label for='{mid}' class='pm-bg'></label><div class='pm-box'>"
-            f"<div class='pm-head'><img class='ph' src='{photo}' alt='' loading='lazy' onerror=\"this.style.display='none'\">"
-            f"<div><div class='pm-name'>{esc(r['name'])}</div><div class='pm-sub'>{logo(tid, 16)} {esc(t['name'])} · {esc(stat_line(r['stats']))}</div></div>"
-            f"<label for='{mid}' class='pm-x'>✕</label></div>"
-            f"{svg}"
-            f"<div class='pm-leg'><span><i class='dot'></i> réussi</span><span><i class='cross'>✕</i> raté</span>"
-            f"<span><i class='sq hot'></i> chaude</span><span><i class='sq avg'></i> dans la moyenne</span><span><i class='sq cold'></i> froide</span></div>"
-            f"<div class='zones'>{''.join(zones)}</div>"
-            f"<div class='note'>{made} tirs réussis sur {len(shots)} (hors lancers francs) · dans chaque zone : tirs réussis / tentés, couleur comparée à la moyenne NBA de la zone.</div>"
-            f"</div></div>")
+    made = sum(1 for s in shots if s[2])
+    return (f"<div class='pm'><label for='{mid}' class='pm-bg'></label><div class='pm-box' style='--tc:{esc(team_color(tid))};--tk:{esc(t['color'])}'>"
+            f"<div class='pm-top'><label for='{mid}' class='pm-x' title='Fermer'>✕</label>"
+            f"<div class='pm-ph'><img src='{photo}' alt='' loading='lazy' onerror=\"this.style.display='none'\"></div>"
+            f"<div class='pm-id'><div class='pm-team'>{logo(tid, 18)} {esc(t['full'] or t['name'])}{' · titulaire' if r.get('starter') else ''}</div>"
+            f"<div class='pm-name'>{esc(r['name'])}</div><div class='pm-min'>{esc(st_.get('MIN', ''))} minutes</div></div></div>"
+            "<div class='pm-tiles'>" + "".join(f"<div><b>{esc(v)}</b><span>{lab}</span></div>" for v, lab in tiles) + "</div>"
+            f"<div class='pm-sec'><span>Carte de tirs</span><small>{made}/{len(shots)} hors lancers francs · 14 zones</small></div>"
+            f"<div class='pm-court'>{svg}</div>"
+            "<div class='pm-leg'><span><i class='dot'></i>Réussi</span><span><i class='x'>✕</i>Raté</span>"
+            "<span><i class='sq hot'></i>Au-dessus de la moyenne NBA</span><span><i class='sq cold'></i>En dessous</span>"
+            "<span><i class='sq low'></i>Moins de 3 tirs</span></div>"
+            f"<div class='pm-bars'>{''.join(bars)}<div class='pm-note'>Trait blanc : moyenne NBA de la zone.</div></div>"
+            "</div></div>")
 
 
 def tale(idx, tid, day, season, home):
@@ -2330,18 +2418,30 @@ def game_card(g, ctx, hero=False):
     if local and zone != "Paris" and local.date() != g["day"]:
         when += " · " + fr_short(local.date())
 
-    # Afficheur façon « play clock » : heure avant le match, score caché ensuite (un clic le révèle)
+    # Le score : un grand chiffre à côté de chaque équipe. Caché, c'est une case « ? » qu'on touche pour le révéler.
     hs, as_ = h["score"], a["score"]
     if not played:
-        clock = ("<div class='clock'><span class='ck-l'>Reporté</span><span class='ck-d'>– –</span></div>" if g["status"] == "STATUS_POSTPONED"
-                 else f"<div class='clock'><span class='ck-l'>Coup d'envoi</span><span class='ck-d'>{esc(when) or '?'}</span></div>")
+        sa = sh = "<span class='sn empty'></span>"
+        sm = ("<span class='sm'><b>Reporté</b></span>" if g["status"] == "STATUS_POSTPONED"
+              else f"<span class='sm pre'><b>{esc(fr_hour(local)) if local else '?'}</b><small>{esc(g['tv']) or 'coup d’envoi'}</small></span>")
         real_big = ""
     else:
-        real = f"{as_} – {hs}" if hs is not None and as_ is not None else "–"
-        lab = "● En direct" if g["state"] == "in" else "Score"
-        clock = (f"<label for='s{gid}' class='clock tap' title='Afficher / cacher le score'><span class='ck-l'>{lab} <i>👁</i></span>"
-                 f"<span class='ck-d'><span class='sc-hid'>? – ?</span><span class='sc-real'>{esc(real)}</span></span></label>")
-        real_big = f"<div class='clock big'><span class='ck-l'>{lab if g['state'] == 'in' else 'Final'}</span><span class='ck-d'>{esc(real)}</span></div>"
+        live = g["state"] == "in"
+        lab = "● En direct" if live else "Final"
+        win_a = (as_ or 0) > (hs or 0)
+
+        def num(v, won, cls):
+            v = "–" if v is None else v
+            dim = " l" if not live and not won else ""
+            return (f"<label for='s{gid}' class='sn {cls}' title='Voir / cacher le score'><span class='sc-hid'>?</span>"
+                    f"<span class='sc-real{dim}'>{v}</span></label>")
+        sa, sh = num(as_, win_a, "a"), num(hs, not win_a, "h")
+        sm = (f"<label for='s{gid}' class='sm{' live' if live else ''}'><small>{lab}</small>"
+              f"<span class='sc-tip'>👁 voir le score</span></label>")
+        real_big = (f"<div class='fsc'><span class='sn a'><span class='sc-real{'' if live or win_a else ' l'}'>{'–' if as_ is None else as_}</span></span>"
+                    f"<span class='sm'><small>{lab}</small></span>"
+                    f"<span class='sn h'><span class='sc-real{'' if live or not win_a else ' l'}'>{'–' if hs is None else hs}</span></span></div>")
+    clock = f"<div class='score'>{sa}{sm}{sh}</div>"
 
     def disc(tid, cls):
         url = team(tid)["logo"]
@@ -2376,7 +2476,8 @@ def game_card(g, ctx, hero=False):
                  f"<div class='ctop'><div class='chips'>{''.join(chips)}</div>"
                  + (f"<span class='cpill'>{esc(when)}</span>" if played and when else "") + "</div>"
                  f"{art}"
-                 f"<div class='cname'><b class='{name_cls(ta)}'>{esc(ta['name'])}</b>{clock}<b class='r {name_cls(th)}'>{esc(th['name'])}</b></div>")
+                 f"<div class='cname two'><b class='{name_cls(ta)}'>{esc(ta['name'])}</b><b class='r {name_cls(th)}'>{esc(th['name'])}</b></div>"
+                 f"<div class='cscore'>{clock}</div>")
 
     # Ligne du tableau des scores : bandeau de rareté, logos avec halo, ville + nom, afficheur, avant-match, résumé, stats
     def city(t):
@@ -2394,7 +2495,7 @@ def game_card(g, ctx, hero=False):
     short = " · ".join(shown[:2])
     row = (f"<div class='mrow {rar}' style='--ta:{rgba(ca, .3)};--th:{rgba(ch, .3)};--ca:{esc(ca)};--ch:{esc(ch)}'><div class='strip'></div><div class='mr-in'>"
            f"<div class='mr-top'><div class='chips'>{''.join(chips)}</div><span class='mr-t'>{esc(when) if played else esc(g['tv'])}</span></div>"
-           f"<div class='mr-main'>{side(a, ta, 'a')}{clock}{side(h, th, 'h')}</div>"
+           f"<div class='mr-main'>{side(a, ta, 'a')}{sa}{sm}{sh}{side(h, th, 'h')}</div>"
            f"<div class='mr-foot'><span class='mr-prev' title='{esc(short)}'>{esc(short)}</span>{''.join(vid_btns[:1])}"
            f"<label for='o{gid}' class='lnk'>{'Stats ›' if played else 'Avant-match ›'}</label></div></div></div>")
 

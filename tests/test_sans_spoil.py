@@ -12,7 +12,7 @@ MOTS_INTERDITS = ["prolongation", "remontée", "serrée", "retard", "décisif", 
 def partie_visible(html):
     """Ce que voit quelqu'un qui n'a rien révélé : sans le panneau du score, le score réel ni l'essentiel caché."""
     html = re.sub(r"<div class='fiche post'>.*$", "", html, flags=re.S)  # fiche d'un match joué : l'ouvrir = demander le score
-    html = re.sub(r"<span class='sc-real'>(?:<span[^>]*>[^<]*</span>|[^<])*</span>", "", html)
+    html = re.sub(r"<span class='sc-real[^']*'>(?:<span[^>]*>[^<]*</span>|[^<])*</span>", "", html)
     return re.sub(r"<div class='ess-hid'>.*?<!--fin-ess-->", "", html, flags=re.S)
 
 

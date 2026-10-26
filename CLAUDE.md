@@ -13,8 +13,12 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   `day_games` reprend la dernière liste reçue (`.cache/sb_<jour>.json`) au lieu d'effacer les scores.
 - **Tableau des scores (v013, choix de Kiki après comparaison des maquettes, alternative D)** : la nuit s'affiche en LIGNES de match
   (`game_card` → `.mrow`, 2 colonnes sur PC, 1 sur téléphone avec les équipes l'une sous l'autre et l'afficheur à droite) : bandeau
-  vertical de rareté à gauche, logo dans une pastille à la couleur de l'équipe avec halo, ville en petit + nom en grand, afficheur
-  « play clock » au centre (clic = score), avant-match sur une ligne, résumé vidéo, « Stats › » (ouvre la fiche avec le score).
+  vertical de rareté à gauche, logo dans une pastille à la couleur de l'équipe avec halo, ville en petit + nom en grand.
+  **Score (v016, demande de Kiki : « oublie l'afficheur, plus grand, plus intégré »)** : un grand chiffre (Barlow Condensed) à côté
+  de chaque équipe (`.sn`), « Final » / « ● En direct » au centre (`.sm`) ; caché = deux cases hachurées « ? » + « 👁 voir le score »,
+  un clic sur l'une révèle (`.tg-s`) ; le perdant est grisé (`.sc-real.l`). Avant le match : l'heure en grand au centre. Sur téléphone :
+  chaque score à droite de son équipe. Carte de la nuit : score sous les noms (`.cscore`) ; fiche : `.fsc` (révélé d'office).
+  Puis avant-match sur une ligne, résumé vidéo, « Stats › » (ouvre la fiche avec le score).
   En tête : « La carte de la nuit » (`hero=True`) = le meilleur match (🔥🔥 ou plus) en grande carte façon carte à collectionner
   (style « Holo » ci-dessous) ; avant les matchs : « L'affiche de la nuit ». Ce match n'est pas répété dans les lignes.
 - **Style « Holo » (v011, gardé pour la carte de la nuit et l'en-tête de la fiche)** : carte à collectionner (`face_head`).
@@ -62,7 +66,10 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   dans `.cache/pre_<id>.json` (perdus à un redémarrage de Streamlit Cloud : pas grave, la preview d'un match passé s'en passe).
 - « 📊 Forme & duels » (`form_html`, `tale`) : comparatif ligne à ligne avant le match (bilan, ext./dom., points pour/contre, série, repos,
   5 derniers en pastilles), puis face-à-face. Stats des joueurs : un clic sur un joueur ouvre sa carte de tirs (`shot_modal`, `court_svg` :
-  tirs ESPN, panier en (25, 0) en pieds ; 14 zones comme les « hot zones » NBA : cercle, raquette en 3, mi-distance en 5, 3 pts en 5 ; rouge/jaune/bleu selon la moyenne NBA de la zone, « réussis/tentés » affiché). Pas de « tous les paniers » (inutile, retiré).
+  tirs ESPN, panier en (25, 0) en pieds ; 14 zones comme les « hot zones » NBA : cercle, raquette en 3, mi-distance en 5, 3 pts en 5).
+  v016 : carte du joueur refaite (en-tête aux couleurs de l'équipe + photo, 4 grosses stats, terrain parquet clair, zones colorées
+  seulement à partir de 3 tirs : rouge au-dessus / bleu en dessous / ocre dans la moyenne NBA, % + réussis/tentés, chaque tir ● / ✕
+  pour voir de quel côté il tire, barres « près du cercle / mi-distance / 3 points » contre la moyenne NBA).
 - Après le score : analyse (`recap_points` : vainqueur, remontée/prolongation, grosse perf au « game score », bilans, blessures citées par l'AP),
   feuille de match (quart-temps, box score, écart au fil du match, paniers par quart-temps).
 - Facultatif : avec `[anthropic] api_key` (et `model`, par défaut `claude-opus-5-5`), Claude réécrit preview et analyse en français

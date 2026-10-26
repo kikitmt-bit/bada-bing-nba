@@ -13,13 +13,18 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   `day_games` reprend la dernière liste reçue (`.cache/sb_<jour>.json`) au lieu d'effacer les scores.
 - **Design v009 « Holo »** (maquettes validées : https://claude.ai/artifact/7jMTkzCrBiNwHBem7c9m1b) : grille de cartes à collectionner (`game_card`),
   coupées en diagonale aux couleurs des 2 équipes, logos ESPN dans des disques, cadre selon la note (`RARITY` : holo doré, argent, bronze,
-  simple, mat, grisé ; affiche = doré, direct = rouge). Tout en HTML pur, une seule `st.markdown` pour la grille. Cases à cocher cachées :
-  `.tg-s` (score), `.tg-o` (fiche du match en grand : avant-match, forme, score, graphique, feuille de match), `.tg-f` (forme & duels).
+  simple, mat, grisé ; affiche = doré, direct = rouge). Tout en HTML pur, une seule `st.markdown` pour la grille.
+  v010 (retours de Kiki : moins de clics) : logo + NOM + bilan de chaque équipe, score au centre ; un clic sur « ? – ? » révèle le
+  score (`.tg-s`, indice « 👁 voir le score ») ; avant-match (3 lignes) directement sur la carte (pas de spoil) ; pied discret :
+  vidéos + lien « Stats et détails › ». Fiche (`.tg-o`, clic sur un logo ou le lien) : vidéos, gros bouton « Voir le score et
+  les stats » si caché, sinon stats tout de suite (quarts-temps, à retenir, graphique, feuille de match), puis avant-match + forme.
   Polices Barlow / Barlow Condensed. Mise en page `wide`, 1240 px max.
-- **Bandeau (`main`)** : semaines NBA lundi → dimanche (comme le joueur de la semaine ; semaine 1 = jour d'ouverture, `season_opening`,
-  `week_of`), flèches ‹ ›, « Dernière nuit », calendrier, choix Nuit / Semaine (`?vue=semaine`). 7 boutons de nuit (`st.container(key="nuits")`,
-  défile au doigt sur mobile) nommés « Dim. 25 → lun. 26 » (`night_label`) avec leur état (`night_state`) : terminée, en cours, à venir.
-- **Nuits vues** : cookie `nba_vues` (AAMMJJ) ; une nuit commencée qu'on ouvre devient « vue ». Nuit terminée jamais ouverte = « ● Pas encore vue ».
+- **En-tête (`main`, v010)** : marque à gauche, 📅 (dernière nuit / date) et ⚙️ en petits boutons à droite (`st.container(key="hdr")`).
+  Bandeau sur UNE ligne (`key="nav"`, défile au doigt sur mobile) : ‹ | « Semaine N » (ouvre la vue Semaine, `?vue=semaine`) | 7 nuits
+  « Dim. 25 → lun. 26 » (`night_label`) | ›. Semaines NBA lundi → dimanche (comme le joueur de la semaine ; semaine 1 = ouverture,
+  `season_opening`, `week_of`). État de chaque nuit (`night_state`) en infobulle seulement.
+- **Nuits vues** : cookie `nba_vues` (AAMMJJ) ; une nuit commencée qu'on ouvre devient « vue ». Pastille dorée sur le bouton = nuit
+  terminée pas encore ouverte ; rouge = en cours (CSS `.st-key-n_<date> button::after`). Pas de pastille = vue ou à venir.
 - **En-tête de la nuit (`night_html`)** : état, titre, NBA Extra et résumé NBA, puis « L'essentiel de la nuit » (`night_essentials`) : nombre de
   matchs par niveau (sans spoil), « À voir en priorité » (ouvre la fiche), et 5 à 7 infos cachées derrière « Révéler » (`.tg-n`) :
   grosses perfs, surprise (favori battu), plus serré / prolongations, remontée, correction, séries, tous les résultats.

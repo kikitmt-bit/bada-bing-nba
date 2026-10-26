@@ -23,7 +23,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v009"
+APP_VERSION = "2026-10-v010"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -1630,6 +1630,45 @@ label.pl:hover {color:var(--accent);}
   .fteam b {font-size:1.6rem;} .fteam.r {justify-content:flex-start; flex-direction:row-reverse; text-align:left;}
   .cm.fm {justify-self:start;}
 }
+
+/* v010 : carte plus pratique */
+.cart2 {display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:6px; padding:12px 10px 10px;}
+.tcol {display:flex; flex-direction:column; align-items:center; text-align:center; gap:5px; cursor:pointer; min-width:0;}
+.tcol b {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.15rem; line-height:1; text-transform:uppercase; color:#fff; text-shadow:0 2px 6px rgba(0,0,0,.55); max-width:100%; overflow-wrap:anywhere;}
+.tcol small {font-size:.74rem; color:#eef1f6; background:rgba(8,10,16,.6); padding:1px 7px; border-radius:999px; white-space:nowrap;}
+.disc.dc {width:86px; height:86px;} .disc.dc img {width:64px; height:64px;}
+.cart2 .cm {background:rgba(8,10,16,.82); border-radius:12px; padding:8px 10px; min-width:84px;}
+.sc-tip {display:block; font-family:'Barlow', sans-serif; font-size:.68rem; font-weight:700; letter-spacing:0; color:#ffc75a; margin-top:4px;}
+.tg-s:checked ~ * .sc-tip {display:none;}
+.cm-score:hover .sc-hid {border-color:#ffc75a; color:#ffc75a;}
+.plate {gap:7px; padding:10px 12px;}
+.cline {font-size:.92rem; font-weight:700; color:#fff;}
+.cprev {list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px;}
+.cprev li {font-size:.8rem; line-height:1.3; color:#c9d0dc; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+.cfoot {display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:2px;}
+.cfoot .cbtn {flex:0 0 auto; min-height:32px; padding:0 10px; font-size:.8rem; border-radius:8px;}
+.lnk {margin-left:auto; cursor:pointer; font-size:.84rem; font-weight:700; color:#ffc75a; padding:6px 2px; white-space:nowrap;}
+.lnk:hover {text-decoration:underline;}
+.reveal {display:block; cursor:pointer; text-align:center; padding:14px; margin:6px 0 4px; border-radius:14px; border:1px dashed #ffc75a; background:rgba(255,199,90,.08); color:#ffc75a; font-weight:800; font-size:1.05rem;}
+.reveal small {display:block; color:#9aa3b5; font-weight:500; font-size:.8rem; margin-top:3px;}
+.tg-s:checked ~ .fiche .reveal {display:none;}
+.fbody .panel-s {border-top:none; padding-top:0;}
+.pf {margin-top:8px;}
+/* Bandeau sur une ligne : ‹ Semaine | 7 nuits | › */
+.st-key-nav [data-testid="stHorizontalBlock"] {flex-wrap:nowrap; overflow-x:auto; gap:6px; align-items:stretch; padding-bottom:4px;}
+.st-key-nav [data-testid="stColumn"] {flex:1 0 118px !important; min-width:118px !important;}
+.st-key-nav [data-testid="stColumn"]:first-child, .st-key-nav [data-testid="stColumn"]:last-child {flex:0 0 44px !important; min-width:44px !important;}
+.st-key-nav button {min-height:48px; height:100%; border-radius:12px; position:relative; padding:4px 8px;}
+.st-key-nav button p {font-family:'Barlow Condensed', sans-serif; font-weight:700; font-size:1rem; white-space:nowrap;}
+.st-key-nav button[kind="primary"], .st-key-nav button[data-testid="stBaseButton-primary"] {background:#ffc75a; border-color:#ffc75a;}
+.st-key-nav button[kind="primary"] p, .st-key-nav button[data-testid="stBaseButton-primary"] p {color:#1a1205;}
+.st-key-hdr [data-testid="stHorizontalBlock"] {flex-wrap:nowrap; align-items:center; gap:8px;}
+.st-key-hdr [data-testid="stColumn"] {width:auto !important; flex:0 0 auto !important; min-width:0 !important;}
+.st-key-hdr [data-testid="stColumn"]:first-child {flex:1 1 auto !important;}
+@media (max-width: 640px) {
+  .st-key-nav [data-testid="stColumn"] {flex:1 0 140px !important; min-width:140px !important;}
+  .disc.dc {width:72px; height:72px;} .disc.dc img {width:54px; height:54px;}
+}
 </style>
 """
 
@@ -2148,7 +2187,7 @@ def game_card(g, ctx):
         txt = f"{f['w']}-{f['l']}" if f["n"] else f"{f['prev_w']}-{f['prev_l']} (2025-26)"
         return txt + (f" · {rank}e {t['conf']}" if rank else "")
 
-    # Centre : heure, ou score caché / révélé
+    # Centre : heure, ou score caché (un clic sur « ? – ? » le révèle)
     if g["state"] == "pre":
         if g["status"] == "STATUS_POSTPONED":
             mid = "<div class='cm-time'>Reporté</div>"
@@ -2163,20 +2202,20 @@ def game_card(g, ctx):
             real = "–"
         sub = "● En direct" if g["state"] == "in" else "Terminé"
         mid = (f"<label for='s{gid}' class='cm-score' title='Afficher / cacher le score'><span class='sc-hid'>? – ?</span>"
-               f"<span class='sc-real'>{real}</span></label><div class='cm-sub{' live' if g['state'] == 'in' else ''}'>{sub}</div>")
+               f"<span class='sc-real'>{real}</span><span class='sc-tip'>👁 voir le score</span></label>"
+               f"<div class='cm-sub{' live' if g['state'] == 'in' else ''}'>{sub}</div>")
 
     def logo_disc(tid, cls):
         url = team(tid)["logo"]
         img = f"<img src='{esc(url)}' alt='' loading='lazy'>" if url else f"<b>{esc(team(tid)['abbr'])}</b>"
         return f"<div class='disc {cls}'>{img}</div>"
 
-    # Avant-match (préparé une fois pour la face et pour la fiche)
+    # Avant-match (sans spoil : visible directement sur la carte)
     points = preview_points(g, idx, pre)
     ai = None
     if ctx["ai"] and (g["state"] == "pre" or disk_get(f"ai_preview_{gid}.json")):
         ai = ai_points("preview", g, ai_material(g, summ, points))
     shown = (ai or points)[:5]
-    line = esc(WATCH_LEVELS[w[0]][2]) if w else esc(card_point(shown))
 
     # Vidéos
     vid_btns = []
@@ -2190,28 +2229,25 @@ def game_card(g, ctx):
         if x:
             d = dur(x, ctx["durs"])
             vid_btns.append(f"<a class='cbtn fr' href='{yt_url(x)}' target='_blank'><span class='frf'></span> NBA Extra{' · ' + d if d else ''}</a>")
-    face_btns = vid_btns[:1]
-    if g["state"] != "pre":
-        face_btns.append(f"<label for='s{gid}' class='cbtn pill-s'><span class='off'>👁 Score</span><span class='on'>🙈 Cacher</span></label>")
-    face_btns.append(f"<label for='o{gid}' class='cbtn'>Fiche du match</label>")
 
+    def team_col(s, t, where):
+        return (f"<label for='o{gid}' class='tcol' title='Ouvrir la fiche du match'>{logo_disc(s['id'], 'dc')}"
+                f"<b>{esc(t['name'])}</b><small>{esc(rec(s, t))} · {where}</small></label>")
+
+    advice = f"<div class='cline'>{esc(WATCH_LEVELS[w[0]][2])}</div>" if w else ""
+    prev = "<ul class='cprev'>" + "".join(f"<li>{esc(p)}</li>" for p in shown[:3]) + "</ul>" if shown else ""
+    more = "Stats et détails ›" if g["state"] != "pre" else "Avant-match complet ›"
     face = (f"<div class='card {rar}'><div class='ci' style='--ca:{esc(ta['color'])};--ch:{esc(th['color'])}'>"
             f"<div class='ctop'><div class='chips'>{''.join(chips)}</div><span class='cpill'>{esc(when)}</span></div>"
-            f"<div class='cart'>{logo_disc(a['id'], 'da')}<div class='at'>@</div>{logo_disc(h['id'], 'dh')}</div>"
-            f"<div class='plate'><div class='crow'>"
-            f"<div class='tn'><b>{esc(ta['name'])}</b><small>{esc(rec(a, ta))} · ext.</small></div>"
-            f"<div class='cm'>{mid}</div>"
-            f"<div class='tn r'><b>{esc(th['name'])}</b><small>dom. · {esc(rec(h, th))}</small></div></div>"
-            + (f"<div class='cline'>{line}</div>" if line else "")
-            + f"<div class='cacts'>{''.join(face_btns)}</div></div></div></div>")
+            f"<div class='cart2'>{team_col(a, ta, 'ext.')}<div class='cm'>{mid}</div>{team_col(h, th, 'dom.')}</div>"
+            f"<div class='plate'>{advice}{prev}"
+            f"<div class='cfoot'>{''.join(vid_btns[:2])}<label for='o{gid}' class='lnk'>{more}</label></div></div></div></div>")
 
-    # Fiche du match (s'ouvre en grand) : le contenu complet
-    acts = list(vid_btns)
-    if g["state"] != "pre":
-        acts.append(f"<label for='s{gid}' class='cbtn pill-s'><span class='off'>👁 Voir le score et les stats</span><span class='on'>🙈 Cacher le score</span></label>")
-    acts.append(f"<label for='f{gid}' class='cbtn pill-f'><span class='off'>📊 Forme & duels</span><span class='on'>📊 Fermer la forme</span></label>")
+    # Fiche du match (s'ouvre en grand) : stats tout de suite si le score est révélé, avant-match toujours visible
     pts_html = "<ul class='pts'>" + "".join(f"<li>{esc(p)}</li>" for p in shown) + "</ul>" if shown else ""
     venue = esc(g["venue"]) + (f", {esc(g['city'])}" if g["neutral"] and g["city"] else "")
+    reveal = (f"<label for='s{gid}' class='reveal'>👁 Voir le score et les stats<small>Le score, le déroulé du match et la feuille de match"
+              f" avec les cartes de tirs des joueurs.</small></label>") if g["state"] != "pre" else ""
 
     panel_s = ""
     if g["state"] != "pre" and summ:
@@ -2231,7 +2267,6 @@ def game_card(g, ctx):
             parts.append("<div class='sec'>Le match en un coup d'œil</div>" + worm)
         parts.append(f"<div class='sec'>Feuille de match</div><div class='in'>{box_html(g, summ)}</div>")
         panel_s = f"<div class='panel panel-s'>{''.join(parts)}</div>"
-    panel_f = f"<div class='panel panel-f'>{form_html(g, idx)}</div>"
 
     fiche = (f"<div class='fiche'><label for='o{gid}' class='fbg' title='Fermer'></label><div class='fbox'>"
              f"<div class='fhead {rar}' style='--ca:{esc(ta['color'])};--ch:{esc(th['color'])}'>"
@@ -2240,13 +2275,13 @@ def game_card(g, ctx):
              f"<div class='cm fm'>{mid}</div>"
              f"<div class='fteam r'><div><b>{esc(th['name'])}</b><small>à domicile · {esc(rec(h, th))}</small></div>{logo_disc(h['id'], 'fd')}</div></div>"
              f"<div class='fchips'>{''.join(chips)}<span class='cpill'>{esc(when)}{' · ' + venue if venue else ''}</span></div></div>"
-             f"<div class='fbody'><div class='facts'>{''.join(acts)}</div>"
-             f"<div class='sec'>Avant le match</div>{pts_html}{panel_f}{panel_s}</div></div></div>")
+             f"<div class='fbody'>" + (f"<div class='facts'>{''.join(vid_btns)}</div>" if vid_btns else "")
+             + f"{reveal}{panel_s}<div class='sec'>Avant le match</div>{pts_html}<div class='pf'>{form_html(g, idx)}</div></div></div></div>")
 
     checked = " checked" if ctx["show_all"] else ""
     return (f"<div class='gc' id='g{gid}'>"
             f"<input type='checkbox' class='tg tg-s' id='s{gid}'{checked}><input type='checkbox' class='tg tg-o' id='o{gid}'>"
-            f"<input type='checkbox' class='tg tg-f' id='f{gid}'>{face}{fiche}</div>")
+            f"{face}{fiche}</div>")
 
 
 def night_state(games, zone, now=None):
@@ -2577,94 +2612,94 @@ def main():
         st.session_state.day, st.session_state.view = d, v
         st.rerun()
 
-    # En-tête : marque à gauche, réglages à droite
-    c1, c2 = st.columns([5, 1.2], vertical_alignment="center")
-    c1.markdown("<div class='bb-brand'>Bada Bing <span>NBA</span></div><div class='bb-tag'>Les matchs de la nuit, sans spoil.</div>",
-                unsafe_allow_html=True)
-    with c2.popover("⚙️ Réglages", width="stretch"):
-        new_zone = st.radio("Heures affichées", list(ZONES), index=list(ZONES).index(zone), horizontal=True)
-        if new_zone != zone:
-            st.query_params["tz"] = new_zone
-            st.rerun()
-        all_teams = sorted(teams().values(), key=lambda t: t["full"])
-        favs = st.multiselect("⭐ Mes équipes", [t["abbr"] for t in all_teams], default=[f for f in st.session_state.favs if f in {t["abbr"] for t in all_teams}],
-                              format_func=lambda ab: next((t["full"] for t in all_teams if t["abbr"] == ab), ab),
-                              help="Leurs matchs passent en tête de liste, avec une étoile.")
-        if favs != st.session_state.favs:
-            st.session_state.favs = favs
-            st.session_state.fav_changed = True
-        new_interest = st.toggle("🔥 Indice « à voir » (sans dire qui gagne)", value=interest,
-                                 help="Note chaque match terminé, de 🔥🔥🔥 à ⛔, et range les meilleurs en premier.")
-        new_show = st.toggle("👁 Toujours montrer les scores", value=show_all)
-        if new_interest != interest or new_show != show_all:
-            if new_interest:
-                st.query_params.pop("indice", None)
-            else:
-                st.query_params["indice"] = "0"
-            if new_show:
-                st.query_params["scores"] = "1"
-            else:
-                st.query_params.pop("scores", None)
-            st.rerun()
-        w = video_watcher()
-        if not _secret("youtube", "api_key", ""):
-            yt = "⚠️ Pas de clé YouTube : seulement les 15 dernières vidéos de chaque chaîne (+ la veille)."
-        elif API_STATUS["ok"] is False:
-            yt = f"⚠️ {API_STATUS['msg']}"
-        else:
-            yt = "✅ Clé YouTube active"
-        nb = sum(len(v) for v in w["seen"].values())
-        st.caption(f"{yt} · veille : {nb} vidéos gardées"
-                   + (f", dernier passage à {fr_hour(datetime.fromtimestamp(w['last'], ZONES[zone]))}" if w["last"] else ""))
-        st.caption(f"Version {APP_VERSION} · ESPN, YouTube")
-
-    # Bandeau : la semaine NBA (lundi → dimanche) et ses 7 nuits
+    # En-tête : marque à gauche, calendrier et réglages à droite
     monday, num = week_of(day, opening)
     week_days = [monday + timedelta(days=i) for i in range(7)]
-    with st.container(key="wk"):
-        cols = st.columns(6, vertical_alignment="center")
-        if cols[0].button("‹", key="wk_prev", help="Semaine précédente"):
+    with st.container(key="hdr"):
+        c1, c2, c3 = st.columns(3, vertical_alignment="center")
+        c1.markdown("<div class='bb-brand'>Bada Bing <span>NBA</span></div><div class='bb-tag'>Les matchs de la nuit, sans spoil.</div>",
+                    unsafe_allow_html=True)
+        with c2.popover("📅", help="Aller à une date"):
+            if st.button("↩ Revenir à la dernière nuit", key="last_night", width="stretch"):
+                go(default_day(days, today))
+            other = st.date_input("Ou choisir une date (jour du match aux États-Unis)", value=day, format="DD/MM/YYYY", key=f"cal_{day}")
+            if other != day:
+                go(other)
+        with c3.popover("⚙️", help="Réglages"):
+            new_zone = st.radio("Heures affichées", list(ZONES), index=list(ZONES).index(zone), horizontal=True)
+            if new_zone != zone:
+                st.query_params["tz"] = new_zone
+                st.rerun()
+            all_teams = sorted(teams().values(), key=lambda t: t["full"])
+            favs = st.multiselect("⭐ Mes équipes", [t["abbr"] for t in all_teams], default=[f for f in st.session_state.favs if f in {t["abbr"] for t in all_teams}],
+                                  format_func=lambda ab: next((t["full"] for t in all_teams if t["abbr"] == ab), ab),
+                                  help="Leurs matchs passent en tête de liste, avec une étoile.")
+            if favs != st.session_state.favs:
+                st.session_state.favs = favs
+                st.session_state.fav_changed = True
+            new_interest = st.toggle("🔥 Indice « à voir » (sans dire qui gagne)", value=interest,
+                                     help="Note chaque match terminé, de 🔥🔥🔥 à ⛔, et range les meilleurs en premier.")
+            new_show = st.toggle("👁 Toujours montrer les scores", value=show_all)
+            if new_interest != interest or new_show != show_all:
+                if new_interest:
+                    st.query_params.pop("indice", None)
+                else:
+                    st.query_params["indice"] = "0"
+                if new_show:
+                    st.query_params["scores"] = "1"
+                else:
+                    st.query_params.pop("scores", None)
+                st.rerun()
+            w = video_watcher()
+            if not _secret("youtube", "api_key", ""):
+                yt = "⚠️ Pas de clé YouTube : seulement les 15 dernières vidéos de chaque chaîne (+ la veille)."
+            elif API_STATUS["ok"] is False:
+                yt = f"⚠️ {API_STATUS['msg']}"
+            else:
+                yt = "✅ Clé YouTube active"
+            nb = sum(len(v) for v in w["seen"].values())
+            st.caption(f"{yt} · veille : {nb} vidéos gardées"
+                       + (f", dernier passage à {fr_hour(datetime.fromtimestamp(w['last'], ZONES[zone]))}" if w["last"] else ""))
+            st.caption(f"Version {APP_VERSION} · ESPN, YouTube")
+
+
+    # Bandeau sur une ligne : ‹  Semaine N  |  7 nuits  › ; une pastille dorée = nuit terminée pas encore ouverte, rouge = en cours
+    games_by_day = {d: day_games(d) for d in week_days}
+    seen = st.session_state.seen
+    if view == "nuit" and night_state(games_by_day.get(day) or [], zone)[0] in ("done", "live") and day not in seen:
+        seen.add(day)
+        st.session_state.seen_changed = True
+    dots = []
+    with st.container(key="nav"):
+        cols = st.columns(10)
+        if cols[0].button("‹", key="wk_prev", help="Semaine précédente", width="stretch"):
             prev = [d for d in days if monday - timedelta(days=7) <= d < monday]
             go(prev[-1] if prev else monday - timedelta(days=1), view)
         title = f"Semaine {num}" if num else ("Play-offs" if day.month in (4, 5, 6) else "Hors saison")
-        cols[1].markdown(f"<div class='wk-t'>{title}<small>du {short_date(week_days[0])} au {short_date(week_days[-1])}</small></div>",
-                         unsafe_allow_html=True)
-        if cols[2].button("›", key="wk_next", help="Semaine suivante"):
+        if cols[1].button(title, key="wk_view", type="primary" if view == "semaine" else "secondary", width="stretch",
+                          help=f"Le bilan de la semaine, du {short_date(week_days[0])} au {short_date(week_days[-1])}"):
+            go(day, "semaine")
+        for col, d in zip(cols[2:9], week_days):
+            gs = games_by_day.get(d) or []
+            key, txt = night_state(gs, zone)
+            if key == "done" and d not in seen:
+                dots.append((d, "#ffc75a"))
+                txt += " · pas encore vue"
+            elif key == "live":
+                dots.append((d, "#ff5a5a"))
+            if col.button(night_label(d, zone), key=f"n_{d}", type="primary" if d == day and view == "nuit" else "secondary",
+                          disabled=key == "none" and d not in game_days, width="stretch", help=txt):
+                go(d)
+        if cols[9].button("›", key="wk_next", help="Semaine suivante", width="stretch"):
             nxt = [d for d in days if monday + timedelta(days=7) <= d < monday + timedelta(days=14)]
             target = nxt[0] if nxt else monday + timedelta(days=7)
             if target <= today <= target + timedelta(days=7):
                 target = default_day(days, today)
             go(target, view)
-        if cols[3].button("Dernière nuit", key="wk_last", type="secondary"):
-            go(default_day(days, today))
-        with cols[4].popover("📅 Calendrier"):
-            other = st.date_input("Aller à une date (jour du match aux États-Unis)", value=day, format="DD/MM/YYYY", key=f"cal_{day}")
-            if other != day:
-                go(other)
-        pick = cols[5].segmented_control("Vue", ["Nuit", "Semaine"], default="Semaine" if view == "semaine" else "Nuit",
-                                         key=f"vue_{view}_{day}", label_visibility="collapsed")
-        if pick and pick.lower() != view:
-            go(day, pick.lower())
-
-    games_by_day = {d: day_games(d) for d in week_days}
-    seen = st.session_state.seen
-    # Nuit ouverte = nuit « vue » (dès qu'elle a commencé), marquée avant d'afficher le bandeau
-    if view == "nuit" and night_state(games_by_day.get(day) or [], zone)[0] in ("done", "live") and day not in seen:
-        seen.add(day)
-        st.session_state.seen_changed = True
-    with st.container(key="nuits"):
-        cols = st.columns(7)
-        for col, d in zip(cols, week_days):
-            gs = games_by_day.get(d) or []
-            key, txt = night_state(gs, zone)
-            cls = key
-            if key == "done":
-                cls, txt = ("done", "Terminée · <b>✓ vue</b>") if d in seen else ("new", "● Pas encore vue")
-            with col:
-                if st.button(night_label(d, zone), key=f"n_{d}", type="primary" if d == day and view == "nuit" else "secondary",
-                             disabled=key == "none" and d not in game_days, width="stretch"):
-                    go(d)
-                st.markdown(f"<div class='ns ns-{cls}'>{txt if key == 'done' else esc(txt)}</div>", unsafe_allow_html=True)
+    if dots:
+        st.markdown("<style>" + "".join(
+            f".st-key-n_{d} button::after {{content:''; position:absolute; top:6px; right:7px; width:9px; height:9px; border-radius:50%;"
+            f" background:{c}; box-shadow:0 0 0 2px #0b0f17;}}" for d, c in dots) + "</style>", unsafe_allow_html=True)
 
     nba_vids, extra_vids = videos_since(min(day, today - timedelta(days=1)))
     ai_on = bool(_secret("anthropic", "api_key", ""))

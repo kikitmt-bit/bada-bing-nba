@@ -23,7 +23,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v005"
+APP_VERSION = "2026-10-v006"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -286,16 +286,48 @@ def _parse_event(e):
 
 @st.cache_data(ttl=3600, show_spinner=False, max_entries=200)
 def scoreboard(day_iso, _bucket):
-    d = get_json(f"{ESPN}/scoreboard", {"dates": day_iso.replace("-", "")}) or {}
-    games = [_parse_event(e) for e in d.get("events") or []]
-    return sorted(games, key=lambda g: (g["utc"] or "", g["id"]))
+    d = get_json(f"{ESPN}/scoreboard", {"dates": day_iso.replace("-", "")})
+    if d is None:
+        raise ConnectionError("ESPN injoignable")  # une erreur n'est pas gardée en cache : on réessaiera au prochain affichage
+    events = d.get("events") or []
+    disk_put(f"sb_{day_iso}.json", events)
+    return events
 
 
 def day_games(day):
-    """Matchs d'un jour : rafraîchis chaque minute autour d'aujourd'hui, une fois par jour pour les jours anciens."""
+    """Matchs d'un jour : rafraîchis chaque minute autour d'aujourd'hui, une fois par jour pour les jours anciens.
+    Si ESPN ne répond pas, on reprend la dernière version reçue (plutôt que des matchs sans score)."""
     today = datetime.now(NY).date()
     recent = abs((day - today).days) <= 1
-    return scoreboard(day.isoformat(), bucket(60) if recent else bucket(86400))
+    try:
+        events = scoreboard(day.isoformat(), bucket(60) if recent else bucket(86400))
+    except ConnectionError:
+        events = disk_get(f"sb_{day.isoformat()}.json") or []
+    games = [_parse_event(e) for e in events]
+    return sorted(games, key=lambda g: (g["utc"] or "", g["id"]))
+
+
+def auto_refresh(games):
+    """La page Streamlit ne se met pas à jour seule : un onglet laissé ouvert garde les scores du moment où on l'a ouvert.
+    On recharge donc la page quand on revient sur l'onglet après plus de 3 minutes, et toutes les 90 secondes pendant
+    les matchs (sauf si un panneau est ouvert, pour ne pas le refermer sous les yeux de l'utilisateur)."""
+    now = datetime.now(timezone.utc)
+    live = any(g["state"] == "in" or (g["state"] == "pre" and g["status"] != "STATUS_POSTPONED" and parse_dt(g["utc"])
+                                      and parse_dt(g["utc"]) - now < timedelta(minutes=15)) for g in games)
+    busy = ".tg-f:checked, .tgp:checked, details[open]" if st.query_params.get("scores") == "1" else ".tg:checked, details[open]"
+    components.html(f"""<script>
+const P = window.parent, D = P.document;
+if (P.__bbAway) D.removeEventListener('visibilitychange', P.__bbAway);
+clearInterval(P.__bbTick);
+P.__bbAway = () => {{
+  if (D.hidden) P.__bbHiddenAt = Date.now();
+  else if (P.__bbHiddenAt && Date.now() - P.__bbHiddenAt > 180000) P.location.reload();
+}};
+D.addEventListener('visibilitychange', P.__bbAway);
+if ({'true' if live else 'false'}) P.__bbTick = setInterval(() => {{
+  if (!D.hidden && !D.querySelector({json.dumps(busy)})) P.location.reload();
+}}, 90000);
+</script>""", height=0)
 
 
 @st.cache_data(ttl=86400, show_spinner=False, max_entries=400)
@@ -2111,6 +2143,7 @@ def main():
 
     if st.session_state.pop("fav_changed", False):
         set_cookie("nba_fav", ".".join(st.session_state.favs))
+    auto_refresh(games)
 
 
 if __name__ == "__main__":

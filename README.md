@@ -1,6 +1,6 @@
 # Bada Bing NBA : notes pour Claude
 
-Site Streamlit (`app.py`, un seul fichier) en français : les matchs NBA **sans spoil**. Réponses à l'utilisateur en français.
+Site Streamlit (`app.py`, plus `fantasy.py` pour le jeu) en français : les matchs NBA **sans spoil**. Réponses à l'utilisateur en français.
 Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami à Montréal.
 
 ## Ce que fait le site
@@ -68,6 +68,18 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - Facultatif : avec `[anthropic] api_key` (et `model`, par défaut `claude-opus-5-5`), Claude réécrit preview et analyse en français
   à partir de l'article AP (`ai_points`, gardé dans `.cache/ai_*.json`). Jamais de preview IA écrite après le coup d'envoi.
 
+- **Le 5 de la semaine (v015, la fantasy, `fantasy.py` + `fantasy_page` dans app.py, bouton 🏆 dans l'en-tête, `?vue=fantasy`)** :
+  règles décidées avec Kiki : une équipe par semaine NBA (lundi → dimanche), verrouillée au 1er match de la semaine ; 2 arrières,
+  2 ailiers, 1 pivot + 6e homme (tout poste) ; budget 100 000 € ; chaque joueur rapporte sa MOYENNE de points fantasy par match joué
+  (toute apparition compte) ; le 6e homme remplace un des 5 qui n'a joué aucun match ; « coup de cœur » 💘 = un des 5 à 10 000 € ou
+  moins, points ×2 ; pas de capitaine. Points : 1/pt, 1,2/rebond, 1,5/passe, 3/interception, 3/contre, −1/balle perdue.
+  Prix calculés par le site (`week_prices`) : forme = 70 % des 10 derniers matchs + 30 % de la saison, tirée vers 12 tant qu'il y a
+  peu de matchs ; prix = 5 000 + 92,5 × forme^1,5 (≈ 48 000 € pour 60 pts/m), entre 4 000 et 50 000 €, ±20 % max par semaine ;
+  figés pour la semaine (`ensure_week`). Équipe robot 🤖 (`robot_team`), équipe parfaite (`perfect_team`, % du maximum).
+  Points et classements cachés derrière des interrupteurs (spoil). Journal des matchs (`log.json`) et équipes (`data.json`) enregistrés
+  sur GitHub dans `fantasy/` (branche `data`, pour ne pas redémarrer le site) via `[github] token, repo, branch` ; sinon sur le disque
+  (perdu au redémarrage). Connexion : pseudo + code (empreinte SHA-256 seulement), cookie `nba_fx`. Effectifs et postes : ESPN `teams/<id>/roster`.
+
 ## Données
 
 - ESPN (sans clé) : `scoreboard?dates=AAAAMMJJ`, `summary?event=`, `teams/<id>/schedule?season=&seasontype=` (la plage de dates
@@ -80,6 +92,7 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - `python tests/test_sans_spoil.py` : vérifie qu'une carte au score caché ne trahit rien (score, « prolongation », « remontée »…). À lancer avant chaque envoi.
 - `python tests/scenarios.py` : note d'intérêt de matchs inventés, pour régler les seuils.
 - `python tests/page_complete.py` : exécute toute la page (Nuit et Semaine) avec un faux Streamlit, pour attraper les erreurs.
+- `python tests/test_fantasy.py` : règles du « 5 de la semaine » ; `python tests/page_fantasy.py` : la page du jeu avec une saison inventée.
 
 
 `python -m streamlit run app.py --server.port 8531`, puis vérifier à l'écran (PC et téléphone). Incrémenter `APP_VERSION` à chaque changement.

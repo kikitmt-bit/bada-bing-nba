@@ -23,7 +23,9 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v014"
+import fantasy as F
+
+APP_VERSION = "2026-10-v015"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -1774,6 +1776,14 @@ label.mt {cursor:pointer;}
   .disc.dr b {font-size:.72rem;}
   .hero-card .cname b {font-size:1.02rem;} .hero-card .cname b.sm, .hero-card .cname b.xs {font-size:.88rem;}
 }
+
+/* ===== Le 5 de la semaine ===== */
+.fx-h {margin:.4rem 0 .8rem; padding:18px 20px; border-radius:18px; border:1px solid #1e2533;
+       background:radial-gradient(500px 200px at 15% 0%, rgba(247,200,80,.14), transparent 70%), #10141e;}
+.fx-k {font-size:.76rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#ffc75a;}
+.fx-t {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:2.2rem; text-transform:uppercase; line-height:1.05;}
+.fx-s {color:#c3cad6; font-size:.95rem; margin-top:4px;}
+.st-key-fx_go button, .st-key-fx_back button {border-color:#ffc75a; color:#ffc75a;}
 </style>
 """
 
@@ -2709,6 +2719,362 @@ def week_html(week_days, games_by_day, summs, watch, ctx):
     return f"<div class='wk'>{left}{right}</div>"
 
 
+# =========================================================================
+# « LE 5 DE LA SEMAINE » : la fantasy (règles et calculs dans fantasy.py)
+# =========================================================================
+@st.cache_resource(show_spinner=False)
+def fantasy_store():
+    """Sauvegarde des équipes : fichier JSON sur GitHub ([github] token / repo / branch, branche « data » par défaut),
+    sinon sur le disque du serveur (perdu au redémarrage de Streamlit Cloud)."""
+    return F.Store(SESSION, str(_secret("github", "token", "")), str(_secret("github", "repo", "")),
+                   str(_secret("github", "branch", "data")), CACHE_DIR)
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def rosters():
+    """{id joueur: {name, short, team, abbr, pos (liste G/F/C), pos_txt, inj, photo}} pour les 30 effectifs (ESPN)."""
+    def one(tid):
+        d = get_json(f"{ESPN}/teams/{tid}/roster") or {}
+        items = d.get("athletes") or []
+        if items and isinstance(items[0], dict) and "items" in items[0]:      # format groupé par poste
+            items = [a for grp in items for a in grp.get("items") or []]
+        out = {}
+        for a in items:
+            pos = (a.get("position") or {}).get("abbreviation", "")
+            inj = ""
+            for i in a.get("injuries") or []:
+                inj = i.get("status") or (i.get("type") or {}).get("description") or inj
+            out[str(a.get("id"))] = {"name": a.get("displayName", ""), "short": a.get("shortName") or a.get("displayName", ""),
+                                     "team": tid, "abbr": team(tid)["abbr"], "pos": sorted(F.positions(pos)), "pos_txt": pos,
+                                     "inj": inj, "photo": (a.get("headshot") or {}).get("href", "")}
+        return out
+    res = {}
+    with ThreadPoolExecutor(10) as pool:
+        for part in pool.map(one, list(teams())):
+            res.update(part)
+    return res
+
+
+@st.cache_resource(show_spinner=False)
+def _fx_memory():
+    return {"log": None, "data": None, "t": 0}
+
+
+def fantasy_log(schedule, today):
+    """Journal des points fantasy de tous les matchs terminés de la saison (complété au fil de l'eau, gardé sur GitHub)."""
+    mem, store = _fx_memory(), fantasy_store()
+    if mem["log"] is None or time.time() - mem["t"] > 600:
+        mem["log"], mem["t"] = store.load("log.json", {}), time.time()
+    log = mem["log"]
+    todo = [g for g in schedule if g["done"] and g["kind"] == "R" and str(g["id"]) not in log and g["day"] < today][:90]
+    if todo:
+        with ThreadPoolExecutor(8) as pool:
+            summs = list(pool.map(lambda g: summary(g["id"], bucket(86400 * 30)), todo))
+        added = sum(F.log_game(log, g["id"], g["day"], s) for g, s in zip(todo, summs) if s)
+        if added:
+            store.save("log.json", log, f"Fantasy : {added} matchs ajoutés au journal")
+    return log
+
+
+def fantasy_data(force=False):
+    mem = _fx_memory()
+    if force or mem["data"] is None or time.time() - mem.get("td", 0) > 120:
+        mem["data"], mem["td"] = fantasy_store().load("data.json", {"users": {}, "weeks": {}}), time.time()
+    return mem["data"]
+
+
+def first_tip(days_):
+    """Coup d'envoi du premier match d'une liste de jours (verrouillage de la semaine)."""
+    for d in days_:
+        tips = [parse_dt(g["utc"]) for g in day_games(d) if g["utc"]]
+        if tips:
+            return min(tips)
+    return None
+
+
+def fx_money(x):
+    return f"{int(x):,} €".replace(",", " ")
+
+
+def fantasy_week_state(schedule, today):
+    """(lundi de la semaine qu'on compose, verrouillage, lundi de la semaine en cours ou None, semaine en cours finie ?)."""
+    now = datetime.now(timezone.utc)
+    mon = F.monday_of(today)
+    lock = first_tip(F.week_days(mon))
+    if lock and now < lock:
+        return mon, lock, None
+    days_cur = set(F.week_days(mon))
+    finished = all(g["done"] for g in schedule if g["day"] in days_cur)
+    nxt = mon + timedelta(days=7)
+    if finished:
+        return nxt, first_tip(F.week_days(nxt)), mon
+    return None, None, mon
+
+
+def ensure_week(data, log, monday, pos_of):
+    """Prix figés de la semaine (calculés une fois, à partir des matchs d'avant) et équipe robot."""
+    key = monday.isoformat()
+    w = data["weeks"].get(key)
+    if w and w.get("prices"):
+        return w
+    prev = (data["weeks"].get((monday - timedelta(days=7)).isoformat()) or {}).get("prices")
+    prices = F.week_prices(log, monday, prev)
+
+    def change(d):
+        wk = d["weeks"].setdefault(key, {"teams": {}})
+        if not wk.get("prices"):
+            wk["prices"] = prices
+            rob = F.robot_team(log, monday, {p: v for p, v in prices.items() if pos_of(p)}, pos_of)
+            if rob:
+                wk["teams"][F.ROBOT] = rob
+    new = fantasy_store().update("data.json", {"users": {}, "weeks": {}}, change, f"Fantasy : prix de la semaine du {key}")
+    if new:
+        _fx_memory()["data"] = new
+        return new["weeks"][key]
+    change(data)
+    return data["weeks"][key]
+
+
+def fantasy_page(schedule, idx, opening, today, zone, show_all):
+    roster = rosters()
+    pos_of = lambda pid: set((roster.get(pid) or {}).get("pos") or [])
+    store = fantasy_store()
+    with st.spinner("Mise à jour des statistiques des joueurs…"):
+        log = fantasy_log(schedule, today)
+    data = fantasy_data()
+    compose_mon, lock, cur_mon = fantasy_week_state(schedule, today)
+    wnum = lambda m: week_of(m, opening)[1]
+
+    st.markdown("<div class='fx-h'><div class='fx-k'>Le jeu de Bada Bing</div><div class='fx-t'>Le 5 de la semaine</div>"
+                "<div class='fx-s'>5 joueurs, 100 000 €, une semaine NBA : chaque joueur rapporte sa moyenne de points par match joué.</div></div>",
+                unsafe_allow_html=True)
+    if not store.remote:
+        st.warning("Les équipes sont enregistrées seulement sur le serveur : elles seront perdues au prochain redémarrage du site. "
+                   "Pour les garder, ajoute une clé GitHub dans les réglages Streamlit (section [github] : token, repo).")
+
+    # Connexion : pseudo + code (pas de mot de passe en clair : seule une empreinte est gardée)
+    try:
+        cookie = (st.context.cookies.get("nba_fx", "") or "")
+    except Exception:
+        cookie = ""
+    if "fx_user" not in st.session_state and ":" in cookie:
+        p, h = cookie.rsplit(":", 1)
+        p = requests.utils.unquote(p)
+        if data["users"].get(p) == h:
+            st.session_state.fx_user = p
+    user = st.session_state.get("fx_user")
+    if not user:
+        with st.container(border=True):
+            st.markdown("**Entre dans le jeu** : choisis un pseudo et un code (au moins 4 caractères). "
+                        "Nouveau pseudo = nouveau joueur ; pseudo existant = connexion.")
+            c1, c2, c3 = st.columns([2, 2, 1], vertical_alignment="bottom")
+            pseudo = c1.text_input("Pseudo", max_chars=20).strip()
+            code = c2.text_input("Code", type="password", max_chars=20)
+            if c3.button("Entrer", type="primary", width="stretch"):
+                if len(pseudo) < 2 or len(code) < 4 or pseudo.lower() == F.ROBOT.lower():
+                    st.error("Pseudo d'au moins 2 caractères et code d'au moins 4 caractères.")
+                else:
+                    h = F.code_hash(pseudo, code)
+                    known = fantasy_data(force=True)["users"].get(pseudo)
+                    if known and known != h:
+                        st.error("Ce pseudo existe déjà avec un autre code.")
+                    else:
+                        if not known:
+                            new = store.update("data.json", {"users": {}, "weeks": {}}, lambda d: d["users"].__setitem__(pseudo, h),
+                                               f"Fantasy : nouveau joueur {pseudo}")
+                            if new:
+                                _fx_memory()["data"] = new
+                        st.session_state.fx_user = pseudo
+                        set_cookie("nba_fx", f"{requests.utils.quote(pseudo)}:{h}")
+                        st.rerun()
+
+    tab_team, tab_rank, tab_prices, tab_rules = st.tabs(["Mon équipe", "Classement", "Tous les prix", "Règles"])
+
+    # Semaine qu'on compose
+    wk = ensure_week(data, log, compose_mon, pos_of) if compose_mon else None
+    prices = (wk or {}).get("prices") or {}
+    week_games = defaultdict(int)
+    if compose_mon:
+        days_c = set(F.week_days(compose_mon))
+        for g in schedule:
+            if g["day"] in days_c:
+                week_games[g["home"]] += 1
+                week_games[g["away"]] += 1
+
+    games_before = F.player_games(log, until=compose_mon or today)
+    infos = {}
+
+    def info(pid):
+        if pid not in infos:
+            infos[pid] = F.player_info(log, pid, compose_mon or today, games_before)
+        return infos[pid]
+
+    def label(pid):
+        r, i = roster.get(pid) or {}, info(pid)
+        flags = []
+        if r.get("inj"):
+            flags.append(f"⚠ {r['inj']}")
+        if i["n"] and i["mpg"] < 15:
+            flags.append("joue peu")
+        return (f"{r.get('name', pid)} ({r.get('abbr', '?')}) · {fx_money(prices.get(pid, 0))} · {fr_num(i['form'])} pts/m · "
+                f"{fr_num(i['mpg'], 0)} min · {'titulaire' if i['starter'] else 'remplaçant'} · {week_games.get(r.get('team'), 0)} m. cette sem."
+                + (" · " + " · ".join(flags) if flags else ""))
+
+    with tab_team:
+        if not compose_mon:
+            st.info(f"La semaine {wnum(cur_mon)} est en cours : les équipes sont verrouillées. "
+                    f"La composition de la semaine {wnum(cur_mon + timedelta(days=7))} ouvre dès que tous les matchs de cette semaine sont finis.")
+        elif not user:
+            st.info("Connecte-toi au-dessus pour composer ton équipe.")
+        else:
+            lock_txt = f"jusqu'au {short_date(lock.astimezone(ZONES[zone]).date())} à {fr_hour(lock.astimezone(ZONES[zone]))}" if lock else ""
+            st.markdown(f"**Semaine {wnum(compose_mon)}** : composition ouverte {lock_txt} "
+                        f"(premier match de la semaine). Tu peux modifier ton équipe autant que tu veux d'ici là.")
+            saved = (wk.get("teams") or {}).get(user) or {}
+            avail = [p for p in prices if p in roster]
+            choice = {}
+            cols = st.columns(2)
+            slots = list(F.SLOTS) + [(None, "6e homme")]
+            for i, (need, lab) in enumerate(slots):
+                opts = sorted([p for p in avail if need is None or need in pos_of(p)], key=lambda p: -prices[p])
+                pre = (saved.get("five") or [None] * 5)[i] if i < 5 else saved.get("six")
+                with cols[i % 2]:
+                    choice[i] = st.selectbox(f"{lab}{' (remplace un joueur qui ne joue pas de la semaine)' if need is None else ''}",
+                                             [None] + opts, index=([None] + opts).index(pre) if pre in opts else 0,
+                                             format_func=lambda p: "— Choisir —" if p is None else label(p), key=f"fx_{compose_mon}_{i}")
+            five, six = [choice[i] for i in range(5)], choice[5]
+            cheap = [p for p in five if p and prices.get(p, 0) <= F.COEUR_MAX]
+            coeur = st.selectbox(f"💘 Coup de cœur (un des 5 à {fx_money(F.COEUR_MAX)} ou moins : ses points comptent double)",
+                                 [None] + cheap, index=([None] + cheap).index(saved.get("coeur")) if saved.get("coeur") in cheap else 0,
+                                 format_func=lambda p: "Aucun" if p is None else label(p), key=f"fx_{compose_mon}_c")
+            cost = sum(prices.get(p, 0) for p in five + [six] if p)
+            left = F.BUDGET - cost
+            st.progress(min(1.0, cost / F.BUDGET), text=f"Budget : {fx_money(cost)} dépensés · {'reste ' + fx_money(left) if left >= 0 else 'DÉPASSÉ de ' + fx_money(-left)}")
+            for p in five + [six]:
+                if not p:
+                    continue
+                r, i = roster.get(p) or {}, info(p)
+                if r.get("inj") and norm(r["inj"]) in ("out", "suspension", "suspended"):
+                    st.warning(f"Attention : {r['name']} est annoncé absent ({r['inj']}).")
+                elif r.get("inj"):
+                    st.warning(f"Attention : {r['name']} est incertain ({r['inj']}).")
+                if i["n"] and i["mpg"] < 15:
+                    st.warning(f"Attention : {r['name']} joue peu ({fr_num(i['mpg'], 0)} min par match).")
+                if week_games.get(r.get("team"), 0) == 0:
+                    st.warning(f"Attention : l'équipe de {r['name']} ne joue pas cette semaine.")
+            team_new = {"five": five, "six": six, "coeur": coeur}
+            errs = F.validate(team_new, prices, pos_of)
+            if st.button("Enregistrer mon équipe", type="primary", disabled=bool(errs) or (lock and datetime.now(timezone.utc) >= lock)):
+                team_new["at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                key = compose_mon.isoformat()
+                new = store.update("data.json", {"users": {}, "weeks": {}},
+                                   lambda d: d["weeks"].setdefault(key, {"teams": {}, "prices": prices}).setdefault("teams", {}).__setitem__(user, team_new),
+                                   f"Fantasy : équipe de {user}, semaine du {key}")
+                if new:
+                    _fx_memory()["data"] = new
+                    st.success("Équipe enregistrée ✓")
+                else:
+                    st.error("L'enregistrement a échoué. Réessaie dans un instant.")
+            elif errs and any(five) and six:
+                for e in errs:
+                    st.caption("⛔ " + e)
+
+        # Équipe de la semaine en cours (verrouillée)
+        if cur_mon and user:
+            mine = ((data["weeks"].get(cur_mon.isoformat()) or {}).get("teams") or {}).get(user)
+            st.markdown(f"#### Ton équipe de la semaine {wnum(cur_mon)}")
+            if not mine:
+                st.caption("Tu n'avais pas d'équipe cette semaine.")
+            else:
+                pts = F.week_points(log, cur_mon)
+                total, detail = F.score_team(mine, pts)
+                reveal = st.toggle("Voir mes points (dévoile des performances de la semaine)", value=show_all, key="fx_rev_me")
+                rows = []
+                for (pid, avg, n, role), (_, lab) in zip(detail, F.SLOTS):
+                    r = roster.get(pid) or {}
+                    rows.append({"Poste": lab, "Joueur": r.get("name", pid), "Équipe": r.get("abbr", ""),
+                                 "Matchs joués": n if reveal else "?", "Points comptés": avg if reveal else "?", "": role if reveal else ""})
+                st.dataframe(rows, hide_index=True, width="stretch")
+                if reveal:
+                    st.markdown(f"**Total provisoire : {fr_num(total)} points**")
+
+    with tab_rank:
+        weeks_done = sorted(k for k, w in data["weeks"].items() if w.get("teams") and (date.fromisoformat(k) + timedelta(days=7) <= today
+                            and all(g["done"] for g in schedule if g["day"] in set(F.week_days(date.fromisoformat(k))))))
+        reveal = st.toggle("Voir les classements (dévoile des performances)", value=show_all, key="fx_rev_rank")
+        if not reveal:
+            st.caption("Caché pour ne rien spoiler. Le résultat officiel d'une semaine tombe quand tous ses matchs sont joués.")
+        else:
+            if cur_mon and cur_mon.isoformat() in data["weeks"]:
+                pts = F.week_points(log, cur_mon)
+                live = sorted(((F.score_team(t, pts)[0], u) for u, t in data["weeks"][cur_mon.isoformat()].get("teams", {}).items()), reverse=True)
+                st.markdown(f"#### Semaine {wnum(cur_mon)} · en cours")
+                st.dataframe([{"Rang": i + 1, "Joueur": ("🤖 " if u == F.ROBOT else "") + u, "Points": s} for i, (s, u) in enumerate(live)],
+                             hide_index=True, width="stretch")
+            season, wins = defaultdict(float), defaultdict(int)
+            for k in weeks_done:
+                m = date.fromisoformat(k)
+                pts = F.week_points(log, m)
+                scores = {u: F.score_team(t, pts)[0] for u, t in data["weeks"][k]["teams"].items()}
+                for u, s in scores.items():
+                    season[u] += s
+                if scores:
+                    wins[max(scores, key=scores.get)] += 1
+            if weeks_done:
+                last = date.fromisoformat(weeks_done[-1])
+                wkd = data["weeks"][weeks_done[-1]]
+                pts = F.week_points(log, last)
+                res = sorted(((F.score_team(t, pts)[0], u) for u, t in wkd["teams"].items()), reverse=True)
+                st.markdown(f"#### Semaine {wnum(last)} · résultat officiel")
+                perfect = F.perfect_team(pts, wkd["prices"], pos_of)
+                best = perfect[1] if perfect else None
+                st.dataframe([{"Rang": i + 1, "Joueur": ("🤖 " if u == F.ROBOT else "") + u, "Points": s,
+                               "% de l'équipe parfaite": f"{round(100 * s / best)} %" if best else "–"} for i, (s, u) in enumerate(res)],
+                             hide_index=True, width="stretch")
+                if perfect:
+                    names = " · ".join(f"{(roster.get(p) or {}).get('name', p)}{' 💘' if p == perfect[0]['coeur'] else ''}" for p in perfect[0]["five"])
+                    st.caption(f"⭐ L'équipe parfaite ({fr_num(best)} points, {fx_money(sum(wkd['prices'][p] for p in perfect[0]['five']))}) : {names}")
+                st.markdown("#### Saison")
+                st.dataframe([{"Rang": i + 1, "Joueur": ("🤖 " if u == F.ROBOT else "") + u, "Points": round(s, 1), "Semaines gagnées": wins[u]}
+                              for i, (u, s) in enumerate(sorted(season.items(), key=lambda x: -x[1]))], hide_index=True, width="stretch")
+            elif not cur_mon:
+                st.caption("Pas encore de semaine jouée.")
+
+    with tab_prices:
+        if not prices:
+            st.caption("Les prix de la prochaine semaine apparaîtront à l'ouverture de la composition.")
+        else:
+            prev = (data["weeks"].get((compose_mon - timedelta(days=7)).isoformat()) or {}).get("prices") or {}
+            rows = []
+            for pid, p in sorted(prices.items(), key=lambda x: -x[1]):
+                r = roster.get(pid)
+                if not r:
+                    continue
+                i = info(pid)
+                d = p - prev[pid] if pid in prev else 0
+                rows.append({"Joueur": r["name"], "Équipe": r["abbr"], "Poste": "/".join({"G": "Arr.", "F": "Ail.", "C": "Piv."}[x] for x in r["pos"]),
+                             "Prix (€)": p, "Évol.": (f"▲ {d:,}" if d > 0 else f"▼ {-d:,}" if d < 0 else "=").replace(",", " "),
+                             "Forme (pts/m)": i["form"], "Min/m": i["mpg"], "Titulaire": "oui" if i["starter"] else "non",
+                             "Matchs cette sem.": week_games.get(r["team"], 0), "Statut": r["inj"] or ""})
+            st.caption(f"Semaine {wnum(compose_mon)} · {len(rows)} joueurs · prix figés pour la semaine.")
+            st.dataframe(rows, hide_index=True, width="stretch", height=560)
+
+    with tab_rules:
+        st.markdown(f"""
+- **Une équipe par semaine NBA** (du lundi au dimanche), modifiable jusqu'au premier match de la semaine, puis verrouillée.
+- **Le 5 de départ** : 2 arrières, 2 ailiers, 1 pivot, plus un **6e homme** de n'importe quel poste. **Budget : {fx_money(F.BUDGET)}.**
+- **Points d'un match** : 1 par point, 1,2 par rebond, 1,5 par passe, 3 par interception, 3 par contre, −1 par balle perdue.
+- **Un joueur rapporte sa moyenne** sur les matchs qu'il a joués dans la semaine : le calendrier et le repos ne pénalisent personne.
+  Toute apparition compte, même s'il se blesse au bout de 3 minutes.
+- **Le 6e homme** remplace un des 5 qui n'a joué **aucun** match de la semaine (un seul remplacement).
+- **Coup de cœur 💘** : un des 5 coûtant {fx_money(F.COEUR_MAX)} ou moins ; ses points comptent double.
+- **Les prix** sont recalculés chaque semaine d'après la forme (10 derniers matchs 70 %, saison 30 %), avec au plus ±20 % de variation.
+- **Résultat officiel** quand tous les matchs de la semaine sont joués ; **l'équipe parfaite** te dit quel pourcentage du maximum tu as fait ;
+  **l'équipe robot 🤖** prend simplement les meilleurs joueurs en forme que le budget permet.
+- Les points et classements sont cachés par défaut, pour ne pas spoiler les matchs.
+""")
+
+
 def main():
     st.set_page_config(page_title="Bada Bing NBA", page_icon="🏀", layout="wide")
     st.markdown(CSS, unsafe_allow_html=True)
@@ -2738,12 +3104,12 @@ def main():
         except ValueError:
             st.session_state.day = default_day(days, today)
     if "view" not in st.session_state:
-        st.session_state.view = "semaine" if st.query_params.get("vue") == "semaine" else "nuit"
+        st.session_state.view = st.query_params.get("vue") if st.query_params.get("vue") in ("semaine", "fantasy") else "nuit"
     day, view = st.session_state.day, st.session_state.view
     if st.query_params.get("nuit") != day.isoformat():
         st.query_params["nuit"] = day.isoformat()
-    if view == "semaine":
-        st.query_params["vue"] = "semaine"
+    if view in ("semaine", "fantasy"):
+        st.query_params["vue"] = view
     else:
         st.query_params.pop("vue", None)
 
@@ -2755,8 +3121,13 @@ def main():
     monday, num = week_of(day, opening)
     week_days = [monday + timedelta(days=i) for i in range(7)]
     with st.container(key="hdr"):
-        c1, c2, c3 = st.columns(3, vertical_alignment="center")
+        c1, c4, c2, c3 = st.columns(4, vertical_alignment="center")
         c1.markdown("<div class='bb-brand'>Bada Bing <span>NBA</span></div>", unsafe_allow_html=True)
+        if view == "fantasy":
+            if c4.button("← Les matchs", key="fx_back"):
+                go(day, "nuit")
+        elif c4.button("🏆 Le 5 de la semaine", key="fx_go", help="Le jeu : compose ton 5 de la semaine"):
+            go(day, "fantasy")
         with c2.popover("📅", help="Aller à une date"):
             if st.button("↩ Revenir à la dernière nuit", key="last_night", width="stretch"):
                 go(default_day(days, today))
@@ -2800,6 +3171,12 @@ def main():
                        + (f", dernier passage à {fr_hour(datetime.fromtimestamp(w['last'], ZONES[zone]))}" if w["last"] else ""))
             st.caption(f"Version {APP_VERSION} · ESPN, YouTube")
 
+
+    if view == "fantasy":
+        fantasy_page(schedule, idx, opening, today, zone, show_all)
+        if st.session_state.pop("fav_changed", False):
+            set_cookie("nba_fav", ".".join(st.session_state.favs))
+        return
 
     # Bandeau sur une ligne : ‹  Semaine N  |  7 nuits  › ; une pastille dorée = nuit terminée pas encore ouverte, rouge = en cours
     games_by_day = {d: day_games(d) for d in week_days}

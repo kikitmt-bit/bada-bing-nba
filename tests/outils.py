@@ -9,6 +9,8 @@ APP = os.path.join(ICI, "..", "app.py")
 
 
 def charger_app():
+    if os.path.dirname(APP) not in sys.path:
+        sys.path.insert(0, os.path.dirname(APP))        # pour « import fantasy »
     st = types.ModuleType("streamlit")
     st.cache_data = lambda *a, **k: (lambda f: f)
     st.cache_resource = lambda *a, **k: (lambda f: f)

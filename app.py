@@ -23,7 +23,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v006"
+APP_VERSION = "2026-10-v007"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -2045,8 +2045,13 @@ def main():
         idx = team_index(season, bucket(3600))
     days = sorted({g["day"] for g in schedule})
     if "day" not in st.session_state:
-        st.session_state.day = default_day(days, today)
+        try:  # la nuit choisie est gardée dans l'adresse (?nuit=AAAA-MM-JJ) : rechargement et liens partagés tombent dessus
+            st.session_state.day = date.fromisoformat(st.query_params.get("nuit", ""))
+        except ValueError:
+            st.session_state.day = default_day(days, today)
     day = st.session_state.day
+    if st.query_params.get("nuit") != day.isoformat():
+        st.query_params["nuit"] = day.isoformat()
 
     # En-tête : marque à gauche, réglages à droite
     c1, c2 = st.columns([5, 1.3], vertical_alignment="center")

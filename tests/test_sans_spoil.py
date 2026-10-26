@@ -24,7 +24,7 @@ def verifier(app, nom, cles, **extra):
     ctx["summ"][g["id"]] = summ
     vue = (partie_visible(app["game_card"](g, ctx)) + partie_visible(app["game_card"](g, ctx, hero=True)) + partie_visible(app["night_html"](g["day"], [g], ctx, g["day"]))
            + partie_visible(app["week_html"]([g["day"]], {g["day"]: [g]}, ctx["summ"], ctx["watch"], ctx)))
-    assert "infos de la nuit" in vue.lower() and "meilleurs matchs de la semaine" in vue.lower(), f"{nom} : en-tête ou semaine absents"
+    assert "récap de la nuit" in vue.lower() and "meilleurs matchs de la semaine" in vue.lower(), f"{nom} : en-tête ou semaine absents"
     texte = re.sub(r"<[^>]+>", " ", vue).lower()
     for mot in MOTS_INTERDITS:
         assert mot not in texte, f"{nom} : le mot « {mot} » est visible avant le score"

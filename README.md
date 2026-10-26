@@ -14,6 +14,9 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - **Tableau des scores (v013, choix de Kiki après comparaison des maquettes, alternative D)** : la nuit s'affiche en LIGNES de match
   (`game_card` → `.mrow`, 2 colonnes sur PC, 1 sur téléphone avec les équipes l'une sous l'autre et l'afficheur à droite) : bandeau
   vertical de rareté à gauche, logo dans une pastille à la couleur de l'équipe avec halo, ville en petit + nom en grand.
+  v018 : fond aux couleurs des 2 équipes coupé en diagonale + rayures, assombri (comme le match de la nuit), pied plus sombre ;
+  sur téléphone, coupure presque horizontale (visiteurs en haut, domicile en bas). Le centre du score s'appelle `.smid`
+  (avant `.sm`, qui entrait en conflit avec la classe `sm` des noms moyens et les cachait sur téléphone).
   **Score (v016, demande de Kiki : « oublie l'afficheur, plus grand, plus intégré »)** : un grand chiffre (Barlow Condensed) à côté
   de chaque équipe (`.sn`), « Final » / « ● En direct » au centre (`.sm`) ; caché = deux cases hachurées « ? » + « 👁 voir le score »,
   un clic sur l'une révèle (`.tg-s`) ; le perdant est grisé (`.sc-real.l`). Avant le match : l'heure en grand au centre. Sur téléphone :
@@ -24,7 +27,7 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   seulement si le site l'a vu absent), star incertaine, invaincus / sans succès, série de 3+, choc au sommet, revanche des play-offs,
   domination ou bilan des face-à-face, fatigue (2e soir), pile ou face / grand favori. Plus de phrase « Duel de l'Ouest… » (jugée inutile).
   Puis résumé vidéo, « Stats › » (ouvre la fiche avec le score).
-  En tête : « La carte de la nuit » (`hero=True`) = le meilleur match (🔥🔥 ou plus) en grande carte façon carte à collectionner
+  En tête : « Le match de la nuit » (v018, ex « carte de la nuit » ; `hero=True`) = le meilleur match (🔥🔥 ou plus) en grande carte façon carte à collectionner
   (style « Holo » ci-dessous) ; avant les matchs : « L'affiche de la nuit ». Ce match n'est pas répété dans les lignes.
 - **Style « Holo » (v011, gardé pour la carte de la nuit et l'en-tête de la fiche)** : carte à collectionner (`face_head`).
   Face : grands logos en diagonale sur les couleurs des 2 équipes (le point fort, ne pas les recouvrir), noms en entier sur une ligne,
@@ -40,9 +43,11 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - **En-tête (`main`)** : marque seule (pas de sous-titre), 📅 (dernière nuit / date) et ⚙️ en icônes (`key="hdr"`). Bandeau sur UNE ligne
   (`key="nav"`, défile au doigt) : ‹ | « Semaine N » (vue Semaine, `?vue=semaine`) | 7 nuits courtes « Jeu. 22 → 23 » (`night_label`,
   doivent tenir en entier) | ›. Semaines NBA lundi → dimanche (`season_opening`, `week_of`). État de la nuit en infobulle.
-- **Barre de la nuit (`night_html`)** : fine, sur une ligne : « Nuit du dim. 25 au lun. 26 oct. » + état ; à droite NBA Extra, résumé de la
-  nuit, « 👁 Infos de la nuit » (`.tg-n`, faits de `night_essentials` : perfs, surprise, serré/prolongations, remontée, correction, séries,
-  résultats). Plus de comptage par niveau ni « À voir en priorité » (jugés inutiles : le tri par flammes suffit).
+- **Le récap de la nuit (`night_html`, `.nrec`, v018 : « plus d'impact », demande de Kiki)** : grand bloc en tête (lueur dorée, rayures
+  comme les cartes) : « Le récap de la nuit », titre « Nuit du dim. 25 au lun. 26 oct. », pastille d'état neutre (✓ Terminée, ● En cours
+  rouge, À venir doré ; plus de texte vert) + nombre de matchs ; boutons vidéo larges (résumé de la nuit doré, NBA Extra aux couleurs de la
+  France). Grande barre dorée animée « 👁 Révéler le récap de la nuit » (`.nr-rev`, `.tg-n`) → tuiles (une par fait de `night_essentials` :
+  perfs, surprise, serré/prolongations, remontée, correction, séries) + « Les résultats » en mini-tableaux de score avec logos.
 - **Nuits vues** : cookie `nba_vues` (AAMMJJ) ; une nuit commencée qu'on ouvre devient « vue ». Pastille dorée sur le bouton = nuit
   terminée pas encore ouverte ; rouge = en cours (CSS `.st-key-n_<date> button::after`). Pas de pastille = vue ou à venir.
 - **Vue Semaine (`week_html`)** : meilleurs matchs de la semaine (sans spoil) ; bilan caché (`.tg-w`) : perfs, notre joueur de la semaine
@@ -71,10 +76,11 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   dans `.cache/pre_<id>.json` (perdus à un redémarrage de Streamlit Cloud : pas grave, la preview d'un match passé s'en passe).
 - « 📊 Forme & duels » (`form_html`, `tale`) : comparatif ligne à ligne avant le match (bilan, ext./dom., points pour/contre, série, repos,
   5 derniers en pastilles), puis face-à-face. Stats des joueurs : un clic sur un joueur ouvre sa carte de tirs (`shot_modal`, `court_svg` :
-  tirs ESPN, panier en (25, 0) en pieds ; 14 zones comme les « hot zones » NBA : cercle, raquette en 3, mi-distance en 5, 3 pts en 5).
+  tirs ESPN, panier en (25, 0) en pieds ; v018 : 10 zones calées sur les lignes du terrain (cercle 8 pieds, raquette, mi-distance gauche/
+  centre/droite séparées par le prolongement des côtés de la raquette, 3 pts : 2 coins, 2 ailes, axe) ; seuls traits ajoutés : 2 pointillés).
   v016 : carte du joueur refaite (en-tête aux couleurs de l'équipe + photo, 4 grosses stats, terrain parquet clair, zones colorées
   seulement à partir de 3 tirs : rouge au-dessus / bleu en dessous / ocre dans la moyenne NBA, % + réussis/tentés, chaque tir ● / ✕
-  pour voir de quel côté il tire, barres « près du cercle / mi-distance / 3 points » contre la moyenne NBA).
+  pour voir de quel côté il tire, barres « près du cercle / raquette / mi-distance / 3 points » contre la moyenne NBA).
 - Après le score : analyse (`recap_points` : vainqueur, remontée/prolongation, grosse perf au « game score », bilans, blessures citées par l'AP),
   feuille de match (quart-temps, box score, écart au fil du match, paniers par quart-temps).
 - Facultatif : avec `[anthropic] api_key` (et `model`, par défaut `claude-opus-5-5`), Claude réécrit preview et analyse en français

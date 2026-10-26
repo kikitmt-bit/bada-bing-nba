@@ -25,7 +25,7 @@ import streamlit.components.v1 as components
 
 import fantasy as F
 
-APP_VERSION = "2026-10-v017"
+APP_VERSION = "2026-10-v018"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -1880,7 +1880,7 @@ label.mt {cursor:pointer;}
 .mt-n small {display:block; font-size:.68rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#9aa3b5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .mt-n b {display:block; font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.5rem; line-height:1; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .mt-n b.sm {font-size:1.3rem;} .mt-n b.xs {font-size:1.12rem;}
-.mt-l {display:flex; flex-wrap:wrap; align-items:baseline; column-gap:6px; row-gap:1px; min-width:0;} .mt-l b {flex:0 1 auto; min-width:0; max-width:100%;}
+.mt-l {display:flex; flex-wrap:wrap; align-items:baseline; column-gap:6px; row-gap:1px; min-width:0;} .mt-l b {flex:0 0 auto; min-width:0; max-width:100%;} .mr-main .mt-n {flex:1 1 auto;}
 .mt-n .rec, .hero-t .rec {flex:none; font-style:normal; font-family:'Barlow Condensed', sans-serif; font-weight:600; font-size:1rem; color:#9aa3b5; letter-spacing:.02em;}
 .hero-t .rec {font-size:.8em;}
 .mr-prev.kf {color:#e6e9ef; font-weight:500;}
@@ -1942,28 +1942,28 @@ label.mt {cursor:pointer;}
 .sn .sc-hid {display:flex; align-items:center; justify-content:center; width:58px; height:50px; border-radius:12px; color:rgba(255,255,255,.55); font-size:1.9rem;
              background:repeating-linear-gradient(135deg, rgba(255,255,255,.07) 0 6px, rgba(255,255,255,.02) 6px 12px); border:1px solid rgba(255,255,255,.16);
              box-shadow:inset 0 1px 0 rgba(255,255,255,.08); transition:border-color .15s, color .15s;}
-.sn:hover .sc-hid, .sm:hover ~ .sn .sc-hid {border-color:#ffc75a; color:#ffc75a;}
+.sn:hover .sc-hid, .smid:hover ~ .sn .sc-hid {border-color:#ffc75a; color:#ffc75a;}
 .sc-real.l {color:rgba(255,255,255,.42);}
-.sm {display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-width:70px; cursor:pointer; text-align:center;}
-.sm small {font-size:.66rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#9aa3b5; white-space:nowrap;}
-.sm.live small {color:#ff6b6b;}
-.sm .sc-tip {font-size:.7rem; font-weight:700; color:#ffc75a; white-space:nowrap; margin:0;}
-.sm.pre {cursor:default;} .sm.pre b {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.7rem; line-height:1; color:#fff;}
-.sm.pre small {letter-spacing:.06em; text-transform:none; font-weight:600;}
+.smid {display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-width:70px; cursor:pointer; text-align:center;}
+.smid small {font-size:.66rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#9aa3b5; white-space:nowrap;}
+.smid.live small {color:#ff6b6b;}
+.smid .sc-tip {font-size:.7rem; font-weight:700; color:#ffc75a; white-space:nowrap; margin:0;}
+.smid.pre {cursor:default;} .smid.pre b {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.7rem; line-height:1; color:#fff;}
+.smid.pre small {letter-spacing:.06em; text-transform:none; font-weight:600;}
 .tg-s:checked ~ * .sc-tip {display:none;}
 .mr-main {grid-template-columns:minmax(0,1fr) auto auto auto minmax(0,1fr); grid-template-areas:"a sa sm sh h"; gap:8px;}
-.mr-main .sn.a {grid-area:sa;} .mr-main .sm {grid-area:sm;} .mr-main .sn.h {grid-area:sh;}
+.mr-main .sn.a {grid-area:sa;} .mr-main .smid {grid-area:sm;} .mr-main .sn.h {grid-area:sh;}
 .cname .score {display:flex; align-items:center; gap:2px; background:rgba(8,10,16,.72); border-radius:14px; padding:2px 4px;}
 .cname .score .sn {min-width:48px; height:46px; font-size:2rem;} .cname .score .sn .sc-hid {width:44px; height:40px; font-size:1.5rem;}
-.cname .score .sm {min-width:56px;}
+.cname .score .smid {min-width:56px;}
 .fsc {display:flex; align-items:center; gap:6px; padding:6px 14px; border-radius:16px; background:rgba(8,10,16,.82);}
 .fsc .sn {font-size:3.3rem; height:64px; min-width:76px; cursor:default;} .fsc .sc-real {display:inline;}
 @media (max-width: 760px) {
   .mr-main {grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"a sa" "h sh"; gap:6px 10px;}
-  .mr-main .sm {display:none;}
+  .mr-main .smid {display:none;}
   .sn {height:44px; min-width:54px; font-size:2rem;} .sn .sc-hid {width:50px; height:40px; font-size:1.5rem;}
   .fsc .sn {font-size:2.4rem; height:52px; min-width:60px;}
-  .cname .score .sm {display:none;}
+  .cname .score .smid {display:none;}
 }
 /* Carte du joueur (zones chaudes) */
 .pm {display:none; position:fixed; inset:0; z-index:1000000; align-items:flex-start; justify-content:center; padding:4vh 14px; overflow-y:auto; box-sizing:border-box;}
@@ -2025,9 +2025,79 @@ label.mt {cursor:pointer;}
 .mr-main .mt {gap:9px;}
 .mr-main .mt-n b {font-size:1.32rem;} .mr-main .mt-n b.sm {font-size:1.16rem;} .mr-main .mt-n b.xs {font-size:.92rem; letter-spacing:-.02em;}
 .mr-main .sn {min-width:52px;} .mr-main .sn .sc-hid {width:50px;}
-.mr-main .sm {min-width:58px;}
+.mr-main .smid {min-width:58px;}
 @media (max-width: 760px) {.mr-main .mt-n b {font-size:1.25rem;} .mr-main .disc.dr {width:42px; height:42px;}
-  .mr-main .sm.pre {display:flex; grid-area:sa; grid-row:1 / span 2; align-self:center;} .mr-main .sn.empty {display:none;}}
+  .mr-main .smid.pre {display:flex; grid-area:sa; grid-row:1 / span 2; align-self:center;} .mr-main .sn.empty {display:none;}}
+/* ===== v018 : le récap de la nuit mis en avant ===== */
+.nrec {position:relative; margin:.5rem 0 1.2rem; padding:18px 20px; border-radius:20px; overflow:hidden;
+       background:radial-gradient(520px 200px at 0% 0%, rgba(247,200,80,.16), transparent 70%),
+                  radial-gradient(520px 220px at 100% 100%, rgba(90,130,255,.14), transparent 70%),
+                  repeating-linear-gradient(115deg, rgba(255,255,255,.025) 0 2px, transparent 2px 10px), #0f1320;
+       border:1px solid rgba(255,215,120,.22); box-shadow:0 14px 34px rgba(0,0,0,.35);}
+.nrec .tg {display:none;}
+.nr-head {display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap;}
+.nr-k {font-size:.76rem; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#ffc75a;}
+.nr-t {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:2.05rem; line-height:1; text-transform:uppercase; margin:4px 0 8px; color:#fff;}
+.nr-s {display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+.nst {display:inline-flex; align-items:center; padding:3px 11px; border-radius:999px; font-size:.78rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+      background:rgba(255,255,255,.1); color:#eef1f6; box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);}
+.nst.k-live {background:#d93636; color:#fff; box-shadow:none; animation:pulse 2s ease-in-out infinite;}
+.nst.k-next {background:rgba(255,199,90,.14); color:#ffd98a; box-shadow:inset 0 0 0 1px rgba(255,199,90,.35);}
+@keyframes pulse {50% {opacity:.65;}}
+.nr-n {font-size:.86rem; font-weight:600; color:#aab3c4;}
+.nr-v {display:flex; gap:8px; flex-wrap:wrap;}
+.nr-v .cbtn {min-height:42px; padding:0 16px; font-size:.9rem; font-weight:700; border-radius:12px; color:#fff;
+             background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04)); border:1px solid rgba(255,255,255,.18);}
+.nr-v a.cbtn:not(.fr):not(.ghost) {background:linear-gradient(180deg, #ffd56e, #f0a92e); border-color:#ffd56e; color:#1a1205 !important;}
+.nr-v .cbtn.fr {background:linear-gradient(90deg, rgba(0,85,164,.55), rgba(255,255,255,.08) 50%, rgba(239,65,53,.5)); border-color:rgba(255,255,255,.25);}
+.nr-v .cbtn.off {opacity:.6;}
+.nr-rev {display:flex; align-items:center; justify-content:center; margin-top:16px; min-height:58px; padding:8px 16px; border-radius:14px; cursor:pointer; text-align:center;
+         background:linear-gradient(115deg, #b8860b, #ffe9a3, #f7c948, #fff8dc, #d4a017, #ffe9a3, #b8860b); background-size:300% 100%; animation:holo 8s linear infinite;
+         color:#241800; font-weight:800; font-size:1.08rem; box-shadow:0 0 28px rgba(247,200,80,.28);}
+.nr-rev:hover {filter:brightness(1.06);}
+.nr-rev small {display:block; font-weight:600; font-size:.78rem; opacity:.8; margin-top:2px;}
+.nr-rev .on {display:none;}
+.tg-n:checked ~ .nr-rev {background:rgba(255,255,255,.06); animation:none; color:#c3cad6; min-height:40px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.14); font-size:.9rem;}
+.tg-n:checked ~ .nr-rev .on {display:inline;} .tg-n:checked ~ .nr-rev .off {display:none;}
+.nrec .ess-hid {border-top:none; padding-top:0; margin-top:14px;}
+.nt-grid {display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px;}
+.nt {display:flex; gap:12px; align-items:flex-start; padding:12px 14px; border-radius:14px; background:rgba(8,10,16,.55); border:1px solid rgba(255,255,255,.08);}
+.nt-i {font-size:1.6rem; line-height:1; flex:none;}
+.nt-k {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.05rem; text-transform:uppercase; letter-spacing:.03em; color:#ffc75a;}
+.nt-b {font-size:.9rem; color:#e6e9ef; line-height:1.4; margin-top:2px;}
+.nr-sec {font-size:.76rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#9aa3b5; margin:16px 0 8px;}
+.rs-grid {display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px;}
+.rs {display:flex; flex-direction:column; gap:2px; padding:8px 10px; border-radius:12px; background:rgba(8,10,16,.55); border:1px solid rgba(255,255,255,.08);}
+.rs-t {display:flex; align-items:center; gap:8px; color:#8a93a5;}
+.rs-t img {width:22px; height:22px; object-fit:contain;}
+.rs-t b {font-family:'Barlow Condensed', sans-serif; font-weight:700; font-size:1.05rem; flex:1;}
+.rs-t em {font-style:normal; font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.25rem; font-variant-numeric:tabular-nums;}
+.rs-t.w {color:#fff;}
+@media (max-width: 760px) {
+  .nrec {padding:14px;} .nr-t {font-size:1.45rem;} .nr-v {width:100%;} .nr-v .cbtn {flex:1 1 auto; min-height:40px; padding:0 10px; font-size:.84rem;}
+  .mr-foot .mr-prev {flex:1 1 100%; -webkit-line-clamp:3;}
+  .nt-grid {grid-template-columns:1fr;} .rs-grid {grid-template-columns:repeat(2, minmax(0,1fr));}
+}
+
+/* ===== v018 : lignes de match aux couleurs des équipes, comme le match de la nuit ===== */
+.mr-main .h .mt-l {justify-content:flex-end;}
+@media (max-width: 760px) {.mr-main .h .mt-l {justify-content:flex-start;}}
+.mrow {background:linear-gradient(rgba(10,13,20,.52), rgba(10,13,20,.52)),
+                  repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 10px),
+                  linear-gradient(105deg, var(--ca) 0%, var(--ca) 49.5%, var(--ch) 50.5%, var(--ch) 100%);
+       border-color:rgba(255,255,255,.1); box-shadow:0 10px 24px rgba(0,0,0,.3);}
+.mrow .mr-foot {margin:2px -14px -10px -12px; padding:9px 14px 10px 12px; background:rgba(8,10,16,.55); border-top:1px solid rgba(255,255,255,.08);}
+.mrow .mt-n small {color:rgba(255,255,255,.7);}
+.mrow .mt-n .rec {color:rgba(255,255,255,.72);}
+.mrow .mr-t {color:rgba(255,255,255,.75);}
+.mrow .disc.dr {box-shadow:0 6px 16px rgba(0,0,0,.45), inset 0 0 0 2px rgba(255,255,255,.25) !important;}
+.mrow .sn .sc-hid {background-color:rgba(8,10,16,.55);}
+.mrow.L3 {border-color:rgba(255,220,130,.6);} .mrow.L2 {border-color:rgba(235,240,245,.4);} .mrow.L1 {border-color:rgba(196,116,63,.55);}
+@media (max-width: 760px) {
+  .mrow {background:linear-gradient(rgba(10,13,20,.52), rgba(10,13,20,.52)),
+                    repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 10px),
+                    linear-gradient(172deg, var(--ca) 0%, var(--ca) 44%, var(--ch) 46%, var(--ch) 100%);}
+}
 </style>
 """
 
@@ -2217,37 +2287,28 @@ def box_html(g, summ):
             + "".join(modals))
 
 
-# Zones de tir à la façon des « hot zones » de la NBA : 14 zones (pieds ; panier en (25, 0), coordonnées d'ESPN).
-# Angle mesuré depuis le panier : 0° = dans l'axe, négatif d'un côté du terrain, positif de l'autre.
-# (clé, famille, bornes d'angle, moyenne NBA de réussite)
+# Zones de tir (v018) : 10 zones calées sur les lignes du terrain, faciles à lire (pieds ; panier en (25, 0), coordonnées d'ESPN).
+# Raquette = x de 17 à 33 pieds, jusqu'à 13,75 pieds devant le panier ; ligne à 3 points : coins jusqu'à 8,75 pieds, arc de 23,75 pieds.
+# (clé, famille, moyenne NBA de réussite)
 HOT_ZONES = [
-    ("rim", "rim", None, 0.64),
-    ("sm_l", "mid", (-125, -30), 0.43), ("sm_c", "mid", (-30, 30), 0.43), ("sm_r", "mid", (30, 125), 0.43),
-    ("lm_bl", "mid", (-125, -60), 0.41), ("lm_l", "mid", (-60, -20), 0.41), ("lm_c", "mid", (-20, 20), 0.41),
-    ("lm_r", "mid", (20, 60), 0.41), ("lm_br", "mid", (60, 125), 0.41),
-    ("c3_l", "three", None, 0.39), ("w3_l", "three", (-125, -25), 0.355), ("t3", "three", (-25, 25), 0.355),
-    ("w3_r", "three", (25, 125), 0.355), ("c3_r", "three", None, 0.39),
+    ("rim", "rim", 0.64), ("paint", "paint", 0.44),
+    ("m_l", "mid", 0.41), ("m_c", "mid", 0.42), ("m_r", "mid", 0.41),
+    ("c3_l", "three", 0.39), ("w3_l", "three", 0.355), ("t3", "three", 0.355), ("w3_r", "three", 0.355), ("c3_r", "three", 0.39),
 ]
-ZONE_AVG = {k: avg for k, _, _, avg in HOT_ZONES}
-FAMILIES = [("rim", "Près du cercle"), ("mid", "Mi-distance"), ("three", "À 3 points")]
+ZONE_AVG = {k: avg for k, _, avg in HOT_ZONES}
+FAMILIES = [("rim", "Près du cercle", 0.64), ("paint", "Raquette", 0.44), ("mid", "Mi-distance", 0.41), ("three", "À 3 points", 0.36)]
 
 
 def shot_zone(x, y, three):
-    ang = math.degrees(math.atan2(x - 25, y))
-    ang = max(-124.9, min(124.9, ang))
     if three:
         if y <= 9 and abs(x - 25) >= 20:
             return "c3_l" if x < 25 else "c3_r"
-        return "w3_l" if ang < -25 else "t3" if ang <= 25 else "w3_r"
-    dist = math.hypot(x - 25, y)
-    if dist <= 8:
+        return "w3_l" if x < 17 else "w3_r" if x > 33 else "t3"
+    if math.hypot(x - 25, y) <= 8:
         return "rim"
-    if dist <= 16:
-        return "sm_l" if ang < -30 else "sm_c" if ang <= 30 else "sm_r"
-    for key, _, (a1, a2), _ in HOT_ZONES[4:9]:
-        if a1 <= ang <= a2:
-            return key
-    return "lm_c"
+    if 17 <= x <= 33 and y <= 13.75:
+        return "paint"
+    return "m_l" if x < 17 else "m_r" if x > 33 else "m_c"
 
 
 def zone_color(made, att, avg):
@@ -2263,64 +2324,48 @@ def zone_color(made, att, avg):
 
 
 def court_svg(shots, uid):
-    """Demi-terrain façon parquet clair (10 px par pied, ligne de fond en haut) : 14 zones colorées seulement à partir de 3 tirs,
+    """Demi-terrain façon parquet clair (10 px par pied, ligne de fond en haut) : 10 zones calées sur les lignes du terrain
+    (cercle, raquette, mi-distance gauche/centre/droite, 3 points coin/aile/axe), colorées seulement à partir de 3 tirs,
     pourcentage + réussis/tentés dans chaque zone, et chaque tir (● réussi, ✕ raté) pour voir où le joueur tire."""
     BY, H = 52.5, 400
-    stats = {k: [0, 0] for k, _, _, _ in HOT_ZONES}
+    stats = {k: [0, 0] for k, _, _ in HOT_ZONES}
     for x, y, made, three in shots:
         z = shot_zone(x, y, three)
         stats[z][1] += 1
         stats[z][0] += 1 if made else 0
-
-    def pt(r, a):
-        return 250 + r * math.sin(math.radians(a)), BY + r * math.cos(math.radians(a))
-
-    def sector(r1, r2, a1, a2):
-        (x1, y1), (x2, y2), (x3, y3), (x4, y4) = pt(r2, a1), pt(r2, a2), pt(r1, a2), pt(r1, a1)
-        inner = f"A{r1},{r1} 0 0 1 {x4:.1f},{y4:.1f}" if r1 > 0 else f"L{x4:.1f},{y4:.1f}"
-        return f"M{x1:.1f},{y1:.1f} A{r2},{r2} 0 0 0 {x2:.1f},{y2:.1f} L{x3:.1f},{y3:.1f} {inner} Z"
-
     yj, r3 = 140, 237.5
     arc = f"M30,0 L30,{yj} A{r3},{r3} 0 0 0 470,{yj} L470,0"
     cin, cout = f"in{uid}", f"out{uid}"
+    # Formes de chaque zone : (svg, découpe éventuelle, position de l'étiquette)
+    rim = f'<circle cx="250" cy="{BY}" r="80" fill="{{c}}"/>'
+    shapes_def = {
+        "rim": (rim, None, (250, BY + 48)),
+        "paint": (f'<path d="M170,0 H330 V190 H170 Z M170,{BY} a80,80 0 1 0 160,0 a80,80 0 1 0 -160,0 Z" fill-rule="evenodd" fill="{{c}}"/>', None, (250, 165)),
+        "m_l": (f'<rect x="0" y="0" width="170" height="{H}" fill="{{c}}"/>', cin, (100, 120)),
+        "m_c": (f'<rect x="170" y="190" width="160" height="{H}" fill="{{c}}"/>', cin, (250, 238)),
+        "m_r": (f'<rect x="330" y="0" width="170" height="{H}" fill="{{c}}"/>', cin, (400, 120)),
+        "c3_l": (f'<rect x="0" y="0" width="30" height="{yj}" fill="{{c}}"/>', None, None),
+        "c3_r": (f'<rect x="470" y="0" width="30" height="{yj}" fill="{{c}}"/>', None, None),
+        "w3_l": (f'<rect x="0" y="0" width="170" height="{H}" fill="{{c}}"/>', cout, (72, 300)),
+        "t3": (f'<rect x="170" y="0" width="160" height="{H}" fill="{{c}}"/>', cout, (250, 350)),
+        "w3_r": (f'<rect x="330" y="0" width="170" height="{H}" fill="{{c}}"/>', cout, (428, 300)),
+    }
     shapes, labels = [], []
-
-    def label(k, x, y):
+    for k, _, avg in HOT_ZONES:
+        shape, clip, pos = shapes_def[k]
         m, a = stats[k]
+        shape = shape.replace("{c}", zone_color(m, a, avg))
+        shapes.append(f'<g clip-path="url(#{clip})">{shape}</g>' if clip else shape)
         if not a:
-            return
-        x = min(455, max(45, x))                      # jamais coupé au bord du terrain
-        if a >= 3:
-            labels.append(f'<text x="{x:.0f}" y="{y - 3:.0f}" class="zp">{round(m / a * 100)}%</text>'
-                          f'<text x="{x:.0f}" y="{y + 13:.0f}" class="zm">{m}/{a}</text>')
+            continue
+        if pos is None:  # coins : étiquette verticale
+            x0 = 15 if k == "c3_l" else 485
+            labels.append(f'<text x="{x0}" y="70" class="zm" transform="rotate(-90 {x0} 70)">{m}/{a}</text>')
+        elif a >= 3:
+            labels.append(f'<text x="{pos[0]}" y="{pos[1] - 3:.0f}" class="zp">{round(m / a * 100)}%</text>'
+                          f'<text x="{pos[0]}" y="{pos[1] + 13:.0f}" class="zm">{m}/{a}</text>')
         else:
-            labels.append(f'<text x="{x:.0f}" y="{y + 5:.0f}" class="zm">{m}/{a}</text>')
-
-    for k, fam, ang, avg in HOT_ZONES:
-        c = zone_color(stats[k][0], stats[k][1], avg)
-        if k == "rim":
-            shapes.append(f'<circle cx="250" cy="{BY}" r="80" fill="{c}"/>')
-            label(k, 250, BY + 52)
-        elif k.startswith("sm_"):
-            shapes.append(f'<path d="{sector(80, 160, *ang)}" fill="{c}" clip-path="url(#{cin})"/>')
-            label(k, *pt(122, max(-75, min(75, sum(ang) / 2))))
-        elif k.startswith("lm_"):
-            shapes.append(f'<path d="{sector(160, 420, *ang)}" fill="{c}" clip-path="url(#{cin})"/>')
-            x, y = pt(205, max(-80, min(80, sum(ang) / 2)))
-            label(k, x, max(y, 30))
-        elif k in ("c3_l", "c3_r"):
-            x0 = 0 if k == "c3_l" else 470
-            shapes.append(f'<rect x="{x0}" y="0" width="30" height="{yj}" fill="{c}"/>')
-            m, a = stats[k]
-            if a:
-                labels.append(f'<text x="{x0 + 15}" y="70" class="zm" transform="rotate(-90 {x0 + 15} 70)">{m}/{a}</text>')
-        else:
-            shapes.append(f'<path d="{sector(0, 700, *ang)}" fill="{c}" clip-path="url(#{cout})"/>')
-            label(k, *pt(300, max(-50, min(50, sum(ang) / 2))))
-
-    seps = [f"M{pt(80, a)[0]:.1f},{pt(80, a)[1]:.1f} L{pt(160, a)[0]:.1f},{pt(160, a)[1]:.1f}" for a in (-30, 30)]
-    seps += [f"M{pt(160, a)[0]:.1f},{pt(160, a)[1]:.1f} L{pt(420, a)[0]:.1f},{pt(420, a)[1]:.1f}" for a in (-60, -20, 20, 60)]
-    seps2 = [f"M{pt(r3, a)[0]:.1f},{pt(r3, a)[1]:.1f} L{pt(700, a)[0]:.1f},{pt(700, a)[1]:.1f}" for a in (-25, 25)]
+            labels.append(f'<text x="{pos[0]}" y="{pos[1] + 5:.0f}" class="zm">{m}/{a}</text>')
     marks = []
     for x, y, made, three in shots:
         X, Y = x * 10, BY + y * 10
@@ -2331,23 +2376,22 @@ def court_svg(shots, uid):
         else:
             marks.append(f'<path d="M{X - 5:.0f},{Y - 5:.0f} L{X + 5:.0f},{Y + 5:.0f} M{X + 5:.0f},{Y - 5:.0f} L{X - 5:.0f},{Y + 5:.0f}" '
                          f'stroke="#3b2f22" stroke-width="2.6" stroke-linecap="round"/>')
-    svg = (f'<svg viewBox="0 0 500 {H}" class="court" role="img" aria-label="Carte de tirs : 14 zones et chaque tir">'
+    # Seuls traits ajoutés aux lignes du terrain : le prolongement des côtés de la raquette (séparation gauche / centre / droite)
+    seps = f'<path d="M170,190 V{H} M330,190 V{H}" stroke="#fffaf0" stroke-width="1.5" stroke-dasharray="5 5" stroke-opacity=".7"/>'
+    svg = (f'<svg viewBox="0 0 500 {H}" class="court" role="img" aria-label="Carte de tirs : 10 zones et chaque tir">'
            f'<defs><clipPath id="{cin}"><path d="{arc} Z"/></clipPath>'
            f'<clipPath id="{cout}"><path d="M0,{yj} L30,{yj} A{r3},{r3} 0 0 0 470,{yj} L500,{yj} L500,{H} L0,{H} Z"/></clipPath>'
            f'<pattern id="pq{uid}" width="500" height="40" patternUnits="userSpaceOnUse"><rect width="500" height="40" fill="#ead3a6"/>'
            f'<rect y="20" width="500" height="20" fill="#e4cb9b"/></pattern></defs>'
            f'<rect x="0" y="0" width="500" height="{H}" fill="url(#pq{uid})"/>'
-           + "".join(shapes)
-           + f'<path d="{" ".join(seps)}" stroke="#fffaf0" stroke-width="1.5" stroke-opacity=".75" clip-path="url(#{cin})"/>'
-           f'<path d="{" ".join(seps2)}" stroke="#fffaf0" stroke-width="1.5" stroke-opacity=".75" clip-path="url(#{cout})"/>'
-           f'<circle cx="250" cy="{BY}" r="160" fill="none" stroke="#fffaf0" stroke-width="1.5" stroke-opacity=".75" clip-path="url(#{cin})"/>'
-           f'<circle cx="250" cy="{BY}" r="80" fill="none" stroke="#fffaf0" stroke-width="1.5" stroke-opacity=".75"/>'
-           f'<g fill="none" stroke="#fffaf0" stroke-width="3"><path d="{arc}"/><rect x="170" y="0" width="160" height="190"/>'
+           + "".join(shapes) + seps
+           + f'<g fill="none" stroke="#fffaf0" stroke-width="3"><path d="{arc}"/><rect x="170" y="0" width="160" height="190"/>'
+           f'<circle cx="250" cy="{BY}" r="80" stroke-width="2"/>'
            f'<path d="M190,190 A60,60 0 0 0 310,190"/><line x1="220" y1="40" x2="280" y2="40"/><rect x="1.5" y="1.5" width="497" height="{H - 3}"/></g>'
            f'<circle cx="250" cy="{BY}" r="7.5" fill="none" stroke="#c4461a" stroke-width="3"/>'
            + "".join(marks) + "".join(labels) + "</svg>")
-    fam = {f: [0, 0] for f, _ in FAMILIES}
-    for k, f, _, _ in HOT_ZONES:
+    fam = {f: [0, 0] for f, _, _ in FAMILIES}
+    for k, f, _ in HOT_ZONES:
         fam[f][0] += stats[k][0]
         fam[f][1] += stats[k][1]
     return svg, fam
@@ -2361,8 +2405,7 @@ def shot_modal(g, r, tid, shots, mid):
     tiles = [(st_.get("PTS", "0"), "Points"), (st_.get("REB", "0"), "Rebonds"), (st_.get("AST", "0"), "Passes"),
              (st_.get("FG", "0-0").replace("-", "/"), "Au tir")]
     bars = []
-    for k, label in FAMILIES:
-        avg = {"rim": 0.64, "mid": 0.42, "three": 0.36}[k]
+    for k, label, avg in FAMILIES:
         m, a = fam[k]
         if not a:
             continue
@@ -2379,7 +2422,7 @@ def shot_modal(g, r, tid, shots, mid):
             f"<div class='pm-id'><div class='pm-team'>{logo(tid, 18)} {esc(t['full'] or t['name'])}{' · titulaire' if r.get('starter') else ''}</div>"
             f"<div class='pm-name'>{esc(r['name'])}</div><div class='pm-min'>{esc(st_.get('MIN', ''))} minutes</div></div></div>"
             "<div class='pm-tiles'>" + "".join(f"<div><b>{esc(v)}</b><span>{lab}</span></div>" for v, lab in tiles) + "</div>"
-            f"<div class='pm-sec'><span>Carte de tirs</span><small>{made}/{len(shots)} hors lancers francs · 14 zones</small></div>"
+            f"<div class='pm-sec'><span>Carte de tirs</span><small>{made}/{len(shots)} hors lancers francs · 10 zones</small></div>"
             f"<div class='pm-court'>{svg}</div>"
             "<div class='pm-leg'><span><i class='dot'></i>Réussi</span><span><i class='x'>✕</i>Raté</span>"
             "<span><i class='sq hot'></i>Au-dessus de la moyenne NBA</span><span><i class='sq cold'></i>En dessous</span>"
@@ -2571,8 +2614,8 @@ def game_card(g, ctx, hero=False):
     hs, as_ = h["score"], a["score"]
     if not played:
         sa = sh = "<span class='sn empty'></span>"
-        sm = ("<span class='sm'><b>Reporté</b></span>" if g["status"] == "STATUS_POSTPONED"
-              else f"<span class='sm pre'><b>{esc(fr_hour(local)) if local else '?'}</b><small>{esc(g['tv']) or 'coup d’envoi'}</small></span>")
+        sm = ("<span class='smid'><b>Reporté</b></span>" if g["status"] == "STATUS_POSTPONED"
+              else f"<span class='smid pre'><b>{esc(fr_hour(local)) if local else '?'}</b><small>{esc(g['tv']) or 'coup d’envoi'}</small></span>")
         real_big = ""
     else:
         live = g["state"] == "in"
@@ -2585,10 +2628,10 @@ def game_card(g, ctx, hero=False):
             return (f"<label for='s{gid}' class='sn {cls}' title='Voir / cacher le score'><span class='sc-hid'>?</span>"
                     f"<span class='sc-real{dim}'>{v}</span></label>")
         sa, sh = num(as_, win_a, "a"), num(hs, not win_a, "h")
-        sm = (f"<label for='s{gid}' class='sm{' live' if live else ''}'><small>{lab}</small>"
+        sm = (f"<label for='s{gid}' class='smid{' live' if live else ''}'><small>{lab}</small>"
               f"<span class='sc-tip'>👁 voir le score</span></label>")
         real_big = (f"<div class='fsc'><span class='sn a'><span class='sc-real{'' if live or win_a else ' l'}'>{'–' if as_ is None else as_}</span></span>"
-                    f"<span class='sm'><small>{lab}</small></span>"
+                    f"<span class='smid'><small>{lab}</small></span>"
                     f"<span class='sn h'><span class='sc-real{'' if live or not win_a else ' l'}'>{'–' if hs is None else hs}</span></span></div>")
     clock = f"<div class='score'>{sa}{sm}{sh}</div>"
 
@@ -2653,12 +2696,12 @@ def game_card(g, ctx, hero=False):
            f"<div class='mr-foot'><span class='mr-prev kf' title='{esc(short)}'>{esc(short)}</span>{''.join(vid_btns[:1])}"
            f"<label for='o{gid}' class='lnk'>{'Stats ›' if played else 'Avant-match ›'}</label></div></div></div>")
 
-    # « La carte de la nuit » : le meilleur match en grande carte (ou l'affiche avant les matchs)
+    # « Le match de la nuit » : le meilleur match en grande carte (ou l'affiche avant les matchs)
     hero_html = ""
     if hero:
         def hrec(s_):
             return f" <i class='rec'>({esc(recs[s_['id']])})</i>" if recs[s_["id"]] else ""
-        kick = "La carte de la nuit" if w else "L'affiche de la nuit"
+        kick = "Le match de la nuit" if w else "L'affiche de la nuit"
         sub = WATCH_LEVELS[w[0]][2] if w else card_point(shown)
         hero_html = (f"<div class='hero'><div class='hero-card'>{face_head}</div></div></div>"
                      f"<div class='hero-txt'><div class='hero-k'>{kick}</div>"
@@ -2818,8 +2861,6 @@ def night_html(day, games, ctx, today):
     zone = ctx["zone"]
     key, state = night_state(games, zone)
     n = len(games)
-    sub = {"done": f"Terminée · {n} matchs", "live": state, "next": f"{state} · {n} matchs" if state.startswith("À venir") else f"À venir · {state}",
-           "none": "Pas de match"}[key]
 
     pills = []
     show_day = day + timedelta(days=1)
@@ -2844,12 +2885,41 @@ def night_html(day, games, ctx, today):
     _, facts = night_essentials(day, games, ctx)
     nid = f"n{day.isoformat()}"
     checked = " checked" if ctx["show_all"] else ""
-    if facts:
-        pills.append(f"<label for='{nid}' class='cbtn pill-n'><span class='off'>👁 Infos de la nuit</span><span class='on'>🙈 Cacher les infos</span></label>")
-    hidden = ("<div class='ess-hid'><ul class='pts'>" + "".join(f"<li>{esc(f)}</li>" for f in facts) + "</ul></div><!--fin-ess-->") if facts else ""
-    return (f"<div class='nbar'><input type='checkbox' class='tg tg-n' id='{nid}'{checked}>"
-            f"<div class='nb-row'><div class='nb-l'><div class='nb-t'>{esc(night_short_title(day, zone))}</div>"
-            f"<div class='nb-s k-{key}'>{esc(sub)}</div></div><div class='nb-r'>{''.join(pills)}</div></div>{hidden}</div>")
+    st_cls = {"done": "Terminée", "live": "En cours", "next": "À venir", "none": "Pas de match"}[key]
+    detail = {"done": f"{n} match{'s' if n > 1 else ''}", "live": state.replace("En cours · ", ""),
+              "next": f"{n} match{'s' if n > 1 else ''}" + (f" · 1er à {state.split('· ')[-1]}" if state.startswith("À venir ·") else ""),
+              "none": ""}[key]
+    head = (f"<div class='nr-head'><div class='nr-l'><div class='nr-k'>{'Le récap de la nuit' if facts else 'La nuit'}</div>"
+            f"<div class='nr-t'>{esc(night_short_title(day, zone))}</div>"
+            f"<div class='nr-s'><span class='nst k-{key}'>{'● ' if key == 'live' else '✓ ' if key == 'done' else ''}{st_cls}</span>"
+            + (f"<span class='nr-n'>{esc(detail)}</span>" if detail else "") + "</div></div>"
+            f"<div class='nr-v'>{''.join(pills)}</div></div>")
+    if not facts:
+        return f"<div class='nrec'>{head}</div>"
+
+    # Le récap caché : une tuile par info, les résultats en petits tableaux de score
+    tiles = []
+    for f in facts:
+        if f.startswith("📋"):
+            continue
+        m = re.match(r"^(\S+)\s+(.*?)\s:\s(.*)$", f)
+        ico, title, body = (m.group(1), m.group(2), m.group(3)) if m else ("•", "", f)
+        tiles.append(f"<div class='nt'><div class='nt-i'>{ico}</div><div><div class='nt-k'>{esc(title)}</div><div class='nt-b'>{esc(body)}</div></div></div>")
+    done = [g for g in games if g["state"] == "post" and g["home"]["score"] is not None]
+    res = []
+    for g in done:
+        a, h = g["away"], g["home"]
+        wa = (a["score"] or 0) > (h["score"] or 0)
+        def tm(s_, won):
+            t = team(s_["id"])
+            img = f"<img src='{esc(t['logo'])}' alt=''>" if t["logo"] else ""
+            return f"<span class='rs-t{' w' if won else ''}'>{img}<b>{esc(t['abbr'])}</b><em>{s_['score']}</em></span>"
+        res.append(f"<div class='rs'>{tm(a, wa)}{tm(h, not wa)}</div>")
+    results = (f"<div class='nr-sec'>Les résultats</div><div class='rs-grid'>{''.join(res)}</div>") if res else ""
+    hidden = (f"<div class='ess-hid'><div class='nt-grid'>{''.join(tiles)}</div>{results}</div><!--fin-ess-->")
+    reveal = (f"<label for='{nid}' class='nr-rev'><span class='off'>👁 Révéler le récap de la nuit<small>Résultats, joueurs en feu, surprises, séries</small></span>"
+              f"<span class='on'>🙈 Cacher le récap</span></label>")
+    return f"<div class='nrec'><input type='checkbox' class='tg tg-n' id='{nid}'{checked}>{head}{reveal}{hidden}</div>"
 
 
 def ai_material(g, summ, points):

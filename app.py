@@ -23,7 +23,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v011"
+APP_VERSION = "2026-10-v012"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -1256,20 +1256,66 @@ def hype(g, idx, pre):
 # =========================================================================
 # VIDÉOS : DURÉES (API YouTube, si une clé est donnée)
 # =========================================================================
-@st.cache_data(ttl=86400, show_spinner=False, max_entries=200)
-def video_durations(ids):
+@st.cache_data(ttl=21600, show_spinner=False, max_entries=300)
+def video_info(ids):
+    """{id: {"mins", "blocked", "allowed"}} via l'API YouTube (1 unité de quota pour 50 vidéos) : durée et pays où la vidéo
+    est bloquée. Sans clé YouTube : {} (impossible de savoir si une vidéo est bloquée en France)."""
     key = str(_secret("youtube", "api_key", ""))
     if not key or not ids:
         return {}
     out = {}
-    d = get_json("https://www.googleapis.com/youtube/v3/videos",
-                 {"part": "contentDetails", "id": ",".join(ids[:50]), "key": key}) or {}
-    for item in d.get("items") or []:
-        m = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", (item.get("contentDetails") or {}).get("duration", ""))
-        if m:
-            secs = int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60 + int(m.group(3) or 0)
-            out[item["id"]] = max(1, round(secs / 60))
+    for i in range(0, len(ids), 50):
+        d = get_json("https://www.googleapis.com/youtube/v3/videos",
+                     {"part": "contentDetails,status", "id": ",".join(ids[i:i + 50]), "key": key}) or {}
+        for item in d.get("items") or []:
+            cd = item.get("contentDetails") or {}
+            m = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", cd.get("duration", ""))
+            secs = int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60 + int(m.group(3) or 0) if m else 0
+            rr = cd.get("regionRestriction") or {}
+            out[item["id"]] = {"mins": max(1, round(secs / 60)) if secs else None, "blocked": set(rr.get("blocked") or []),
+                               "allowed": set(rr["allowed"]) if "allowed" in rr else None,
+                               "embed": bool((item.get("status") or {}).get("embeddable", True))}
     return out
+
+
+def video_durations(ids):
+    return {k: v["mins"] for k, v in video_info(ids).items() if v["mins"]}
+
+
+def playable(v, info, country):
+    """La vidéo passe-t-elle dans ce pays ? (inconnu = on suppose que oui)"""
+    i = info.get(v["id"]) if v else None
+    if not v:
+        return False
+    if not i:
+        return True
+    return country not in i["blocked"] and (i["allowed"] is None or country in i["allowed"])
+
+
+def alt_video(g, exclude):
+    """Autre résumé du match (autre chaîne que la NBA), trouvé par une recherche YouTube : candidats dans l'ordre."""
+    ta, th = team(g["away"]["id"])["name"], team(g["home"]["id"])["name"]
+    when = f"{MONTHS_EN[g['day'].month - 1].title()} {g['day'].day}, {g['day'].year}"
+    tip = parse_dt(g["utc"])
+    out = []
+    for q in (f"{ta} vs {th} highlights {when}", f"{ta} {th} full game highlights {when}"):
+        for v in yt_search(q):
+            t = norm(v["title"])
+            if v["id"] in exclude or v["channel"] == NBA_CHANNEL or v in out:
+                continue
+            if "highlight" not in t and "resume" not in t and "recap" not in t:
+                continue
+            if not (_has_team(t, g["home"]["id"]) and _has_team(t, g["away"]["id"])):
+                continue
+            if any(x in t for x in ("top 10", "reaction", "react", "live", "prediction", "preview", "2k", "every ")):
+                continue
+            td = _title_date(t)
+            if td and td != g["day"]:
+                continue
+            if not _in_window(v, parse_dt(v["published"]), tip, 4) or (v.get("mins") and v["mins"] < 3):
+                continue
+            out.append(v)
+    return out[:6]
 
 
 def dur(v, durs):
@@ -1533,29 +1579,30 @@ label.pl:hover {color:var(--accent);}
 .gc {position:relative; scroll-margin-top:80px;}
 .gc .tg {display:none;}
 .card {padding:5px; border-radius:20px; height:100%; box-sizing:border-box; background:#2a3242; box-shadow:0 14px 30px rgba(0,0,0,.35);}
-/* Raretés (même largeur de cadre partout) : commune → légendaire */
-.card.Lm2 {background:#585e68;}
-.card.Lm1 {background:#8a939f;}
-.card.L0 {background:#3fae5a;}
-.card.L1 {background:linear-gradient(135deg, #1d4ed8, #60a5fa 50%, #1e40af);}
-.card.L2 {background:linear-gradient(135deg, #7c3aed, #e879f9 45%, #a855f7 70%, #6d28d9); box-shadow:0 0 22px rgba(168,85,247,.35), 0 14px 30px rgba(0,0,0,.35);}
+/* Raretés (même largeur de cadre partout) : gris très foncé → gris clair → ardoise → cuivre → argent → or légendaire */
+.card.Lm2 {background:#1b1d21; box-shadow:inset 0 0 0 1px #2a2d33, 0 14px 30px rgba(0,0,0,.35);}
+.card.Lm1 {background:#7c838d;}
+.card.L0 {background:#4b5a6e;}
+.card.L1 {background:linear-gradient(135deg, #6e3417, #c4743f 30%, #f0b58a 50%, #b0602d 70%, #6e3417); box-shadow:0 0 16px rgba(196,116,63,.28), 0 14px 30px rgba(0,0,0,.35);}
+.card.L2 {background:linear-gradient(115deg, #7d8894, #e9eef3, #b9c2cc, #ffffff, #8e99a5, #dfe5ec, #7d8894); background-size:300% 100%;
+          animation:holo 9s linear infinite; box-shadow:0 0 0 1px rgba(235,240,245,.45), 0 0 26px rgba(220,230,240,.25), 0 14px 30px rgba(0,0,0,.35);}
 .card.L3 {background:linear-gradient(115deg, #b8860b, #ffe9a3, #f7c948, #fff8dc, #d4a017, #9fdcff, #f5b8ff, #ffe9a3, #b8860b); background-size:300% 100%;
           animation:holo 6s linear infinite; box-shadow:0 0 0 1px rgba(255,220,130,.6), 0 0 34px rgba(247,200,80,.35), 0 14px 30px rgba(0,0,0,.35);}
 .card.Laff {background:linear-gradient(135deg, #a8781f, #ffd770 50%, #a8781f);}
 .card.Llive {background:linear-gradient(135deg, #b91c1c, #ff6b6b 50%, #b91c1c);}
 @keyframes holo {to {background-position:300% 0;}}
-@media (prefers-reduced-motion: reduce) {.card.L3 {animation:none;}}
+@media (prefers-reduced-motion: reduce) {.card.L3, .card.L2 {animation:none;}}
 .ci {height:100%; border-radius:15px; overflow:hidden; display:flex; flex-direction:column;
      background:repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 10px), linear-gradient(115deg, var(--ca) 0%, var(--ca) 49%, var(--ch) 51%, var(--ch) 100%);}
 .ctop {display:flex; justify-content:space-between; align-items:center; gap:6px; padding:11px 11px 0; min-height:26px;}
 .chips {display:flex; gap:5px; flex-wrap:wrap;}
 .lvl {display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; background:rgba(8,10,16,.8); color:#fff; font-weight:700; font-size:.8rem; white-space:nowrap;}
 .L3 .lvl {background:linear-gradient(135deg, #f7c948, #fff4c2, #d4a017); color:#2a1e00;}
-.L2 .lvl {background:linear-gradient(135deg, #a855f7, #e879f9); color:#fff;}
-.L1 .lvl {background:#2563eb; color:#fff;}
-.L0 .lvl {background:#2f8f48; color:#fff;}
-.Lm1 .lvl {background:#5f6773; color:#fff;}
-.Lm2 .lvl {background:#3d424a; color:#d6dae0;}
+.L2 .lvl {background:linear-gradient(135deg, #dfe5ec, #ffffff, #aeb8c3); color:#16191d;}
+.L1 .lvl {background:linear-gradient(135deg, #b0602d, #f0b58a); color:#2a1206;}
+.L0 .lvl {background:#4b5a6e; color:#fff;}
+.Lm1 .lvl {background:#7c838d; color:#fff;}
+.Lm2 .lvl {background:#1b1d21; color:#c3c8cf; box-shadow:inset 0 0 0 1px #3a3e45;}
 .Llive .lvl {background:#d93636;}
 .Laff .lvl {background:#ffd770; color:#2a1e00;}
 .cpill {display:inline-flex; align-items:center; padding:3px 9px; border-radius:999px; background:rgba(8,10,16,.75); color:#eef1f6; font-weight:700; font-size:.8rem; white-space:nowrap;}
@@ -1572,6 +1619,7 @@ label.cart {cursor:pointer;}
 .cname {display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:8px; padding:8px 12px; background:linear-gradient(180deg, rgba(8,10,16,.0), rgba(8,10,16,.55));}
 .cname b {font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.2rem; line-height:1; text-transform:uppercase; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 2px 6px rgba(0,0,0,.6);}
 .cname b.r {text-align:right;}
+.cname b.sm {font-size:1.02rem;} .cname b.xs {font-size:.9rem; letter-spacing:-.01em;}
 .clock {display:flex; flex-direction:column; align-items:center; gap:2px; padding:5px 10px 6px; border-radius:9px; background:#050505;
         box-shadow:inset 0 0 0 1px #2b2b2b, inset 0 0 12px rgba(0,0,0,.9), 0 4px 12px rgba(0,0,0,.5); min-width:86px;}
 .clock.tap {cursor:pointer;}
@@ -2103,6 +2151,40 @@ def form_html(g, idx):
 RARITY = {3: "L3", 2: "L2", 1: "L1", 0: "L0", -1: "Lm1", -2: "Lm2"}
 
 
+def _rgb(c):
+    try:
+        return tuple(int(c[i:i + 2], 16) for i in (1, 3, 5))
+    except (ValueError, TypeError, IndexError):
+        return (128, 128, 128)
+
+
+def _dist(c1, c2):
+    return sum((x - y) ** 2 for x, y in zip(_rgb(c1), _rgb(c2))) ** 0.5
+
+
+def _shade(c, k):
+    """Assombrit (k < 0) ou éclaircit (k > 0) une couleur."""
+    return "#%02x%02x%02x" % tuple(round(x + (255 - x) * k) if k > 0 else round(x * (1 + k)) for x in _rgb(c))
+
+
+def card_colors(ta, th):
+    """Couleurs des deux moitiés de la carte. Si les deux équipes ont des couleurs trop proches (deux rouges, deux noirs...),
+    l'équipe à l'extérieur prend sa 2e couleur, sinon l'équipe à domicile, sinon on assombrit nettement les visiteurs."""
+    ca, ch = ta["color"], th["color"]
+    if _dist(ca, ch) >= 110:
+        return ca, ch
+    for alt_a, alt_h in ((ta.get("alt"), ch), (ca, th.get("alt"))):
+        if _dist(alt_a or "", alt_h or "") >= 110 and 0.06 < _lum(alt_a or "#808080") < 0.8 and 0.06 < _lum(alt_h or "#808080") < 0.8:
+            return alt_a, alt_h
+    return _shade(ca, -0.55) if _lum(ca) > 0.2 else _shade(ca, 0.35), ch
+
+
+def name_cls(t):
+    """Taille du nom sur la carte : les noms longs (Timberwolves, Trail Blazers) en plus petit, pour tenir en entier."""
+    n = len(t["name"])
+    return "xs" if n >= 12 else "sm" if n >= 9 else ""
+
+
 def card_point(points):
     """La phrase d'avant-match la plus parlante (favori ou star), sinon la première."""
     for p in points:
@@ -2125,6 +2207,7 @@ def game_card(g, ctx):
     fav = th["abbr"] in ctx["favs"] or ta["abbr"] in ctx["favs"]
     w = ctx["watch"].get(gid)
     played = g["state"] != "pre"
+    ca, ch = card_colors(ta, th)
 
     if w:
         rar = RARITY[w[0]]
@@ -2184,7 +2267,7 @@ def game_card(g, ctx):
             d = dur(v, ctx["durs"])
             vid_btns.append(f"<a class='cbtn main' href='{yt_url(v)}' target='_blank'>▶ Résumé{' · ' + d if d else ''}</a>")
         else:
-            vid_btns.append(f"<a class='cbtn ghost' href='{yt_search_url(g)}' target='_blank' title='Pas encore trouvé : recherche sur YouTube'>🔎 Résumé</a>")
+            vid_btns.append(f"<a class='cbtn ghost' href='{yt_search_url(g)}' target='_blank' title='Pas de résumé visible dans ton pays pour l’instant : recherche sur YouTube'>🔎 Chercher un résumé</a>")
         if x:
             d = dur(x, ctx["durs"])
             vid_btns.append(f"<a class='cbtn fr' href='{yt_url(x)}' target='_blank'><span class='frf'></span> NBA Extra{' · ' + d if d else ''}</a>")
@@ -2193,11 +2276,11 @@ def game_card(g, ctx):
     art = f"<label for='o{gid}' class='cart' title='Avant-match complet'>{art}</label>" if not played else f"<div class='cart'>{art}</div>"
     prev = "<ul class='cprev'>" + "".join(f"<li>{esc(p)}</li>" for p in shown[:3]) + "</ul>" if shown else ""
     more = "Stats et détails ›" if played else "Avant-match complet ›"
-    face = (f"<div class='card {rar}'><div class='ci' style='--ca:{esc(ta['color'])};--ch:{esc(th['color'])}'>"
+    face = (f"<div class='card {rar}'><div class='ci' style='--ca:{esc(ca)};--ch:{esc(ch)}'>"
             f"<div class='ctop'><div class='chips'>{''.join(chips)}</div>"
             + (f"<span class='cpill'>{esc(when)}</span>" if played and when else "") + "</div>"
             f"{art}"
-            f"<div class='cname'><b>{esc(ta['name'])}</b>{clock}<b class='r'>{esc(th['name'])}</b></div>"
+            f"<div class='cname'><b class='{name_cls(ta)}'>{esc(ta['name'])}</b>{clock}<b class='r {name_cls(th)}'>{esc(th['name'])}</b></div>"
             f"<div class='info'>{prev}<div class='cfoot'>{''.join(vid_btns[:2])}"
             f"<label for='o{gid}' class='lnk'>{more}</label></div></div></div></div>")
 
@@ -2228,7 +2311,7 @@ def game_card(g, ctx):
         parts.append(f"<div class='sec'>Feuille de match</div><div class='in'>{box_html(g, summ)}</div>")
         stats = f"<div class='panel-s'>{''.join(parts)}</div>"
     fiche = (f"<div class='fiche{' post' if played else ''}'><label for='o{gid}' class='fbg' title='Fermer'></label><div class='fbox'>"
-             f"<div class='fhead {rar}' style='--ca:{esc(ta['color'])};--ch:{esc(th['color'])}'>"
+             f"<div class='fhead {rar}' style='--ca:{esc(ca)};--ch:{esc(ch)}'>"
              f"<label for='o{gid}' class='fx' title='Fermer'>✕</label>"
              f"<div class='frow'><div class='fteam'>{disc(a['id'], 'fd')}<div><b>{esc(ta['name'])}</b><small>{esc(rec(a))} · extérieur</small></div></div>"
              f"{real_big or clock}"
@@ -2678,8 +2761,25 @@ def main():
         vids = pool.map(lambda g: game_videos(g, nba_vids, extra_vids) if g["state"] == "post" else (None, None), games)
         ctx["vids"] = dict(zip([g["id"] for g in games], vids))
     ctx["recap"], ctx["show"] = night_videos(day, nba_vids, extra_vids)
+    # Vidéos bloquées dans le pays (résumés NBA en France) : on les remplace par un autre résumé qui passe
+    country = "FR" if zone == "Paris" else "CA"
     found = [v for pair in ctx["vids"].values() for v in pair if v] + [v for v in (ctx["recap"], ctx["show"]) if v]
-    ctx["durs"] = video_durations(tuple(sorted({v["id"] for v in found})))
+    info = video_info(tuple(sorted({v["id"] for v in found})))
+    if info:
+        need = [g for g in games if g["state"] == "post" and not playable(ctx["vids"][g["id"]][0], info, country)]
+        with ThreadPoolExecutor(8) as pool:
+            cands = dict(zip([g["id"] for g in need], pool.map(lambda g: alt_video(g, {v["id"] for v in ctx["vids"][g["id"]] if v}), need)))
+        more = video_info(tuple(sorted({v["id"] for c in cands.values() for v in c}))) if cands else {}
+        info = {**info, **more}
+        for g in need:
+            alt = next((v for v in cands.get(g["id"], []) if v["id"] in info and playable(v, info, country)), None)
+            nba, extra = ctx["vids"][g["id"]]
+            ctx["vids"][g["id"]] = (alt, extra if playable(extra, info, country) else None)
+        for k in ("recap", "show"):
+            if ctx[k] and not playable(ctx[k], info, country):
+                ctx[k] = None
+    ctx["durs"] = {k: v["mins"] for k, v in info.items() if v["mins"]} or video_durations(tuple(sorted({v["id"] for v in found})))
+    ctx["yt_key"] = bool(_secret("youtube", "api_key", ""))
 
     st.markdown(night_html(day, games, ctx, today), unsafe_allow_html=True)
     if not games:

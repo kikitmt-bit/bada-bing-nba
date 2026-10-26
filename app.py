@@ -23,7 +23,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-APP_VERSION = "2026-10-v013"
+APP_VERSION = "2026-10-v014"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -35,6 +35,7 @@ ZONES = {"Paris": ZoneInfo("Europe/Paris"), "Montréal": ZoneInfo("America/Toron
 
 NBA_CHANNEL = "UCWJ2lWNubArHWmf3FIHbfcQ"    # chaîne officielle NBA
 EXTRA_CHANNEL = "UCcMGbm0EYWh1SZZ8MsM75tw"  # NBA Extra - beIN SPORTS France
+GT_CHANNEL = "UC0LrZO9wORIqn_aRJtKdgfA"     # GAMETIME HIGHLIGHTS (@thegametimehighlights) : source principale des résumés (choix de Kiki, 26/10)
 YOUTUBE_FEED_URL = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
 YOUTUBE_PLAYLIST_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
 
@@ -503,7 +504,7 @@ def video_watcher():
     def tick():
         key = str(_secret("youtube", "api_key", ""))
         limit = datetime.now(timezone.utc) - timedelta(days=10)
-        for ch in (NBA_CHANNEL, EXTRA_CHANNEL):
+        for ch in (NBA_CHANNEL, EXTRA_CHANNEL, GT_CHANNEL):
             box = seen.setdefault(ch, {})
             try:
                 r = SESSION.get(YOUTUBE_FEED_URL.format(ch), timeout=8)
@@ -532,9 +533,11 @@ def video_watcher():
 
 
 def videos_since(day):
+    """(vidéos NBA, vidéos NBA Extra) ; les vidéos GAMETIME HIGHLIGHTS sont rangées avec celles de la NBA, marquées « gt »."""
     oldest = (datetime.combine(day, datetime.min.time()) - timedelta(days=1)).isoformat()
     b = bucket(600)
-    return channel_videos(NBA_CHANNEL, oldest, b), channel_videos(EXTRA_CHANNEL, oldest, b)
+    gt = [dict(v, gt=True) for v in channel_videos(GT_CHANNEL, oldest, b)]
+    return channel_videos(NBA_CHANNEL, oldest, b) + gt, channel_videos(EXTRA_CHANNEL, oldest, b)
 
 
 def _names(tid):
@@ -567,7 +570,8 @@ def _in_window(v, pub, tip, days):
 
 
 def nba_video(videos, g):
-    """Résumé officiel NBA : « KINGS at CLIPPERS | FULL GAME HIGHLIGHTS | October 21, 2026 »."""
+    """Résumé du match : GAMETIME HIGHLIGHTS d'abord (« Utah Jazz vs New Orleans Pelicans Full Game Highlights - October 23, 2026 |
+    NBA Season »), sinon le résumé officiel NBA (« KINGS at CLIPPERS | FULL GAME HIGHLIGHTS | October 21, 2026 »)."""
     tip = parse_dt(g["utc"])
     best = None
     for v in videos:
@@ -582,7 +586,7 @@ def nba_video(videos, g):
         pub = parse_dt(v["published"])
         if not _in_window(v, pub, tip, 2):
             continue
-        key = (0 if "full game highlights" in t else 1, pub)
+        key = (0 if v.get("gt") else 1, 0 if "full game highlights" in t else 1, pub)
         if best is None or key < best[0]:
             best = (key, v)
     return best[1] if best else None
@@ -719,12 +723,21 @@ def remember_video(key, v):
 def game_videos(g, nba_vids, extra_vids):
     """(résumé NBA, résumé NBA Extra) d'un match terminé : listes des chaînes, puis mémoire, puis recherche YouTube."""
     store = found_videos()
-    nba = nba_video(nba_vids, g) or store.get(f"nba_{g['id']}")
+    nba = nba_video(nba_vids, g)
+    if not (nba and nba.get("gt")) and store.get(f"gt_{g['id']}"):
+        nba = dict(store[f"gt_{g['id']}"], gt=True)
+    nba = nba or store.get(f"nba_{g['id']}")
     extra = extra_video(extra_vids, g) or store.get(f"x_{g['id']}")
+    when = f"{MONTHS_EN[g['day'].month - 1].title()} {g['day'].day}, {g['day'].year}"
+    if g["state"] == "post" and not (nba and nba.get("gt")):
+        tfa, tfh = team(g["away"]["id"])["full"], team(g["home"]["id"])["full"]
+        found = [dict(v, gt=True) for v in _from(GT_CHANNEL, yt_search(f"{tfa} vs {tfh} Full Game Highlights {when} GAMETIME HIGHLIGHTS"))]
+        nba = nba_video(found, g) or nba
     if g["state"] == "post" and not nba:
         ta, th = team(g["away"]["id"])["name"], team(g["home"]["id"])["name"]
-        q = f"{ta} at {th} full game highlights {MONTHS_EN[g['day'].month - 1].title()} {g['day'].day}, {g['day'].year}"
-        nba = nba_video(_from(NBA_CHANNEL, yt_search(q)), g)
+        nba = nba_video(_from(NBA_CHANNEL, yt_search(f"{ta} at {th} full game highlights {when}")), g)
+    if nba and nba.get("gt"):
+        remember_video(f"gt_{g['id']}", nba)
     tip = parse_dt(g["utc"])
     if g["state"] == "post" and not extra and tip and datetime.now(timezone.utc) - tip < timedelta(days=4):
         ta, th = team(g["away"]["id"])["name"], team(g["home"]["id"])["name"]

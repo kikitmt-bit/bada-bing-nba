@@ -11,6 +11,11 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - **Mise à jour automatique** (`auto_refresh`) : Streamlit ne rafraîchit pas une page ouverte, donc la page se recharge quand on revient
   sur l'onglet après plus de 3 min, et toutes les 90 s pendant les matchs (sauf si un panneau est ouvert). Si ESPN ne répond pas,
   `day_games` reprend la dernière liste reçue (`.cache/sb_<jour>.json`) au lieu d'effacer les scores.
+- **Stats d'un match terminé (v019)** : juste après la fin, ESPN renvoie parfois un résumé en retard (box score et actions arrêtés
+  au 1er quart-temps). `final_summary` ne le garde pour de bon (mémoire + `.cache/sum_<id>.json`) que s'il est complet
+  (`summary_complete` : points du box score = score final, dernière action = score final) ; sinon il redemande à ESPN toutes les 2 min.
+  Le journal fantasy n'enregistre que des résumés complets et efface les matchs incomplets déjà enregistrés (`F.partial_game`,
+  moins de 400 minutes jouées au total) pour les reprendre ; l'analyse écrite par Claude attend aussi un résumé complet.
 - **Tableau des scores (v013, choix de Kiki après comparaison des maquettes, alternative D)** : la nuit s'affiche en LIGNES de match
   (`game_card` → `.mrow`, 2 colonnes sur PC, 1 sur téléphone avec les équipes l'une sous l'autre et l'afficheur à droite) : bandeau
   vertical de rareté à gauche, logo dans une pastille à la couleur de l'équipe avec halo, ville en petit + nom en grand.
@@ -20,7 +25,8 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   **Score (v016, demande de Kiki : « oublie l'afficheur, plus grand, plus intégré »)** : un grand chiffre (Barlow Condensed) à côté
   de chaque équipe (`.sn`), « Final » / « ● En direct » au centre (`.sm`) ; caché = deux cases hachurées « ? » + « 👁 voir le score »,
   un clic sur l'une révèle (`.tg-s`) ; le perdant est grisé (`.sc-real.l`). Avant le match : l'heure en grand au centre. Sur téléphone :
-  chaque score à droite de son équipe. Carte de la nuit : score sous les noms (`.cscore`) ; fiche : `.fsc` (révélé d'office).
+  chaque score à droite de son équipe. Carte de la nuit : score sous les noms (`.cscore`) ; fiche : `.fsc` (révélé d'office ; v019 : logo au-dessus du nom de chaque équipe,
+  score en très grand au centre sans bloc noir, « Final » en pastille, pour ne plus empiéter sur les noms).
   Bilan d'avant-match entre parenthèses à côté du nom (`team_record`, « Grizzlies (2-0) »). Puis, sur une ligne, L'INFO CLÉ
   d'avant-match (v017, `key_fact`, une seule, la plus importante, choisie par priorité) : play-offs, star absente (meneur ESPN en
   points/rebonds/passes), retour de blessure (absent au match précédent, mémorisé dans `.cache/outs_<équipe>.json` par `remember_outs` :
@@ -110,6 +116,7 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - `python tests/test_sans_spoil.py` : vérifie qu'une carte au score caché ne trahit rien (score, « prolongation », « remontée »…). À lancer avant chaque envoi.
 - `python tests/scenarios.py` : note d'intérêt de matchs inventés, pour régler les seuils.
 - `python tests/page_complete.py` : exécute toute la page (Nuit et Semaine) avec un faux Streamlit, pour attraper les erreurs.
+- `python tests/test_resume_complet.py` : un résumé ESPN arrêté en plein match n'est pas gardé comme définitif.
 - `python tests/test_fantasy.py` : règles du « 5 de la semaine » ; `python tests/page_fantasy.py` : la page du jeu avec une saison inventée.
 
 

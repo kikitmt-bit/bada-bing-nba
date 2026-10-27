@@ -25,7 +25,7 @@ import streamlit.components.v1 as components
 
 import fantasy as F
 
-APP_VERSION = "2026-10-v018"
+APP_VERSION = "2026-10-v019"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -403,14 +403,51 @@ def summary(event_id, _bucket):
     return out
 
 
+def summary_complete(s, home_score, away_score):
+    """Le résumé ESPN couvre-t-il tout le match ? Juste après la fin, ESPN renvoie parfois une version en retard
+    (actions et box score arrêtés au 1er quart-temps…) : on vérifie que les points du box score font le score final
+    et que la dernière action le porte aussi."""
+    if not s or not any(s.get("box") or {}) or home_score is None or away_score is None:
+        return False
+    try:
+        pts = sum(int(v) if str(v := r["stats"].get("PTS", "")).isdigit() else 0 for rows in s["box"].values() for r in rows if not r["dnp"])
+        if pts != int(home_score) + int(away_score):
+            return False
+        if s.get("plays"):
+            last = s["plays"][-1]
+            return int(last[3]) == int(home_score) and int(last[2]) == int(away_score)
+    except (TypeError, ValueError, KeyError):
+        return False
+    return True
+
+
+@st.cache_resource(show_spinner=False)
+def _final_summaries():
+    """Résumés COMPLETS des matchs terminés (ils ne changent plus) : {id match: résumé}."""
+    return {}
+
+
+def final_summary(event_id, home_score, away_score):
+    """Résumé d'un match terminé. Gardé pour de bon seulement s'il est complet (mémoire + disque) ; sinon on redemande
+    à ESPN toutes les 2 minutes, au lieu de garder 30 jours une version arrêtée en plein match."""
+    done = _final_summaries()
+    s = done.get(event_id) or disk_get(f"sum_{event_id}.json")
+    if summary_complete(s, home_score, away_score):
+        done[event_id] = s
+        return s
+    s = summary(event_id, bucket(120))
+    if summary_complete(s, home_score, away_score):
+        if len(done) > 600:
+            done.clear()
+        done[event_id] = s
+        disk_put(f"sum_{event_id}.json", s)
+    return s
+
+
 def game_summary(g):
     if g["state"] == "post":
-        b = bucket(86400 * 30)
-    elif g["state"] == "in":
-        b = bucket(30)
-    else:
-        b = bucket(1800)
-    s = summary(g["id"], b)
+        return final_summary(g["id"], g["home"]["score"], g["away"]["score"])
+    s = summary(g["id"], bucket(30) if g["state"] == "in" else bucket(1800))
     if s and g["state"] == "pre":
         # Garder ce qu'on sait avant le match : la preview sans spoil s'en servira une fois le match joué
         disk_put(f"pre_{g['id']}.json", {"injuries": s["injuries"], "line": s["line"], "home_pct": s["home_pct"],
@@ -1965,6 +2002,30 @@ label.mt {cursor:pointer;}
   .fsc .sn {font-size:2.4rem; height:52px; min-width:60px;}
   .cname .score .smid {display:none;}
 }
+/* ===== v019 : en-tête de la fiche. Logo au-dessus du nom, score en grand au centre, sans bloc noir ===== */
+.frow {grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:18px; padding:0 44px;}
+.fteam, .fteam.r {flex-direction:column; justify-content:flex-start; text-align:center; gap:10px;}
+.fteam.r {flex-direction:column-reverse;}
+.fteam b {font-size:2rem; overflow-wrap:anywhere;} .fteam b.sm {font-size:1.8rem;} .fteam b.xs {font-size:1.6rem;}
+.fsc {gap:0; padding:0; background:none; border-radius:0;}
+.fsc .sn {font-size:4.6rem; height:auto; min-width:96px; text-shadow:0 3px 14px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.5);}
+.fsc .sc-real.l {color:rgba(255,255,255,.55);}
+.fsc .smid {min-width:0; padding:0 10px; cursor:default;}
+.fsc .smid small {color:#fff; background:rgba(8,10,16,.45); border:1px solid rgba(255,255,255,.22); padding:4px 10px; border-radius:999px;
+                  letter-spacing:.16em; backdrop-filter:blur(4px);}
+.fsc .smid.live small {color:#fff; background:rgba(214,40,40,.8); border-color:transparent;}
+.fhead .score {justify-content:center;}
+@media (max-width: 640px) {
+  .frow {grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:4px; padding:30px 0 0;}
+  .fteam, .fteam.r {flex-direction:column; text-align:center; gap:6px;}
+  .fteam.r {flex-direction:column-reverse;}
+  .fteam b {font-size:1.25rem; white-space:nowrap; overflow-wrap:normal;} .fteam b.sm {font-size:1.08rem;} .fteam b.xs {font-size:.95rem;}
+  .fteam small {font-size:.64rem; padding:2px 6px;}
+  .disc.fd {width:56px; height:56px;} .disc.fd img {width:40px; height:40px;}
+  .fsc .sn {font-size:2.3rem; min-width:0; padding:0 2px;}
+  .fsc .smid {padding:0 2px;} .fsc .smid small {font-size:.52rem; padding:2px 5px; letter-spacing:.08em;}
+  .frow .clock, .frow .score {justify-self:center;}
+}
 /* Carte du joueur (zones chaudes) */
 .pm {display:none; position:fixed; inset:0; z-index:1000000; align-items:flex-start; justify-content:center; padding:4vh 14px; overflow-y:auto; box-sizing:border-box;}
 .tgp:checked + .pm {display:flex;}
@@ -2631,7 +2692,7 @@ def game_card(g, ctx, hero=False):
         sm = (f"<label for='s{gid}' class='smid{' live' if live else ''}'><small>{lab}</small>"
               f"<span class='sc-tip'>👁 voir le score</span></label>")
         real_big = (f"<div class='fsc'><span class='sn a'><span class='sc-real{'' if live or win_a else ' l'}'>{'–' if as_ is None else as_}</span></span>"
-                    f"<span class='smid'><small>{lab}</small></span>"
+                    f"<span class='smid{' live' if live else ''}'><small>{lab}</small></span>"
                     f"<span class='sn h'><span class='sc-real{'' if live or not win_a else ' l'}'>{'–' if hs is None else hs}</span></span></div>")
     clock = f"<div class='score'>{sa}{sm}{sh}</div>"
 
@@ -2722,7 +2783,7 @@ def game_card(g, ctx, hero=False):
         parts = [quarters_html(g)]
         if g["state"] == "post" and g["completed"]:
             rp = recap_points(g, summ, ctx["idx"])
-            ai_r = ai_points("recap", g, ai_material(g, summ, rp)) if ctx["ai"] and (summ.get("article") or {}).get("type") == "Recap" else None
+            ai_r = ai_points("recap", g, ai_material(g, summ, rp)) if ctx["ai"] and summary_complete(summ, g["home"]["score"], g["away"]["score"]) and (summ.get("article") or {}).get("type") == "Recap" else None
             parts.append("<div class='sec'>Ce qu'il faut retenir</div><ul class='pts'>" + "".join(f"<li>{esc(p)}</li>" for p in (ai_r or rp)) + "</ul>"
                          + ("<div class='ai'>✨ Écrit par Claude d'après le compte rendu AP</div>" if ai_r else ""))
             if w and w[1]:
@@ -2738,9 +2799,9 @@ def game_card(g, ctx, hero=False):
     fiche = (f"<div class='fiche{' post' if played else ''}'><label for='o{gid}' class='fbg' title='Fermer'></label><div class='fbox'>"
              f"<div class='fhead {rar}' style='--ca:{esc(ca)};--ch:{esc(ch)}'>"
              f"<label for='o{gid}' class='fx' title='Fermer'>✕</label>"
-             f"<div class='frow'><div class='fteam'>{disc(a['id'], 'fd')}<div><b>{esc(ta['name'])}</b><small>{esc(rec(a))} · extérieur</small></div></div>"
+             f"<div class='frow'><div class='fteam'>{disc(a['id'], 'fd')}<div><b class='{name_cls(ta)}'>{esc(ta['name'])}</b><small>{esc(rec(a))} · extérieur</small></div></div>"
              f"{real_big or clock}"
-             f"<div class='fteam r'><div><b>{esc(th['name'])}</b><small>domicile · {esc(rec(h))}</small></div>{disc(h['id'], 'fd')}</div></div>"
+             f"<div class='fteam r'><div><b class='{name_cls(th)}'>{esc(th['name'])}</b><small>domicile · {esc(rec(h))}</small></div>{disc(h['id'], 'fd')}</div></div>"
              f"<div class='fchips'>{''.join(chips)}<span class='cpill'>{esc(when)}{' · ' + venue if venue else ''}</span></div></div>"
              f"<div class='fbody'>" + (f"<div class='facts'>{''.join(vid_btns)}</div>" if vid_btns else "")
              + f"{stats}<div class='sec'>Avant le match</div>{pts_html}<div class='pf'>{form_html(g, idx)}</div></div></div></div>")
@@ -3093,11 +3154,14 @@ def fantasy_log(schedule, today):
     if mem["log"] is None or time.time() - mem["t"] > 600:
         mem["log"], mem["t"] = store.load("log.json", {}), time.time()
     log = mem["log"]
+    for gid in [k for k, v in log.items() if F.partial_game(v)]:
+        del log[gid]                                    # stats incomplètes enregistrées avant v019 : le match sera repris
     todo = [g for g in schedule if g["done"] and g["kind"] == "R" and str(g["id"]) not in log and g["day"] < today][:90]
     if todo:
         with ThreadPoolExecutor(8) as pool:
-            summs = list(pool.map(lambda g: summary(g["id"], bucket(86400 * 30)), todo))
-        added = sum(F.log_game(log, g["id"], g["day"], s) for g, s in zip(todo, summs) if s)
+            summs = list(pool.map(lambda g: final_summary(g["id"], g["hs"], g["as"]), todo))
+        # Un résumé incomplet (ESPN en retard) n'entre pas au journal : le match sera repris à la prochaine visite
+        added = sum(F.log_game(log, g["id"], g["day"], s) for g, s in zip(todo, summs) if summary_complete(s, g["hs"], g["as"]))
         if added:
             store.save("log.json", log, f"Fantasy : {added} matchs ajoutés au journal")
     return log

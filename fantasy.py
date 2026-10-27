@@ -99,6 +99,13 @@ def log_game(log, game_id, day, summary):
     return bool(rows)
 
 
+def partial_game(entry):
+    """Match enregistré avec des stats arrêtées en cours de route (résumé ESPN en retard) : un match complet totalise
+    environ 480 minutes de jeu (2 équipes × 5 joueurs × 48 min). Sans minutes du tout, on ne peut pas juger."""
+    total = sum(row[1] for row in entry["p"].values())
+    return 0 < total < 400
+
+
 def player_games(log, until=None):
     """{id joueur: [(jour, pts, minutes, titulaire, équipe), ...]} trié, jusqu'au jour `until` exclu."""
     out = defaultdict(list)

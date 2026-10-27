@@ -80,10 +80,11 @@ for d in range(20, 26):
     for a, h in (("0", "1"), ("2", "3"), ("4", "5")):
         gid += 1
         box = {t: [{"id": p, "name": roster[p]["name"], "short": "", "starter": int(p[-1]) < 5, "dnp": False, "reason": "",
-                    "stats": {"MIN": str(random.randint(8, 38)), "PTS": str(int(level[p] * random.uniform(.5, 1.5))), "REB": "4", "AST": "3",
+                    "stats": {"MIN": str(random.randint(20, 28)), "PTS": str(int(level[p] * random.uniform(.5, 1.5))), "REB": "4", "AST": "3",
                               "STL": "1", "BLK": "0", "TO": "2"}} for p in roster if roster[p]["team"] == t] for t in (a, h)}
         summaries[gid] = {"box": box}
-        schedule.append({"id": str(gid), "day": day, "home": h, "away": a, "hs": 100, "as": 90, "done": True, "kind": "R"})
+        pts = {t: sum(int(r["stats"]["PTS"]) for r in box[t]) for t in (a, h)}   # score final = total du box score (résumé complet)
+        schedule.append({"id": str(gid), "day": day, "home": h, "away": a, "hs": pts[h], "as": pts[a], "done": True, "kind": "R"})
 app["summary"] = lambda i, b: summaries.get(int(i))
 shutil.rmtree(os.path.join(os.path.dirname(__file__), ".cache_test"), ignore_errors=True)
 

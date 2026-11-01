@@ -96,7 +96,7 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   Tester ce cas en local : `BB_SANS_COOKIES=1` (le serveur ignore les cookies, comme sur Streamlit Cloud).
 - Bouton « Révéler le récap de la nuit » de la page Matchs : pastille sobre (v025, plus de grande barre dorée animée).
 - **La nuit en bref (v026-v027, `night_story`, `story_html`)** : v027 = liste de faits avec icône (🎬 ⚖️ ⭐ 😮 🔄 💥 📈 📊, jusqu'à 5,
-  dont le classement dans le brief via `moves`) ; à côté, « 🏆 Le MVP de la nuit » (meilleur `game_score` : photo, équipe,
+  dont le classement dans le brief via `moves` ; v028 : sans la ligne MVP dans le brief, `mvp=False`) ; à côté, « 💥 Le MVP et les grosses perfs » : le MVP de la nuit (meilleur `game_score` : photo, équipe,
   adversaire, 9 cases de stats), puis les grosses perfs (2e à 7e). Avant v027 : 2 à 4 phrases (match de la nuit selon l'indice, sinon le plus serré ;
   la perf ; la surprise (favori de 5 pts ou plus battu) ou la remontée de 15 pts ou plus ou la raclée ; une série de 5+), accordées
   (« le Magic bat », « les Celtics battent » : `SINGULIER`, `les`, `vb`). Réécrites en paragraphe par Claude si `[anthropic]`
@@ -178,7 +178,10 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   (résumé vidéo `v`, NBA Extra `x`/`X`, résumé de la nuit `R`, stats `s`, récap révélé `n`, score `r`, carte de tirs `p`…) et durée
   dans `nba_hb` : relus au chargement suivant (Streamlit ne lit les cookies qu'à l'ouverture). Tampon envoyé toutes les 5 min sur
   GitHub (`stats/AAAA-MM.json`, branche `data`, mêmes secrets `[github]` que le jeu), sinon disque. Les appareils qui ont ouvert la
-  page admin sont marqués (cookie `nba_me` + liste `_moi` dans `stats/names.json`) et exclus des chiffres par défaut.
+  page admin sont marqués (cookie `nba_me` + liste `_moi` dans `stats/names.json`). v028 : qui est qui (`person` dans `admin_page`) :
+  nom donné (page admin ou lien personnel `?qui=tom|busta|kiki`, `WHO`, enregistré par `finish_run`), sinon Kiki = appareils de
+  l'admin, Busta = fuseau d'Amérique (Montréal), « Tom ? » = appareil français revenu au moins 2 jours. Kiki est compté (interrupteur
+  « Exclure mes visites »). Une arrivée notée avec un n° provisoire passe au vrai n° quand `restore` le donne (`apply_restore`).
   v022 : `nba_id` écrit dès le début de la page et « arrivée » comptée seulement en fin de page (avant : chaque chargement
   interrompu créait un faux visiteur). Noms donnés aux visiteurs : `stats/names.json` ; même nom = une seule personne.
 

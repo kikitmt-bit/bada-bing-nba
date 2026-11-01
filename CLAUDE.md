@@ -60,7 +60,9 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - **Pas de spoil dans les chiffres (`spoil_cut`)** : bilans, classement, séries comptent les matchs AVANT la dernière nuit jouée tant
   que l'appareil ne l'a pas ouverte (cookie `nba_vues`) ; interrupteur « Inclure la dernière nuit » ; tout est à jour si elle a été
   ouverte ou avec « Toujours montrer les scores ».
-- **Où regarder (v024, `watch_on`, `watch_badge`)** : selon le pays des réglages, beIN SPORTS (FR) ou TSN / Sportsnet / RDS / TVA Sports
+- **Où regarder : RETIRÉ de l'affichage en v027** (demande de Kiki : pas à jour, affichait presque toujours « NBA League Pass »).
+  Le code reste (`watch_on`, `watch_badge`, `nba_schedule_tv`) mais n'est plus appelé. Le pays des réglages sert à « nos joueurs »
+  et à NBA Extra. Ancienne description (v024) : selon le pays des réglages, beIN SPORTS (FR) ou TSN / Sportsnet / RDS / TVA Sports
   (CA) quand une source le dit (ESPN `broadcasts` + `geoBroadcasts` → `tv_all`, et calendrier officiel `cdn.nba.com` scheduleLeagueV2,
   `nba_schedule_tv`, sigles NBA via `NBA_TRI`), sinon « NBA League Pass ». En doré quand la chaîne est connue. Sources non vérifiées
   depuis l'environnement de test (bloquées) : à surveiller en ligne.
@@ -93,7 +95,9 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   `apply_restore` (une fois par visite, `ss.restored`). Le n° d'appareil n'est écrit que s'il n'existe pas (`only_if_missing`).
   Tester ce cas en local : `BB_SANS_COOKIES=1` (le serveur ignore les cookies, comme sur Streamlit Cloud).
 - Bouton « Révéler le récap de la nuit » de la page Matchs : pastille sobre (v025, plus de grande barre dorée animée).
-- **La nuit en bref (v026, `night_story`, `story_html`)** : 2 à 4 phrases (match de la nuit selon l'indice, sinon le plus serré ;
+- **La nuit en bref (v026-v027, `night_story`, `story_html`)** : v027 = liste de faits avec icône (🎬 ⚖️ ⭐ 😮 🔄 💥 📈 📊, jusqu'à 5,
+  dont le classement dans le brief via `moves`) ; à côté, « 🏆 Le MVP de la nuit » (meilleur `game_score` : photo, équipe,
+  adversaire, 9 cases de stats), puis les grosses perfs (2e à 7e). Avant v027 : 2 à 4 phrases (match de la nuit selon l'indice, sinon le plus serré ;
   la perf ; la surprise (favori de 5 pts ou plus battu) ou la remontée de 15 pts ou plus ou la raclée ; une série de 5+), accordées
   (« le Magic bat », « les Celtics battent » : `SINGULIER`, `les`, `vb`). Réécrites en paragraphe par Claude si `[anthropic]`
   (`ai_night`, gardé dans `.cache/ai_night_<jour>.json`, une fois la nuit finie). Remplace les tuiles surprise / plus serré /
@@ -199,3 +203,7 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 
 Scripts invisibles (cookies, rechargement, clics) : `run_js` → `st.iframe` (Streamlit récent) sinon `components.html` (retiré bientôt).
 Le code doit rester lisible par Python 3.11 (pas de f-strings imbriquées avec les mêmes guillemets) : `python3.11 -c "import ast; ast.parse(open('app.py').read())"`.
+
+**Règle d'affichage (v027, demande de Kiki)** : une info courte = UNE ligne. Heures, noms de joueurs et d'équipes, dates, pastilles :
+`white-space:nowrap` (+ `text-overflow:ellipsis` si la place manque), jamais coupés au milieu (« 21h3 / 0 », « Wembanyam / a »).
+Dans les listes de joueurs, la ligne de stats va SOUS le nom (`.bs .sl`), pas à côté. Les enfants de grilles ont `min-width:0`.

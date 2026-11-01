@@ -32,7 +32,7 @@ END = date(2027, 4, 11)
 FIRST = ["Jalen", "Tyrese", "Luka", "Jayson", "Anthony", "Devin", "Victor", "Shai", "Donovan", "Trae", "Paolo", "Cade", "Zion",
          "Jaylen", "Kevin", "Stephen", "LaMelo", "Scottie", "Franz", "Chet"]
 LAST = ["Martin", "Dubois", "Johnson", "Williams", "Brown", "Davis", "Moore", "Taylor", "Thomas", "Jackson", "White", "Harris",
-        "Clark", "Lewis", "Walker", "Young", "Allen", "King", "Wright", "Scott"]
+        "Clark", "Lewis", "Walker", "Young", "Allen", "Wembanyama", "Antetokounmpo", "Gilgeous-Alexander"]
 
 
 def logo_uri(tid):

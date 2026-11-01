@@ -4,3 +4,7 @@ primaryColor = "#F58426"
 
 [server]
 headless = true
+
+[client]
+# Menu ⋮ réduit au minimum : les visiteurs ne voient pas les options de développeur de Streamlit
+toolbarMode = "minimal"

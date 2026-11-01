@@ -54,10 +54,14 @@ app["night_videos"] = lambda d, a, b: (None, None)
 app["video_durations"] = lambda ids: {}
 app["set_cookie"] = lambda n, v: out.append(f"COOKIE {n}={v}")
 app["nba_schedule_tv"] = lambda: {}
+app["league_players"] = lambda: {}
+app["league_injuries"] = lambda: []
+app["players_db"] = lambda: {"log": {"g": {}, "n": {}, "days": []}, "v": 1, "store": None, "memo": {}}
+app["team_roster"] = lambda tid: []
 app["auto_refresh"] = lambda games, *a: out.append("AUTO")
 for vue in ("nuit", "semaine"):
     out.clear(); st.session_state.clear(); st.query_params.clear()
-    if vue == "semaine": st.query_params["vue"] = "semaine"
+    st.query_params["vue"] = vue
     app["main"]()
     html = "\n".join(o for o in out if isinstance(o, str))
     print(vue, "OK", len(html), "car. ·", [o for o in out if str(o).startswith("COOKIE")], "· carte(s):", html.count("class='gc'"),
@@ -103,5 +107,5 @@ for vue, extra in (("brief", {}), ("joueurs", {"rub": "meilleurs"}), ("joueurs",
     st.query_params.update({"vue": vue, **extra})
     app["main"]()
     html = "\n".join(o for o in out if isinstance(o, str))
-    print(vue, extra, "OK", len(html), "car. · brief:", "class='brev'" in html, "· fiche:", "class='ph'" in html,
+    print(vue, extra, "OK", len(html), "car. · brief:", "class='bt-grid'" in html, "· fiche:", "class='ph'" in html,
           "· meilleurs:", "class='tbox ld'" in html, "· nos joueurs:", "class='fr-g'" in html, "· infirmerie:", "class='ij-g'" in html)

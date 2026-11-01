@@ -28,7 +28,7 @@ import streamlit.components.v1 as components
 import fantasy as F
 import stats as S
 
-APP_VERSION = "2026-11-v025"
+APP_VERSION = "2026-11-v026"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -2875,6 +2875,136 @@ def night_essentials(day, games, ctx):
     return safe, facts[:7]
 
 
+SINGULIER = {"Magic", "Heat", "Jazz", "Thunder"}  # « le Magic », mais « les Celtics »
+
+
+def les(tid, cap=False):
+    n = team(tid)["name"]
+    art = "le" if n in SINGULIER else "les"
+    return f"{art.capitalize() if cap else art} {n}"
+
+
+def vb(tid, sing, plur):
+    return sing if team(tid)["name"] in SINGULIER else plur
+
+
+def night_story(day, games, summs, idx, watch):
+    """« La nuit en bref » : 2 à 4 phrases, le match de la nuit, la grosse perf, la surprise ou la remontée, une série."""
+    done = [g for g in games if g["state"] == "post" and g["home"]["score"] is not None and g["away"]["score"] is not None]
+    if not done:
+        return []
+
+    def res(g):
+        h, a = g["home"], g["away"]
+        return (h, a) if h["score"] > a["score"] else (a, h)
+    out, used = [], set()
+    best = max(done, key=lambda g: (watch.get(g["id"]) or (0, 0, -99))[2]) if watch else None
+    if best and (watch.get(best["id"]) or (0,))[0] >= 1:
+        w, l = res(best)
+        ot = max(len(best["home"]["lines"]), len(best["away"]["lines"])) > 4
+        margin = w["score"] - l["score"]
+        out.append(f"Le match de la nuit : {les(w['id'])} {vb(w['id'], 'bat', 'battent')} {les(l['id'])} {w['score']}-{l['score']}"
+                   + (" après prolongation" if ot else (", au bout du suspense" if margin <= 3 else "")) + ".")
+        used.add(best["id"])
+    else:  # sans indice « à voir » : le match le plus serré
+        tight = min(done, key=lambda g: abs(g["home"]["score"] - g["away"]["score"]))
+        w, l = res(tight)
+        if w["score"] - l["score"] <= 5:
+            ot = max(len(tight["home"]["lines"]), len(tight["away"]["lines"])) > 4
+            out.append(f"Le match le plus serré : {les(w['id'])} {vb(w['id'], 'bat', 'battent')} {les(l['id'])} {w['score']}-{l['score']}"
+                       + (" après prolongation" if ot else "") + ".")
+            used.add(tight["id"])
+    perfs = []
+    for g in done:
+        for tid, rows in ((summs.get(g["id"]) or {}).get("box") or {}).items():
+            for r in rows:
+                if not r.get("dnp") and r.get("stats"):
+                    perfs.append((game_score(r["stats"]), r, tid))
+    if perfs:
+        _, r, tid = max(perfs, key=lambda x: x[0])
+        out.append(f"La perf de la nuit est signée {r['name']} ({team(tid)['name']}) : {stat_line(r['stats'])}.")
+    upsets = []
+    for g in done:
+        if g["id"] in used:
+            continue
+        pre = pre_info(g, summs.get(g["id"])) or {}
+        m = re.match(r"([A-Z]{2,4})\s*-([\d.]+)", pre.get("line") or "")
+        if m:
+            w, l = res(g)
+            if team(l["id"])["abbr"] == m.group(1) and float(m.group(2)) >= 5:
+                upsets.append((float(m.group(2)), g, w, l))
+    comebacks = []
+    for g in done:
+        s = summs.get(g["id"])
+        if s and g["id"] not in used:
+            _, max_h, max_a, _ = flow(s)
+            w, l = res(g)
+            deficit = max_a if w is g["home"] else max_h
+            if deficit >= 15:
+                comebacks.append((deficit, g, w, l))
+    if upsets:
+        _, g, w, l = max(upsets, key=lambda x: x[0])
+        out.append(f"La surprise : {les(w['id'])} {vb(w['id'], 's’impose', 's’imposent')} face {'au' if team(l['id'])['name'] in SINGULIER else 'aux'} "
+                   f"{team(l['id'])['name']} ({w['score']}-{l['score']}), pourtant {vb(l['id'], 'largement favori', 'largement favoris')}.")
+    elif comebacks:
+        d, g, w, l = max(comebacks, key=lambda x: x[0])
+        out.append(f"{les(w['id'], True)} {vb(w['id'], 'est revenu', 'sont revenus')} de {d} points pour battre {les(l['id'])} ({w['score']}-{l['score']}).")
+    else:
+        big = max((g for g in done if g["id"] not in used), key=lambda g: abs(g["home"]["score"] - g["away"]["score"]), default=None)
+        if big:
+            w, l = res(big)
+            if w["score"] - l["score"] >= 25:
+                out.append(f"Soirée à oublier pour {les(l['id'])}, {vb(l['id'], 'balayé', 'balayés')} par {les(w['id'])} ({w['score']}-{l['score']}).")
+    streaks = []
+    for g in done:
+        for side in ("home", "away"):
+            f = team_form(idx, g[side]["id"], day + timedelta(days=1), g["season"])
+            if any(m[0] == day for m in f["last"]) and (f["streak"] >= 5 or f["streak"] <= -6):
+                streaks.append((abs(f["streak"]), g[side]["id"], f["streak"]))
+    if streaks:
+        _, tid, s_ = max(streaks)
+        out.append(f"{les(tid, True)} {vb(tid, 'enchaîne', 'enchaînent')} {'une ' + str(s_) + 'e victoire' if s_ > 0 else 'une ' + str(-s_) + 'e défaite'} de suite.")
+    return out[:4]
+
+
+def ai_night(day, sentences, games):
+    """Le même résumé réécrit par Claude en un petit paragraphe (si une clé est fournie), une fois la nuit terminée."""
+    key = str(_secret("anthropic", "api_key", ""))
+    if not key or not sentences or any(g["state"] != "post" for g in games):
+        return None
+    name = f"ai_night_{day.isoformat()}.json"
+    cached = disk_get(name)
+    if cached:
+        return cached.get("text")
+    results = "; ".join(f"{team(g['away']['id'])['full']} {g['away']['score']} - {g['home']['score']} {team(g['home']['id'])['full']}" for g in games)
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=key)
+        resp = client.messages.create(
+            model=str(_secret("anthropic", "model", AI_MODEL_DEFAULT)), max_tokens=1500, output_config={"effort": "low"},
+            system="Tu écris pour un site français qui suit la NBA. Ton vivant mais sobre, phrases courtes, aucun fait inventé.",
+            messages=[{"role": "user", "content": "Écris un paragraphe de 3 ou 4 phrases qui résume cette nuit de NBA, uniquement à partir de ces "
+                       "infos (n'ajoute rien d'autre). Réponds seulement par le paragraphe.\n\nFaits : " + " ".join(sentences)
+                       + "\n\nRésultats : " + results}])
+        if resp.stop_reason == "refusal":
+            return None
+        text = " ".join(b.text for b in resp.content if b.type == "text").strip()
+        if text:
+            disk_put(name, {"text": text})
+        return text or None
+    except Exception as e:
+        log.warning("Claude indisponible (%s)", type(e).__name__)
+        return None
+
+
+def story_html(day, games, summs, idx, watch):
+    sentences = night_story(day, games, summs, idx, watch)
+    text = ai_night(day, sentences, games)
+    if text:
+        return f"<p class='story'>{esc(text)}</p>"
+    return "<p class='story'>" + " ".join(esc(x) for x in sentences) + "</p>" if sentences else ""
+
+
 def night_short_title(day, zone):
     """« Nuit du sam. 24 au dim. 25 oct. » (Paris) ou « Samedi 24 octobre » (Montréal)."""
     if zone != "Paris":
@@ -2924,14 +3054,8 @@ def night_html(day, games, ctx, today):
     if not facts:
         return f"<div class='nrec'>{head}</div>"
 
-    # Le récap caché : une tuile par info, les résultats en petits tableaux de score
-    tiles = []
-    for f in facts:
-        if f.startswith("📋"):
-            continue
-        m = re.match(r"^(\S+)\s+(.*?)\s:\s(.*)$", f)
-        ico, title, body = (m.group(1), m.group(2), m.group(3)) if m else ("•", "", f)
-        tiles.append(f"<div class='nt'><div class='nt-i'>{ico}</div><div><div class='nt-k'>{esc(title)}</div><div class='nt-b'>{esc(body)}</div></div></div>")
+    # Le récap caché : la nuit en quelques lignes, puis les résultats en petits tableaux de score
+    story = story_html(day, games, ctx.get("summ") or {}, ctx["idx"], ctx.get("watch") or {})
     done = [g for g in games if g["state"] == "post" and g["home"]["score"] is not None]
     res = []
     for g in done:
@@ -2943,8 +3067,8 @@ def night_html(day, games, ctx, today):
             return f"<span class='rs-t{' w' if won else ''}'>{img}<b>{esc(t['abbr'])}</b><em>{s_['score']}</em></span>"
         res.append(f"<div class='rs'>{tm(a, wa)}{tm(h, not wa)}</div>")
     results = (f"<div class='nr-sec'>Les résultats</div><div class='rs-grid'>{''.join(res)}</div>") if res else ""
-    hidden = (f"<div class='ess-hid'><div class='nt-grid'>{''.join(tiles)}</div>{results}</div><!--fin-ess-->")
-    reveal = (f"<label for='{nid}' class='nr-rev'><span class='off'>👁 Révéler le récap de la nuit<small>Résultats, joueurs en feu, surprises, séries</small></span>"
+    hidden = (f"<div class='ess-hid'>{f'<div class=nr-sec>La nuit en bref</div>{story}' if story else ''}{results}</div><!--fin-ess-->")
+    reveal = (f"<label for='{nid}' class='nr-rev'><span class='off'>👁 Révéler le récap de la nuit<small>le résumé en quelques lignes et les résultats</small></span>"
               f"<span class='on'>🙈 Cacher le récap</span></label>")
     return f"<div class='nrec'><input type='checkbox' class='tg tg-n' id='{nid}'{checked}>{head}{reveal}{hidden}</div>"
 
@@ -2958,14 +3082,22 @@ def ai_material(g, summ, points):
     return "\n".join(lines)
 
 
-KEEP = ("nba_fav", "nba_opt", "nba_hello", "nba_id")  # réglages aussi copiés dans le stockage du navigateur (restaurés si le cookie saute)
+KEEP = ("nba_fav", "nba_opt", "nba_hello", "nba_id", "nba_vues", "nba_me")  # réglages aussi copiés dans le stockage du navigateur (restaurés si le cookie saute)
 
 
-def set_cookie(name, value):
+def _cookie_js(name, value, only_if_missing=False):
+    keep = f"try {{ parent.localStorage.setItem('{name}', '{value}'); }} catch (e) {{}}" if name in KEEP else ""
+    write = f"parent.document.cookie='{name}={value}; path=/; max-age=31536000; SameSite=Lax';{keep}"
+    if only_if_missing:  # ne pas écraser un numéro déjà donné (le serveur ne voit pas toujours les cookies : Streamlit Cloud)
+        return (f"try {{ if (!parent.document.cookie.split('; ').some(c => c.startsWith('{name}=')) && !parent.localStorage.getItem('{name}')) {{ {write} }} }}"
+                f" catch (e) {{ {write} }}")
+    return write
+
+
+def set_cookie(name, value, only_if_missing=False):
     """Écrit un cookie (et une copie dans localStorage pour les réglages). L'ordre est gardé pour toute la visite et réécrit
     à chaque fin de page (`finish_run`) : s'il a été coupé par un changement de page, il passe au tour suivant."""
-    keep = f"try {{ parent.localStorage.setItem('{name}', '{value}'); }} catch (e) {{}}" if name in KEEP else ""
-    run_js(f"<script>parent.document.cookie='{name}={value}; path=/; max-age=31536000; SameSite=Lax';{keep}</script>")
+    run_js(f"<script>{_cookie_js(name, value, only_if_missing)}</script>")
     try:
         st.session_state.setdefault("_cookies", {})[name] = value
     except Exception:
@@ -3600,11 +3732,56 @@ def link(href, text, cls="lk", title=""):
     return f"<a class='{cls}' href='#go?{esc(query)}'{t}>{text}</a>"
 
 
+def opts_from(opt, tzname=""):
+    """Cookie nba_opt (« i1s0cFR ») → réglages."""
+    opt = opt or ""
+    return {"indice": "i0" not in opt, "scores": "s1" in opt,
+            "pays": "CA" if "cCA" in opt else ("FR" if "cFR" in opt else ("CA" if tzname.startswith("America/") else "FR"))}
+
+
+def apply_restore(q):
+    """Réglages de l'appareil renvoyés par la page (cookies et copie locale lus dans le navigateur). Sur Streamlit Cloud, le
+    serveur ne reçoit pas toujours les cookies écrits par la page : sans ce renvoi, l'équipe favorite sautait à chaque visite."""
+    ss = st.session_state
+    ss.restored = True
+    fav = q.get("fav", "")
+    if fav and team_by_abbr(fav) and ss.get("favs") != [fav]:
+        ss.favs = [fav]
+        if not ss.get("team"):
+            ss.team = team_by_abbr(fav)
+    if q.get("opt"):
+        ss.opts = opts_from(q["opt"])
+    if q.get("hello"):
+        ss.hello_done = True
+    if q.get("vues"):
+        ss.seen = set(ss.get("seen") or set()) | read_seen({"nba_vues": q["vues"]})
+    trk = ss.get("trk")
+    if trk:
+        if q.get("me") == "1":
+            trk["me"] = True
+        uid = q.get("id", "")
+        if re.fullmatch(r"[a-z0-9]{10}", uid) and uid != trk["u"]:
+            trk["u"], trk["new"] = uid, False
+            if trk.get("pending"):
+                trk["pending"].update(u=uid)
+                trk["pending"].pop("n", None)
+        for tok, e in S.parse_client(q.get("ev")):
+            if tok not in trk["done"]:
+                S.add(dict(e, u=trk["u"], **({"me": 1} if trk["me"] else {})))
+                trk["done"].append(tok)
+        hb = S.parse_hb(q.get("hb"))
+        if hb:
+            S.add({"t": hb[1], "s": hb[0], "u": trk["u"], "k": "hb", **({"me": 1} if trk["me"] else {})})
+
+
 def apply_go(cmd):
     """Applique un lien interne reçu par le champ caché : nuit, vue, équipe, joueur, match à ouvrir."""
     from urllib.parse import parse_qsl
-    q = dict(parse_qsl(cmd))
+    q = dict(parse_qsl(cmd, keep_blank_values=True))
     ss = st.session_state
+    if q.get("restore"):
+        apply_restore(q)
+        return
     if q.get("nuit"):
         try:
             ss.day = date.fromisoformat(q["nuit"])
@@ -3876,18 +4053,17 @@ def status_fr(s):
 
 
 def team_picker(key):
-    """Grille des 30 équipes (par conférence) : un clic ouvre sa page."""
+    """Les 30 équipes en tuiles (logo, ville, nom, aux couleurs de l'équipe), par conférence : un clic ouvre sa page."""
+    blocks = []
     for conf in ("Est", "Ouest"):
-        st.markdown(f"<div class='pick-h'>Conférence {conf}</div>", unsafe_allow_html=True)
         ts = sorted([t for t in teams().values() if t["conf"] == conf], key=lambda t: t["name"])
-        with st.container(key=f"pick_{key}_{conf}"):
-            cols = st.columns(5)
-            for i, t in enumerate(ts):
-                if cols[i % 5].button(t["name"], key=f"pk_{key}_{t['id']}", width="stretch"):
-                    st.session_state.team = t["id"]
-                    st.rerun()
-        st.markdown("<style>" + "".join(f".st-key-pk_{key}_{t['id']} button {{border-left:5px solid {team_color(t['id'])};}}" for t in ts)
-                    + "</style>", unsafe_allow_html=True)
+        tiles = "".join(
+            link(f"/?vue=equipe&eq={t['abbr']}",
+                 f"<span class='pk-l'>{logo(t['id'], 64)}</span><span class='pk-n'><small>{esc(t['full'][:-len(t['name'])].strip())}</small>"
+                 f"<b>{esc(t['name'])}</b></span>", "pk", t["full"]).replace("<a ", f"<a style='--c:{team_color(t['id'])}' ", 1)
+            for t in ts)
+        blocks.append(f"<div class='pick-h'>Conférence {conf}</div><div class='pk-g'>{tiles}</div>")
+    st.markdown("".join(blocks), unsafe_allow_html=True)
 
 
 def team_page(schedule, idx, season, cut, days, today, zone, show_all):
@@ -4195,6 +4371,15 @@ details.news ul {list-style:none; padding:0; margin:8px 0 0;} details.news li {d
 details.news a {color:#e8ecf3 !important; text-decoration:none !important; flex:1;} details.news a small {display:block; color:#8a94a8;}
 details.news li i {color:#6f7a8f; font-style:normal; font-size:.8rem; white-space:nowrap;}
 .pick-h {font-family:'Barlow Condensed', sans-serif; text-transform:uppercase; font-weight:700; font-size:1.2rem; margin:14px 0 6px;}
+.pk-g {display:grid; grid-template-columns:repeat(auto-fill, minmax(225px, 1fr)); gap:10px;}
+a.pk {display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:16px; text-decoration:none !important; color:#e8ecf3 !important;
+  border:1px solid #1f2736; background:linear-gradient(120deg, color-mix(in srgb, var(--c) 30%, #10151f) 0%, #10151f 70%);
+  transition:transform .12s ease, border-color .12s ease;}
+a.pk:hover {transform:translateY(-2px); border-color:var(--c);}
+.pk-l img {filter:drop-shadow(0 4px 10px rgba(0,0,0,.45)); display:block;}
+.pk-n {display:flex; flex-direction:column; line-height:1.1; min-width:0;} .pk-n small {color:#9aa4b8; font-size:.75rem;}
+.pk-n b {font-family:'Barlow Condensed', sans-serif; font-size:1.3rem; text-transform:uppercase; letter-spacing:.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+@media (max-width: 640px) {.pk-g {grid-template-columns:1fr 1fr; gap:8px;} a.pk {padding:10px; gap:8px;} .pk-l img {width:40px; height:40px;} .pk-n b {font-size:1rem;}}
 [class*="st-key-pick_"] button {min-height:48px; justify-content:flex-start; text-align:left; font-weight:700;}
 @media (max-width: 640px) {[class*="st-key-pick_"] [data-testid="stHorizontalBlock"] {flex-wrap:wrap;}
   [class*="st-key-pick_"] [data-testid="stColumn"] {flex:1 1 45% !important; min-width:45% !important;}}
@@ -4373,11 +4558,93 @@ def league_injuries():
             det = i.get("details") or {}
             out.append({"tid": tid or (p or {}).get("team", ""), "pid": (p or {}).get("id", ""), "name": ath.get("displayName", ""),
                         "status": i.get("status", ""), "type": det.get("type") or (i.get("type") or {}).get("description", ""),
-                        "back": det.get("returnDate", ""), "note": i.get("shortComment", ""), "date": i.get("date", "")})
+                        "detail": det.get("detail", ""), "side": det.get("side", ""), "back": det.get("returnDate", ""),
+                        "note": i.get("shortComment", ""), "long": i.get("longComment", ""), "date": i.get("date", "")})
     if not out:
         out = [{"tid": p["team"], "pid": p["id"], "name": p["name"], "status": p["inj"], "type": p.get("inj_type", ""),
                 "back": p.get("inj_back", ""), "note": "", "date": ""} for p in players.values() if p["inj"]]
     return out
+
+
+DETAIL_FR = {"sprain": "entorse", "strain": "élongation", "soreness": "douleurs", "fracture": "fracture", "surgery": "opération",
+             "contusion": "contusion", "bruise": "contusion", "tear": "déchirure", "tendinitis": "tendinite", "tendinopathy": "tendinopathie",
+             "inflammation": "inflammation", "dislocation": "luxation", "spasms": "contractures", "tightness": "raideur",
+             "impingement": "conflit articulaire", "laceration": "coupure", "rupture": "rupture", "stress reaction": "fracture de fatigue",
+             "bone bruise": "œdème osseux", "torn": "déchirure", "illness": "maladie", "rest": "repos", "management": "gestion de la charge",
+             "recovery": "convalescence", "personal": "raisons personnelles", "suspension": "suspension", "surgery recovery": "suites d’opération"}
+FEMININ = {"cheville", "épaule", "main", "hanche", "jambe", "cuisse", "aine", "tête", "poitrine", "mâchoire", "côtes"}
+
+
+def injury_fr(i):
+    """« Entorse · cheville gauche » d'après les détails ESPN (type, détail, côté)."""
+    part = INJURY_FR.get(norm(i.get("type")), (i.get("type") or "").lower())
+    side = norm(i.get("side"))
+    if side in ("left", "right") and part:
+        fem = part in FEMININ
+        part += " " + ("gauche" if side == "left" else ("droite" if fem else "droit"))
+    det = norm(i.get("detail"))
+    det_fr = next((v for k, v in DETAIL_FR.items() if k in det), (i.get("detail") or "").lower()) if det else ""
+    txt = " · ".join(x for x in (det_fr.capitalize() if det_fr else "", part if det_fr else part.capitalize()) if x)
+    return txt or "Raison non précisée"
+
+
+def find_injury(pid, name=""):
+    return next((i for i in league_injuries() if (pid and i["pid"] == pid) or (name and norm(i["name"]) == norm(name))), None)
+
+
+def missed_games(pid, tid, schedule, today):
+    """(date de son dernier match, nombre de matchs de son équipe joués depuis) d'après le journal des feuilles de match."""
+    games = player_games(players_db(), pid)
+    last = games[-1]["d"] if games else None
+    played = [g for g in schedule if g["done"] and tid in (g["home"], g["away"]) and g["day"] < today]
+    if last:
+        return last, sum(1 for g in played if g["day"] > last)
+    return None, len(played)
+
+
+@st.cache_data(ttl=86400 * 7, show_spinner=False, max_entries=300)
+def ai_translate(text):
+    """Le commentaire d'ESPN (en anglais) traduit par Claude, si une clé est fournie."""
+    key = str(_secret("anthropic", "api_key", ""))
+    if not key or not text:
+        return None
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=key)
+        resp = client.messages.create(
+            model=str(_secret("anthropic", "model", AI_MODEL_DEFAULT)), max_tokens=800, output_config={"effort": "low"},
+            system="Tu traduis en français des brèves sur les blessures de joueurs NBA. Réponds seulement par la traduction, fidèle et naturelle.",
+            messages=[{"role": "user", "content": text}])
+        if resp.stop_reason == "refusal":
+            return None
+        return " ".join(b.text for b in resp.content if b.type == "text").strip() or None
+    except Exception as e:
+        log.warning("Claude indisponible (%s)", type(e).__name__)
+        return None
+
+
+def injury_box(pid, tid, name, schedule, today):
+    """Le bloc « Infirmerie » d'une fiche : statut, blessure, depuis quand, matchs manqués, retour prévu, le point d'ESPN."""
+    i = find_injury(pid, name)
+    if not i:
+        return ""
+    st_fr = status_fr(i["status"])
+    last, missed = missed_games(pid, tid, schedule, today)
+    facts = [("Blessure", injury_fr(i))]
+    if i.get("date"):
+        facts.append(("Signalé le", fr_date_iso(i["date"])))
+    if last:
+        facts.append(("Dernier match", f"{short_date(last)} · {missed} match{'s' if missed > 1 else ''} manqué{'s' if missed > 1 else ''} depuis" if missed
+                      else f"{short_date(last)} (il a joué le dernier match de son équipe)"))
+    elif missed:
+        facts.append(("Cette saison", f"pas encore joué ({missed} matchs de son équipe)"))
+    facts.append(("Retour prévu", f"vers le {fr_date_iso(i['back'])}" if i.get("back") else "pas de date annoncée"))
+    note = i.get("long") or i.get("note") or ""
+    fr = ai_translate(note) if note else None
+    note_html = (f"<div class='inj-note'><b>Le point d'ESPN</b>{esc(fr) if fr else esc(note)}"
+                 f"{'' if fr else '<small> (en anglais)</small>'}</div>") if note else ""
+    return (f"<div class='tbox injb'><div class='tbox-h'>🩹 Infirmerie <span class='inj {'o' if INJ_ORDER.get(st_fr, 5) <= 1 else 'q'}'>{esc(st_fr)}</span></div>"
+            f"<dl>{''.join(f'<dt>{k}</dt><dd>{esc(v)}</dd>' for k, v in facts)}</dl>{note_html}</div>")
 
 
 COUNTRY = {"FR": ("France", "🇫🇷", "Les Français de la NBA"), "CA": ("Canada", "🇨🇦", "Les Canadiens de la NBA")}
@@ -4445,6 +4712,8 @@ def player_page(pid, schedule, cut, today, zone):
         f"<div class='th-k'>{team_txt}{' · n°' + esc(info['num']) if info.get('num') else ''}</div>"
         f"<h1>{flag + ' ' if flag else ''}{esc(name)}</h1><div class='ph-bio'>{esc(' · '.join(bio))}</div>"
         f"{f'<div class=ph-inj>{inj}</div>' if inj else ''}</div></div>", unsafe_allow_html=True)
+    if info.get("inj") or find_injury(pid, name):
+        st.markdown(injury_box(pid, tid, name, schedule, today), unsafe_allow_html=True)
     if not a:
         st.info("Pas encore de match joué cette saison (ou le journal des matchs se remplit : reviens dans quelques minutes).")
         return
@@ -4591,7 +4860,7 @@ def injuries_section(players, table, favs):
         rows = "".join(
             f"<li>{headshot(players.get(i['pid']), 30)}<span class='nm'><span>{player_link(i['pid'], i['name'])}"
             f"{' <span class=star>⭐</span>' if (table.get(i['pid']) or {}).get('pts', 0) >= 16 else ''}</span>"
-            f"<small>{esc(INJURY_FR.get(norm(i['type']), i['type']))}{' · retour vers le ' + fr_date_iso(i['back']) if i['back'] else ''}</small></span>"
+            f"<small>{esc(injury_fr(i))}{' · retour vers le ' + fr_date_iso(i['back']) if i['back'] else ''}</small></span>"
             f"<span class='inj {'o' if INJ_ORDER.get(i['st_fr'], 5) <= 1 else 'q'}'>{esc(i['st_fr'])}</span></li>"
             for i in sorted(by_team[tid], key=lambda i: (INJ_ORDER.get(i["st_fr"], 5), i["name"])))
         blocks.append(f"<div class='tbox ij{' fav' if tid in favs else ''}'><div class='tbox-h'>{mini_logo(tid, 22)} {team_link(tid) if tid else 'Autres'}"
@@ -4628,6 +4897,11 @@ svg.spark {width:100%; height:auto; display:block; margin:8px 0 4px;} .spark pol
 .ij .tbox-h span {margin-left:auto; color:#8a94a8; font-size:.8rem;} .ij.fav {border-color:rgba(255,199,90,.45);}
 .ij li .nm {display:flex; flex-direction:column; flex:1; min-width:0; line-height:1.25;} .ij li .nm small {color:#8a94a8;}
 .stars {display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:8px; margin-top:8px;}
+.stars small.why {color:#9aa4b8; font-size:.74rem;}
+.injb {border-color:rgba(239,68,68,.35);} .injb .tbox-h {display:flex; align-items:center; gap:8px;}
+.injb dl {display:grid; grid-template-columns:max-content 1fr; gap:6px 16px; margin:10px 0 4px;} .injb dt {color:#8a94a8; font-size:.85rem;}
+.injb dd {margin:0; color:#e8ecf3;} .inj-note {background:rgba(255,255,255,.03); border-radius:12px; padding:10px 12px; margin-top:8px; color:#d5dbe6; font-size:.92rem;}
+.inj-note b {display:block; color:#ffc75a; font-size:.75rem; text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px;} .inj-note small {color:#8a94a8;}
 .stars > div {display:flex; gap:10px; align-items:center;} .stars > div > span {display:flex; flex-direction:column; align-items:flex-start; line-height:1.25;} .stars small {color:#8a94a8;}
 </style>
 """
@@ -4751,17 +5025,32 @@ def brief_page(schedule, idx, season, days, today, zone, show_all, interest):
                         f"<span class='mv {'up' if new < old else 'dn'}'>{'▲' if new < old else '▼'} {old}e → {new}e</span></li>" for _, c, t, old, new in moves[:8])
     flag, ours_title = COUNTRY[pays][1], COUNTRY[pays][2]
 
-    def section(sid, title, body, empty):
-        return (f"<div class='bs'><input type='checkbox' class='tg tg-x' id='bs-{sid}'>"
+    def section(sid, title, body, empty, wide=False, raw=False):
+        content = body if raw else f"<ul>{body or f'<li class=ok>{empty}</li>'}</ul>"
+        return (f"<div class='bs{' wide' if wide else ''}'><input type='checkbox' class='tg tg-x' id='bs-{sid}'>"
                 f"<div class='bs-h'><span>{title}</span><label for='bs-{sid}' class='pill'><span class='off'>👁 Voir</span><span class='on'>🙈 Cacher</span></label></div>"
-                f"<div class='bs-c'><ul>{body or f'<li class=ok>{empty}</li>'}</ul></div><div class='bs-hid'>Caché pour ne rien dévoiler.</div></div>")
+                f"<div class='bs-c'>{content}</div><div class='bs-hid'>Caché pour ne rien dévoiler.</div></div>")
     secs = ""
+    story = story_html(last, games, summs, idx, watch) if done else ""
     if done:
-        secs = ("<div class='bsecs'>" + section("perf", "💥 Les grosses perfs", plist(perfs[:6]), "Pas de feuille de match pour l’instant.")
+        secs = ("<div class='bsecs'>" + (section("story", "📝 La nuit en bref", story, "", wide=True, raw=True) if story else "")
+                + section("perf", "💥 Les grosses perfs", plist(perfs[:6]), "Pas de feuille de match pour l’instant.")
                 + section("cls", "📊 Ce qui a bougé au classement", move_html, "Rien de notable.")
                 + section("nous", f"{flag} Nos {'Français' if pays == 'FR' else 'Canadiens'} cette nuit", plist(ours), "Aucun n’a joué cette nuit.") + "</div>")
     reveal = "" if show_all or not done else (
         "<label for='b-all' class='pill big'><span class='off'>👁 Tout révéler</span><span class='on'>🙈 Tout cacher</span></label>")
+    # Les vidéos de la nuit : le résumé de la nuit (NBA) et l'émission NBA Extra (beIN SPORTS, 12h45 à Paris)
+    recap, show = night_videos(last, nba_vids, extra_vids)
+    vb_ = []
+    if recap:
+        vb_.append(f"<a class='cbtn main' href='{yt_url(recap)}' target='_blank' title='Tous les matchs, NBA, en anglais'>▶ Résumé de la nuit</a>")
+    elif key == "done":
+        q = f"NBA nightly recap {MONTHS_EN[last.month - 1].title()} {last.day}, {last.year}"
+        vb_.append(f"<a class='cbtn ghost' href='https://www.youtube.com/results?search_query={requests.utils.quote(q)}' target='_blank'>🔎 Résumé de la nuit</a>")
+    if pays == "FR":
+        vb_.append(f"<a class='cbtn fr' href='{yt_url(show)}' target='_blank' title=\"L'émission de beIN SPORTS sur cette nuit\"><span class='frf'></span> NBA Extra</a>" if show
+                   else "<span class='cbtn off' title='En direct à 12h45 sur beIN SPORTS, replay YouTube vers 15h-17h'><span class='frf'></span> NBA Extra · bientôt</span>")
+    reveal = f"<div class='bf-act'>{''.join(vb_)}{reveal}</div>"
     st.markdown(
         f"<div class='bf{' all' if show_all else ''}'><input type='checkbox' class='tg tg-all' id='b-all'>"
         f"<div class='bf-bar'><div><div class='pg-k'>☕ Le brief · {esc(rel_label(last, zone, today) or 'la dernière nuit')}</div>"
@@ -4776,8 +5065,10 @@ def brief_page(schedule, idx, season, days, today, zone, show_all, interest):
         st.markdown("<div class='sec-h'>🩹 Les grosses absences <span>15 points ou plus de moyenne · "
                     + link("/?vue=joueurs&rub=infirmerie", "toute l'infirmerie ›", "lk") + "</span></div><div class='tbox'><div class='stars'>"
                     + "".join(f"<div>{headshot(players.get(i['pid']), 40)}<span>{player_link(i['pid'], i['name'])}<small>{esc(team(i['tid'])['name'])} · "
-                              f"<span class='inj {'o' if INJ_ORDER.get(status_fr(i['status']), 5) <= 1 else 'q'}'>{esc(status_fr(i['status']))}</span></small></span></div>"
-                              for i in inj[:8]) + "</div></div>", unsafe_allow_html=True)
+                              f"<span class='inj {'o' if INJ_ORDER.get(status_fr(i['status']), 5) <= 1 else 'q'}'>{esc(status_fr(i['status']))}</span></small>"
+                              f"<small class='why'>{esc(injury_fr(i))}{' · retour vers le ' + fr_date_iso(i['back']) if i.get('back') else ''}</small></span></div>"
+                              for i in inj[:8]) + "</div><p class='pg-note'>Un clic sur un nom : le détail de la blessure et les matchs manqués.</p></div>",
+                    unsafe_allow_html=True)
 
     # La nuit prochaine
     nxt_day = next((d for d in days if d > last), None)
@@ -4833,7 +5124,10 @@ BRIEF_CSS = """
 .bt-b {display:flex; align-items:center; gap:6px; margin-top:auto; padding-top:6px; border-top:1px solid rgba(255,255,255,.07); flex-wrap:nowrap; overflow:hidden;}
 .bt-b .cbtn {padding:4px 10px; font-size:.8rem; white-space:nowrap;} .bt-b a.lk {margin-left:auto; font-size:.85rem;} .bt-b .wt {font-size:.74rem;}
 /* rubriques cachées */
-.bsecs {display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:12px;}
+.bsecs {display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:12px;} .bs.wide {grid-column:1 / -1;}
+.story {color:#e3e8f0; font-size:1rem; line-height:1.6; margin:8px 0 2px;}
+.bf-act {display:flex; align-items:center; gap:8px; flex-wrap:wrap;} .bf-act .cbtn {padding:7px 14px;}
+.bf-act .cbtn.off {opacity:.6; cursor:default;}
 @media (max-width: 1000px) {.bsecs {grid-template-columns:1fr;}}
 .bs {background:#10151f; border:1px solid #1f2736; border-radius:16px; padding:10px 14px;}
 .bs-h {display:flex; align-items:center; justify-content:space-between; gap:8px; font-weight:700;}
@@ -4909,12 +5203,13 @@ def finish_run(day):
         set_cookie("nba_fav", ".".join(ss.favs))
     if ss.pop("hello_cookie", False):
         set_cookie("nba_hello", "1")
+    if ss.pop("seen_cookie", False):
+        write_seen(ss.seen)
     if ss.pop("opt_changed", False):
         set_cookie("nba_opt", ("i1" if ss.opts["indice"] else "i0") + ("s1" if ss.opts["scores"] else "s0") + "c" + ss.opts.get("pays", "FR"))
     pend = {k: v for k, v in (ss.get("_cookies") or {}).items() if k in KEEP}
     if pend:  # même contenu d'un passage à l'autre : le cadre n'est pas recréé, l'écriture est seulement assurée
-        run_js("<script>" + "".join(f"parent.document.cookie='{k}={v}; path=/; max-age=31536000; SameSite=Lax';"
-                                    f"try {{ parent.localStorage.setItem('{k}', '{v}'); }} catch (e) {{}}" for k, v in sorted(pend.items())) + "</script>")
+        run_js("<script>" + "".join(_cookie_js(k, v, k == "nba_id") for k, v in sorted(pend.items())) + "</script>")
     trk = ss.get("trk")
     if not trk:
         return
@@ -4924,16 +5219,43 @@ def finish_run(day):
 
 
 def click_tracker(day, done):
+    ss = st.session_state
+    trk = ss.get("trk") or {}
+    o = ss.get("opts") or {}
+    known = {"restored": bool(ss.get("restored")), "fav": (ss.get("favs") or [""])[0], "id": trk.get("u", ""),
+             "opt": ("i1" if o.get("indice", True) else "i0") + ("s1" if o.get("scores") else "s0") + "c" + o.get("pays", "FR"),
+             "hello": bool(ss.get("hello_done")), "vues": ".".join(d.strftime("%y%m%d") for d in sorted(ss.get("seen") or [])[-150:])}
+    _click_tracker(day, done, known)
+
+
+def _click_tracker(day, done, known):
     """Les vidéos, stats et récaps s'ouvrent dans la page, sans passer par le serveur : on note chaque clic dans le cookie
     nba_ev (relu au chargement suivant) et, toutes les 30 s tant que la page est affichée, l'heure dans nba_hb (durée)."""
     run_js(f"""<script>
 const P = window.parent, D = P.document;
 D.documentElement.lang = 'fr';
-try {{  // réglages perdus (cookie effacé) mais gardés dans le navigateur : on les remet, puis on recharge une seule fois
-  const lost = {json.dumps(list(KEEP))}.filter(n => !D.cookie.split('; ').some(c => c.startsWith(n + '=')) && P.localStorage.getItem(n));
-  lost.forEach(n => {{ D.cookie = n + '=' + P.localStorage.getItem(n) + '; path=/; max-age=31536000; SameSite=Lax'; }});
-  if (lost.includes('nba_fav') || lost.includes('nba_opt')) {{
-    if (!P.sessionStorage.getItem('bb_restored')) {{ P.sessionStorage.setItem('bb_restored', '1'); P.location.reload(); }}
+P.__bbGo = cmd => {{  // envoie une commande au site par le champ caché « go_to » (liens internes, réglages)
+  const inp = D.querySelector('.st-key-go_to input');
+  if (!inp) return false;
+  const setter = Object.getOwnPropertyDescriptor(P.HTMLInputElement.prototype, 'value').set;
+  inp.focus();
+  setter.call(inp, cmd + '&_=' + Date.now());
+  inp.dispatchEvent(new P.Event('input', {{bubbles: true}}));
+  inp.dispatchEvent(new P.KeyboardEvent('keydown', {{key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}}));
+  inp.blur();
+  return true;
+}};
+try {{  // réglages de l'appareil (cookie, sinon copie locale) renvoyés au site s'il ne les a pas : une fois par visite
+  const K = {json.dumps(known)};
+  const ck = n => (D.cookie.split('; ').find(c => c.startsWith(n + '=')) || '').slice(n.length + 1);
+  const get = n => ck(n) || P.localStorage.getItem(n) || '';
+  const v = {{fav: get('nba_fav'), opt: get('nba_opt'), hello: get('nba_hello'), id: get('nba_id'), vues: get('nba_vues'),
+             me: get('nba_me'), ev: ck('nba_ev'), hb: ck('nba_hb')}};
+  const diff = (v.fav && v.fav !== K.fav) || (v.opt && v.opt !== K.opt) || (v.hello && !K.hello) || (v.id && v.id !== K.id)
+               || (v.vues && v.vues !== K.vues);
+  if (!K.restored && diff && !P.__bbRestoreSent) {{
+    P.__bbRestoreSent = true;
+    setTimeout(() => P.__bbGo('restore=1&' + new URLSearchParams(v).toString()), 30);
   }}
 }} catch (e) {{}}
 const center = () => {{  // bande des nuits (téléphone) : la nuit affichée au milieu
@@ -4963,14 +5285,7 @@ P.__bbClick = e => {{
   const g = e.target.closest && e.target.closest('a[href^="#go?"]');
   if (g) {{  // lien interne : on passe par le champ caché (la page est dans un cadre sur Streamlit Cloud)
     e.preventDefault();
-    const inp = D.querySelector('.st-key-go_to input');
-    if (!inp) return;
-    const setter = Object.getOwnPropertyDescriptor(P.HTMLInputElement.prototype, 'value').set;
-    inp.focus();
-    setter.call(inp, g.getAttribute('href').slice(4) + '&_=' + Date.now());
-    inp.dispatchEvent(new P.Event('input', {{bubbles: true}}));
-    inp.dispatchEvent(new P.KeyboardEvent('keydown', {{key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}}));
-    inp.blur();
+    P.__bbGo(g.getAttribute('href').slice(4));
     P.scrollTo && D.querySelector('[data-testid="stMain"]')?.scrollTo({{top: 0}});
     return;
   }}
@@ -5175,7 +5490,7 @@ def main():
     with st.container(key="gobox"):  # champ caché des liens internes (voir `link`)
         st.text_input("Aller à", key="go_to", label_visibility="collapsed")
     try:
-        cookies = st.context.cookies
+        cookies = {} if os.environ.get("BB_SANS_COOKIES") else st.context.cookies  # BB_SANS_COOKIES : imiter Streamlit Cloud
     except Exception:
         cookies = {}
     if "favs" not in st.session_state:  # une seule équipe (les anciens cookies à plusieurs équipes gardent la 1re)
@@ -5195,8 +5510,8 @@ def main():
         st.query_params.pop("scores", None)
     zone = user_zone()
     trk = start_tracking(cookies)
-    if trk["new"]:  # numéro de l'appareil écrit tout de suite (si la page est interrompue, le prochain chargement le garde)
-        set_cookie("nba_id", trk["u"])
+    if trk["new"]:  # numéro de l'appareil écrit tout de suite, sauf si le navigateur en a déjà un (il sera renvoyé par `restore`)
+        set_cookie("nba_id", trk["u"], only_if_missing=True)
     today = datetime.now(NY).date()
     season = season_of(today)
     show_all = st.session_state.opts["scores"]

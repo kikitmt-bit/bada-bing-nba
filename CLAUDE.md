@@ -80,14 +80,28 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   (prochain match + chaîne), TOUS les matchs de la nuit en tuiles de MÊME taille (`.bt-grid`, `grid-auto-rows:1fr`, une ligne par
   équipe avec bilan d'avant-match, cases « ? » cliquables par match `.tg-t`, indice « à voir », info clé `key_fact` sur une ligne,
   Résumé / NBA Extra / Stats ›), triées mon équipe puis indice. Rubriques cachées, chacune avec sa pastille « 👁 Voir » (`.tg-x`) :
-  grosses perfs, ce qui a bougé au classement, nos Français/Canadiens. Puis grosses absences et la nuit prochaine. TOUT est caché
+  « 📝 La nuit en bref » (pleine largeur), grosses perfs, ce qui a bougé au classement, nos Français/Canadiens. En haut à droite :
+  « ▶ Résumé de la nuit » et « NBA Extra » (ou « bientôt ») (`night_videos`). Puis grosses absences (avec la blessure et le
+  retour prévu) et la nuit prochaine. TOUT est caché
   par défaut (sauf « Toujours montrer les scores », classe `.bf.all`).
   ⚠️ Ne jamais écrire `checked` dans le HTML d'une case à cocher : React la verrouille (impossible de la décocher : bug « Cacher »
   du brief v024). Pour un état ouvert par défaut, utiliser une classe CSS sur le bloc.
-- **Réglages qui tiennent (v025)** : `set_cookie` copie `nba_fav`, `nba_opt`, `nba_hello`, `nba_id` dans `localStorage`
-  (`KEEP`) et `finish_run` les réécrit à chaque fin de page ; au chargement, `click_tracker` remet un cookie disparu depuis la
-  copie et recharge une fois (`sessionStorage bb_restored`).
+- **Réglages qui tiennent (v026)** : SUR STREAMLIT CLOUD, LE SERVEUR NE REÇOIT PAS LES COOKIES ÉCRITS PAR LA PAGE (d'où l'équipe
+  favorite qui sautait et les « 5 visiteurs » qui étaient Kiki). Donc : `set_cookie` écrit le cookie + une copie `localStorage`
+  (`KEEP` : équipe, réglages, bienvenue, n° d'appareil, nuits vues, admin) ; au chargement, `click_tracker` relit tout dans le
+  navigateur et, si le serveur ne l'a pas, l'envoie par le champ caché (`restore=1&fav=…&opt=…&id=…&vues=…&ev=…&hb=…`) →
+  `apply_restore` (une fois par visite, `ss.restored`). Le n° d'appareil n'est écrit que s'il n'existe pas (`only_if_missing`).
+  Tester ce cas en local : `BB_SANS_COOKIES=1` (le serveur ignore les cookies, comme sur Streamlit Cloud).
 - Bouton « Révéler le récap de la nuit » de la page Matchs : pastille sobre (v025, plus de grande barre dorée animée).
+- **La nuit en bref (v026, `night_story`, `story_html`)** : 2 à 4 phrases (match de la nuit selon l'indice, sinon le plus serré ;
+  la perf ; la surprise (favori de 5 pts ou plus battu) ou la remontée de 15 pts ou plus ou la raclée ; une série de 5+), accordées
+  (« le Magic bat », « les Celtics battent » : `SINGULIER`, `les`, `vb`). Réécrites en paragraphe par Claude si `[anthropic]`
+  (`ai_night`, gardé dans `.cache/ai_night_<jour>.json`, une fois la nuit finie). Remplace les tuiles surprise / plus serré /
+  correction / remontée / séries (jugées peu utiles par Kiki) dans le récap de la page Matchs ; restent la nuit en bref + les résultats.
+- **Blessures détaillées (v026)** : `league_injuries` garde aussi détail, côté, date, `longComment` ; `injury_fr` (« Entorse · genou
+  gauche », `DETAIL_FR`, `FEMININ`), `injury_box` sur la fiche joueur : blessure, signalée le, dernier match + matchs manqués
+  (`missed_games`, journal des joueurs), retour prévu, « le point d'ESPN » traduit par Claude si `[anthropic]` (`ai_translate`), sinon en anglais.
+- **Choix de l'équipe (v026, `team_picker`)** : 30 tuiles avec logo, ville et nom, aux couleurs de l'équipe (liens `link`).
 - **Joueurs (v024, `players_page`, `PLAYERS_CSS`)** : rubriques Fiches · Les meilleurs · Les Français (ou Canadiens selon le pays) ·
   Infirmerie. Journal de toutes les feuilles de match de la saison (`players_db`, fil de fond « joueurs » toutes les 15 min,
   `_players_tick` lit le scoreboard jour par jour puis `summary_raw`, `_box_line`) gardé sur GitHub `joueurs/log.json` (branche data,

@@ -28,7 +28,7 @@ import streamlit.components.v1 as components
 import fantasy as F
 import stats as S
 
-APP_VERSION = "2026-11-v020"
+APP_VERSION = "2026-11-v021"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -1506,7 +1506,7 @@ CSS = """
 }
 .stApp {background: radial-gradient(1200px 500px at 50% -200px, #1a2333 0%, var(--bg) 60%) fixed;}
 .block-container {padding-top: 3.6rem; padding-bottom: 4rem; max-width: 860px;}
-header[data-testid="stHeader"] {background: transparent;}
+header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"] {display: none !important;}  /* barre Streamlit (partager, étoile, crayon, ⋮) cachée */
 h1, h2, h3 {letter-spacing:-.01em}
 .bb-brand {font-size:1.35rem; font-weight:800; letter-spacing:-.02em; line-height:1.1;}
 .bb-brand span {color:var(--accent);}

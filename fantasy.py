@@ -307,8 +307,9 @@ def code_hash(pseudo, code):
 # Sauvegarde : un fichier JSON sur GitHub (branche « data » pour ne pas redémarrer le site), sinon sur le disque
 # ---------------------------------------------------------------------------
 class Store:
-    def __init__(self, session, token="", repo="", branch="data", local_dir=".cache"):
+    def __init__(self, session, token="", repo="", branch="data", local_dir=".cache", folder="fantasy"):
         self.s, self.token, self.repo, self.branch, self.dir = session, token, repo, branch or "data", local_dir
+        self.folder = folder
         self.sha = {}
         self.lock = threading.Lock()
 
@@ -336,7 +337,7 @@ class Store:
     def load(self, name, default):
         if self.remote:
             try:
-                r = self.s.get(f"https://api.github.com/repos/{self.repo}/contents/fantasy/{name}", headers=self._h(),
+                r = self.s.get(f"https://api.github.com/repos/{self.repo}/contents/{self.folder}/{name}", headers=self._h(),
                                params={"ref": self.branch}, timeout=15)
                 if r.status_code == 200:
                     j = r.json()
@@ -348,7 +349,7 @@ class Store:
             except Exception:
                 pass
         try:
-            with open(os.path.join(self.dir, f"fantasy_{name}"), encoding="utf-8") as f:
+            with open(os.path.join(self.dir, f"{self.folder}_{name}"), encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return default
@@ -362,7 +363,7 @@ class Store:
         with self.lock:
             try:
                 os.makedirs(self.dir, exist_ok=True)
-                with open(os.path.join(self.dir, f"fantasy_{name}"), "wb") as f:
+                with open(os.path.join(self.dir, f"{self.folder}_{name}"), "wb") as f:
                     f.write(body)
             except Exception:
                 pass
@@ -372,7 +373,7 @@ class Store:
                 payload = {"message": message, "content": base64.b64encode(body).decode(), "branch": self.branch}
                 if self.sha.get(name):
                     payload["sha"] = self.sha[name]
-                r = self.s.put(f"https://api.github.com/repos/{self.repo}/contents/fantasy/{name}", headers=self._h(),
+                r = self.s.put(f"https://api.github.com/repos/{self.repo}/contents/{self.folder}/{name}", headers=self._h(),
                                json=payload, timeout=20)
                 if r.status_code in (200, 201):
                     self.sha[name] = (r.json().get("content") or {}).get("sha")
@@ -401,7 +402,7 @@ class Store:
         with self.lock:
             try:
                 os.makedirs(self.dir, exist_ok=True)
-                with open(os.path.join(self.dir, f"fantasy_{name}"), "wb") as f:
+                with open(os.path.join(self.dir, f"{self.folder}_{name}"), "wb") as f:
                     f.write(body)
             except Exception:
                 pass
@@ -410,9 +411,9 @@ class Store:
             payload = {"message": message, "content": base64.b64encode(body).decode(), "branch": self.branch}
             if self.sha.get(name):
                 payload["sha"] = self.sha[name]
-            r = self.s.put(f"https://api.github.com/repos/{self.repo}/contents/fantasy/{name}", headers=self._h(), json=payload, timeout=20)
+            r = self.s.put(f"https://api.github.com/repos/{self.repo}/contents/{self.folder}/{name}", headers=self._h(), json=payload, timeout=20)
             if r.status_code == 404 and self._ensure_branch():
-                r = self.s.put(f"https://api.github.com/repos/{self.repo}/contents/fantasy/{name}", headers=self._h(), json=payload, timeout=20)
+                r = self.s.put(f"https://api.github.com/repos/{self.repo}/contents/{self.folder}/{name}", headers=self._h(), json=payload, timeout=20)
             if r.status_code in (200, 201):
                 self.sha[name] = (r.json().get("content") or {}).get("sha")
                 return True

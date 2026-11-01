@@ -7,7 +7,8 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 
 - Matchs groupés par « jour du match » d'ESPN (heure de New York), titre selon le fuseau : « Nuit du mercredi 21 au jeudi 22 octobre » (Paris)
   ou « Mercredi 21 octobre » (Montréal). Fuseau deviné du navigateur (`st.context.timezone`), sans réglage (v019 : retiré de ⚙️, `?tz=` des anciens liens ignoré).
-  Site ouvert à tous, sans compte (choix de Kiki) : équipes favorites gardées par appareil (cookie `nba_fav`).
+  Site ouvert à tous, sans compte (choix de Kiki) : réglages gardés par appareil (cookies `nba_fav` équipes, `nba_opt` indice/scores).
+  ⚙️ ne montre que les réglages utiles aux visiteurs (plus l'état de la clé YouTube : il est sur la page admin).
   Jour affiché par défaut : la nuit qui vient de se jouer (`default_day`). Nuit choisie gardée dans l'adresse (`?nuit=AAAA-MM-JJ`).
 - **Mise à jour automatique** (`auto_refresh`) : Streamlit ne rafraîchit pas une page ouverte, donc la page se recharge quand on revient
   sur l'onglet après plus de 3 min, et toutes les 90 s pendant les matchs (sauf si un panneau est ouvert). Si ESPN ne répond pas,
@@ -99,6 +100,15 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   sur GitHub dans `fantasy/` (branche `data`, pour ne pas redémarrer le site) via `[github] token, repo, branch` ; sinon sur le disque
   (perdu au redémarrage). Connexion : pseudo + code (empreinte SHA-256 seulement), cookie `nba_fx`. Effectifs et postes : ESPN `teams/<id>/roster`.
 
+- **Statistiques de visite et page admin (v020, `stats.py`, `admin_page`)** : page cachée, sans bouton, ouverte par le lien secret
+  `?admin=<code>` (`[admin] code` dans les secrets ; sans code, pas de page admin). Anonyme : numéro d'appareil au hasard (cookie
+  `nba_id`), pas d'IP. Côté serveur : arrivée (`open`, fuseau, appareil), changement de nuit/vue (`nav`), réglages (`set`), erreurs
+  (`err` : ESPN/YouTube qui ne répondent pas, plantages). Clics dans la page notés par `click_tracker` dans le cookie `nba_ev`
+  (résumé vidéo `v`, NBA Extra `x`/`X`, résumé de la nuit `R`, stats `s`, récap révélé `n`, score `r`, carte de tirs `p`…) et durée
+  dans `nba_hb` : relus au chargement suivant (Streamlit ne lit les cookies qu'à l'ouverture). Tampon envoyé toutes les 5 min sur
+  GitHub (`stats/AAAA-MM.json`, branche `data`, mêmes secrets `[github]` que le jeu), sinon disque. Les appareils qui ont ouvert la
+  page admin sont marqués (cookie `nba_me`) et exclus des chiffres par défaut. Noms donnés aux visiteurs : `stats/names.json`.
+
 ## Données
 
 - ESPN (sans clé) : `scoreboard?dates=AAAAMMJJ`, `summary?event=`, `teams/<id>/schedule?season=&seasontype=` (la plage de dates
@@ -111,6 +121,7 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - `python tests/test_sans_spoil.py` : vérifie qu'une carte au score caché ne trahit rien (score, « prolongation », « remontée »…). À lancer avant chaque envoi.
 - `python tests/scenarios.py` : note d'intérêt de matchs inventés, pour régler les seuils.
 - `python tests/page_complete.py` : exécute toute la page (Nuit et Semaine) avec un faux Streamlit, pour attraper les erreurs.
+- `python tests/test_stats.py` : statistiques de visite (cookies, visites, activité par nuit).
 - `python tests/test_fantasy.py` : règles du « 5 de la semaine » ; `python tests/page_fantasy.py` : la page du jeu avec une saison inventée.
 
 

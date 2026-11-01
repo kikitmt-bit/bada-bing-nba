@@ -52,7 +52,7 @@ app["game_videos"] = lambda g, a, b: (None, None)
 app["night_videos"] = lambda d, a, b: (None, None)
 app["video_durations"] = lambda ids: {}
 app["set_cookie"] = lambda n, v: out.append(f"COOKIE {n}={v}")
-app["auto_refresh"] = lambda games: out.append("AUTO")
+app["auto_refresh"] = lambda games, *a: out.append("AUTO")
 for vue in ("nuit", "semaine"):
     out.clear(); st.session_state.clear(); st.query_params.clear()
     if vue == "semaine": st.query_params["vue"] = "semaine"

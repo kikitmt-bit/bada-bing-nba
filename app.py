@@ -4,6 +4,7 @@ Liste des matchs par nuit, preview écrite avant le match, résumés vidéo (NBA
 journal NBA Extra du jour, et, seulement quand on le demande, le score, l'analyse et la feuille de match.
 Données : API publique d'ESPN (sans clé) et YouTube (flux public, ou API YouTube si une clé est fournie).
 """
+import hmac
 import html
 import json
 import logging
@@ -12,6 +13,7 @@ import os
 import re
 import threading
 import time
+import traceback
 import unicodedata
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -24,8 +26,9 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import fantasy as F
+import stats as S
 
-APP_VERSION = "2026-11-v019"
+APP_VERSION = "2026-11-v020"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -84,9 +87,16 @@ def get_json(url, params=None, timeout=10):
         if r.status_code == 200:
             return r.json()
         log.warning("HTTP %s sur %s", r.status_code, url.split("?")[0])
+        S.add_error(f"HTTP {r.status_code} sur {_short_url(url)}")
     except Exception as e:
         log.warning("%s sur %s", type(e).__name__, url.split("?")[0])
+        S.add_error(f"{type(e).__name__} sur {_short_url(url)}")
     return None
+
+
+def _short_url(url):
+    """Adresse sans paramètres ni nom de domaine, pour le journal des erreurs (la clé YouTube n'y figure jamais)."""
+    return re.sub(r"^https?://[^/]+", "", url.split("?")[0])[-80:]
 
 
 def parse_dt(iso):
@@ -311,14 +321,14 @@ def day_games(day):
     return sorted(games, key=lambda g: (g["utc"] or "", g["id"]))
 
 
-def auto_refresh(games):
+def auto_refresh(games, show_all=False):
     """La page Streamlit ne se met pas à jour seule : un onglet laissé ouvert garde les scores du moment où on l'a ouvert.
     On recharge donc la page quand on revient sur l'onglet après plus de 3 minutes, et toutes les 90 secondes pendant
     les matchs (sauf si un panneau est ouvert, pour ne pas le refermer sous les yeux de l'utilisateur)."""
     now = datetime.now(timezone.utc)
     live = any(g["state"] == "in" or (g["state"] == "pre" and g["status"] != "STATUS_POSTPONED" and parse_dt(g["utc"])
                                       and parse_dt(g["utc"]) - now < timedelta(minutes=15)) for g in games)
-    busy = ".tg-f:checked, .tgp:checked, details[open]" if st.query_params.get("scores") == "1" else ".tg:checked, details[open]"
+    busy = ".tg-f:checked, .tgp:checked, details[open]" if show_all else ".tg:checked, details[open]"
     components.html(f"""<script>
 const P = window.parent, D = P.document;
 if (P.__bbAway) D.removeEventListener('visibilitychange', P.__bbAway);
@@ -449,6 +459,7 @@ def _fetch_uploads(api_key, channel_id, oldest, max_pages=40):
         except Exception as e:
             log.warning("API YouTube indisponible (%s)", type(e).__name__)
             API_STATUS.update(ok=False, msg=f"API YouTube injoignable ({type(e).__name__})", at=time.time())
+            S.add_error(API_STATUS["msg"])
             break
         if r.status_code != 200:
             log.warning("API YouTube : HTTP %s", r.status_code)
@@ -458,6 +469,7 @@ def _fetch_uploads(api_key, channel_id, oldest, max_pages=40):
             except Exception:
                 pass
             API_STATUS.update(ok=False, msg=f"API YouTube refusée : HTTP {r.status_code} {reason}".strip(), at=time.time())
+            S.add_error(API_STATUS["msg"])
             break
         API_STATUS.update(ok=True, msg="API YouTube active", at=time.time())
         payload = r.json()
@@ -3401,6 +3413,266 @@ def fantasy_page(schedule, idx, opening, today, zone, show_all):
 """)
 
 
+# =========================================================================
+# STATISTIQUES DE VISITE (anonymes) ET PAGE ADMIN (lien secret ?admin=<code>)
+# =========================================================================
+@st.cache_resource(show_spinner=False)
+def stats_store():
+    """Statistiques : stats/AAAA-MM.json sur GitHub (mêmes réglages [github] que le jeu), sinon sur le disque."""
+    store = F.Store(SESSION, str(_secret("github", "token", "")), str(_secret("github", "repo", "")),
+                    str(_secret("github", "branch", "data")), CACHE_DIR, folder="stats")
+    S.start_flusher(store)
+    return store
+
+
+def start_tracking(cookies):
+    """Au premier passage d'une visite : numéro de l'appareil (cookie nba_id), puis clics et durée laissés par la visite
+    précédente dans les cookies nba_ev / nba_hb (le navigateur ne peut pas les envoyer avant)."""
+    trk = st.session_state.get("trk")
+    if trk:
+        return trk
+    uid = cookies.get("nba_id", "") or ""
+    new = not re.fullmatch(r"[a-z0-9]{10}", uid)
+    try:
+        ua = (st.context.headers or {}).get("User-Agent", "")
+        tz = st.context.timezone or ""
+    except Exception:
+        ua, tz = "", ""
+    trk = {"u": S.new_id() if new else uid, "new": new, "me": cookies.get("nba_me") == "1", "z": tz, "dev": S.device(ua), "done": []}
+    st.session_state.trk = trk
+    stats_store()
+    for tok, e in S.parse_client(cookies.get("nba_ev")):
+        S.add(dict(e, u=trk["u"], **({"me": 1} if trk["me"] else {})))
+        trk["done"].append(tok)
+    hb = S.parse_hb(cookies.get("nba_hb"))
+    if hb:
+        S.add({"t": hb[1], "s": hb[0], "u": trk["u"], "k": "hb", **({"me": 1} if trk["me"] else {})})
+    return trk
+
+
+def track(kind, **fields):
+    trk = st.session_state.get("trk")
+    if not trk:
+        return
+    e = {"t": int(time.time()), "u": trk["u"], "k": kind, **{k: v for k, v in fields.items() if v not in (None, "")}}
+    if trk.get("me"):
+        e["me"] = 1
+    S.add(e)
+
+
+def finish_run(day):
+    """Fin de page : cookies à écrire (équipes, réglages, numéro de l'appareil) et petit script qui note les clics."""
+    ss = st.session_state
+    if ss.pop("fav_changed", False):
+        set_cookie("nba_fav", ".".join(ss.favs))
+    if ss.pop("opt_changed", False):
+        set_cookie("nba_opt", ("i1" if ss.opts["indice"] else "i0") + ("s1" if ss.opts["scores"] else "s0"))
+    trk = ss.get("trk")
+    if not trk:
+        return
+    if trk["new"]:
+        set_cookie("nba_id", trk["u"])
+        trk["new"] = False
+    click_tracker(day, trk["done"])
+
+
+def click_tracker(day, done):
+    """Les vidéos, stats et récaps s'ouvrent dans la page, sans passer par le serveur : on note chaque clic dans le cookie
+    nba_ev (relu au chargement suivant) et, toutes les 30 s tant que la page est affichée, l'heure dans nba_hb (durée)."""
+    components.html(f"""<script>
+const P = window.parent, D = P.document;
+P.__bbDay = {json.dumps(day.strftime("%y%m%d"))};
+const C = n => (D.cookie.split('; ').find(c => c.startsWith(n + '=')) || '').slice(n.length + 1);
+const W = (n, v) => {{ D.cookie = n + '=' + v + '; path=/; max-age=31536000; SameSite=Lax'; }};
+const done = {json.dumps(done)};
+if (done.length) W('nba_ev', C('nba_ev').split('-').filter(x => x && !done.includes(x)).join('-'));
+const now = () => Math.floor(Date.now() / 1000);
+const add = (k, g) => {{
+  const q = C('nba_ev').split('-').filter(Boolean);
+  q.push([now().toString(36), k, g || '', P.__bbDay].join('.'));
+  while (q.join('-').length > 3000) q.shift();
+  W('nba_ev', q.join('-'));
+}};
+const gid = el => {{ const c = el.closest('.gc'); return c ? c.id.slice(1) : ''; }};
+if (P.__bbClick) D.removeEventListener('click', P.__bbClick, true);
+if (P.__bbChange) D.removeEventListener('change', P.__bbChange, true);
+P.__bbClick = e => {{
+  const a = e.target.closest && e.target.closest('a.cbtn');
+  if (!a) return;
+  if (a.closest('.nrec')) add(a.classList.contains('fr') ? 'X' : 'R', '');
+  else add(a.classList.contains('fr') ? 'x' : a.classList.contains('ghost') ? 'q' : 'v', gid(a));
+}};
+P.__bbChange = e => {{
+  const i = e.target;
+  if (!i.checked || !i.classList) return;
+  if (i.classList.contains('tg-o')) add('s', i.id.slice(1));
+  else if (i.classList.contains('tg-s')) add('r', i.id.slice(1));
+  else if (i.classList.contains('tg-n')) add('n', '');
+  else if (i.classList.contains('tg-w')) add('w', '');
+  else if (i.classList.contains('tgp')) add('p', gid(i));
+}};
+D.addEventListener('click', P.__bbClick, true);
+D.addEventListener('change', P.__bbChange, true);
+const beat = () => {{
+  if (D.hidden) return;
+  const [s, l] = C('nba_hb').split('.').map(x => parseInt(x, 36));
+  const t = now();
+  W('nba_hb', ((s && l && t - l < 1800) ? s : t).toString(36) + '.' + t.toString(36));
+}};
+clearInterval(P.__bbBeat);
+beat();
+P.__bbBeat = setInterval(beat, 30000);
+</script>""", height=0)
+
+
+def admin_page(zone):
+    """Statistiques de visite : qui vient, quand, combien de temps, et ce qui est ouvert, nuit par nuit."""
+    import pandas as pd
+    store = stats_store()
+    S.flush(store)
+    tz = ZONES[zone]
+    st.markdown("<div class='bb-brand'>Bada Bing <span>NBA</span> · admin</div>", unsafe_allow_html=True)
+    c1, c2 = st.columns([2, 1], vertical_alignment="bottom")
+    period = c1.segmented_control("Période", [1, 7, 30, 90], default=7, key="adm_p",
+                                  format_func=lambda n: "Aujourd'hui" if n == 1 else f"{n} jours") or 7
+    mine = c2.toggle("Compter mes appareils", value=False, help="Cet appareil est reconnu comme le tien depuis que tu as ouvert cette page.")
+    now = time.time()
+    since = now - period * 86400
+    months = sorted({S.month_of(since + i * 86400) for i in range(period + 1)} | {S.month_of(now)})
+    raw = S.dedupe([e for m in months for e in (store.load(f"{m}.json", []) or []) if e.get("t", 0) >= since])
+    names = store.load("names.json", {}) or {}
+    errs = [e for e in raw if e["k"] == "err"]
+    evs = [e for e in raw if e["k"] != "err" and (mine or not e.get("me"))]
+    info = {}
+    for e in evs:
+        if e["k"] == "open":
+            i = info.setdefault(e["u"], {"first": e["t"], "z": "", "dev": "", "new": False})
+            i.update(z=e.get("z", i["z"]), dev=e.get("dev", i["dev"]))
+            i["new"] = i["new"] or bool(e.get("n"))
+
+    def who(u):
+        return names.get(u) or f"{(info.get(u) or {}).get('dev', 'Appareil')} n°{u[:4]}"
+
+    def hm(t):
+        return datetime.fromtimestamp(t, tz).strftime("%d/%m %H:%M")
+
+    vis = S.visits(evs)
+    acts = S.night_activity(evs)
+    clicks = [e for e in evs if e["k"] in S.CLIENT_KINDS]
+    m = st.columns(5)
+    m[0].metric("Visiteurs", len({v["u"] for v in vis}), help="Appareils différents (un téléphone et un PC = 2)")
+    m[1].metric("Dont nouveaux", sum(1 for i in info.values() if i["new"]))
+    m[2].metric("Visites", len(vis), help="30 minutes sans rien = nouvelle visite")
+    m[3].metric("Durée moyenne", S.fmt_dur(sum(v["end"] - v["start"] for v in vis) / len(vis)) if vis else "–",
+                help="Temps où la page est restée affichée. La visite en cours n'est comptée qu'au chargement suivant.")
+    m[4].metric("Vidéos lancées", sum(1 for e in clicks if e["k"] in "vxqRX"))
+    if not raw:
+        st.info("Pas encore de visite enregistrée sur cette période. Les visites arrivent ici quelques minutes après "
+                "(envoi toutes les 5 minutes) ; les clics d'une visite, à son chargement suivant.")
+
+    # Quand ?
+    if vis:
+        g1, g2 = st.columns(2)
+        hours = [0] * 24
+        for v in vis:
+            hours[datetime.fromtimestamp(v["start"], tz).hour] += 1
+        g1.markdown(f"**Heure d'arrivée** (heure de {zone})")
+        g1.bar_chart(pd.DataFrame({"Visites": hours}, index=[f"{h:02d}h" for h in range(24)]), height=220)
+        per_day = defaultdict(set)
+        for v in vis:
+            per_day[datetime.fromtimestamp(v["start"], tz).strftime("%d/%m")].add(v["u"])
+        g2.markdown("**Visiteurs par jour**")
+        g2.bar_chart(pd.DataFrame({"Visiteurs": [len(x) for x in per_day.values()]}, index=list(per_day)), height=220)
+
+    # Nuit par nuit
+    st.markdown("#### Nuit par nuit")
+    st.caption("Vidéos et stats : nombre de matchs différents ouverts. Une nuit = jour du match aux États-Unis.")
+    nights = defaultdict(lambda: {"u": set(), "v": 0, "x": 0, "s": 0, "R": 0, "X": 0, "n": 0})
+    for (u, d), a in acts.items():
+        n = nights[d]
+        n["u"].add(u)
+        for k in ("v", "x", "s"):
+            n[k] += len(a[k])
+        for k in ("R", "X", "n"):
+            n[k] += a[k]
+    if nights:
+        st.dataframe(pd.DataFrame([{
+            "Nuit": night_label(date.fromisoformat(d), zone), "Visiteurs": len(n["u"]), "Résumés vidéo": n["v"], "Stats": n["s"],
+            "Résumé de la nuit": n["R"], "NBA Extra (match)": n["x"], "NBA Extra (émission)": n["X"], "Récap révélé": n["n"]}
+            for d, n in sorted(nights.items(), reverse=True)]), hide_index=True, width="stretch")
+
+        st.markdown("#### Qui a regardé quoi")
+        yes = lambda b: "✓" if b else ""
+        st.dataframe(pd.DataFrame([{
+            "Nuit": night_label(date.fromisoformat(d), zone), "Visiteur": who(u),
+            "Résumés vidéo": len(a["v"]) or "", "Stats": len(a["s"]) or "", "Scores révélés": len(a["r"]) or "",
+            "Résumé de la nuit": yes(a["R"]), "NBA Extra": (f"{len(a['x'])} match(s)" if a["x"] else "") + (" + émission" if a["X"] else ""),
+            "Récap révélé": yes(a["n"]), "Cartes de tirs": a["p"] or "", "Dernier passage": hm(a["last"])}
+            for (u, d), a in sorted(acts.items(), key=lambda kv: (kv[0][1], kv[1]["last"]), reverse=True)]),
+            hide_index=True, width="stretch")
+
+    # Visiteurs
+    if vis:
+        st.markdown("#### Les visiteurs")
+        per_u = defaultdict(list)
+        for v in vis:
+            per_u[v["u"]].append(v)
+        rows = []
+        for u, vs in sorted(per_u.items(), key=lambda kv: -kv[1][-1]["end"]):
+            i = info.get(u, {})
+            rows.append({"Visiteur": who(u), "Appareil": i.get("dev", ""), "Fuseau": i.get("z", ""),
+                         "Visites": len(vs), "Temps total": S.fmt_dur(sum(v["end"] - v["start"] for v in vs)),
+                         "Vidéos": sum(1 for e in clicks if e["u"] == u and e["k"] in "vxqRX"),
+                         "Première": hm(vs[0]["start"]), "Dernière": hm(vs[-1]["end"])})
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+        with st.expander("✏️ Donner un nom à un visiteur"):
+            u = st.selectbox("Visiteur", list(per_u), format_func=lambda u: f"{who(u)} · {info.get(u, {}).get('z', '')}", key="adm_u")
+            nm = st.text_input("Nom", value=names.get(u, ""), key=f"adm_nm_{u}")
+            if st.button("Enregistrer", key="adm_save"):
+                def change(d):
+                    if nm.strip():
+                        d[u] = nm.strip()[:30]
+                    else:
+                        d.pop(u, None)
+                store.update("names.json", {}, change, "Statistiques : nom d'un visiteur")
+                st.rerun()
+
+    # Journal
+    with st.expander("📜 Journal des 150 derniers événements"):
+        rows = []
+        for e in sorted([e for e in evs if e["k"] != "hb"], key=lambda e: -e["t"])[:150]:
+            label = S.KINDS.get(e["k"], e["k"])
+            if e.get("g") and e.get("d"):
+                g = next((g for g in day_games(date.fromisoformat(e["d"])) if g["id"] == e["g"]), None)
+                if g:
+                    label += f" · {team(g['away']['id'])['name']} @ {team(g['home']['id'])['name']}"
+            rows.append({"Heure": hm(e["t"]), "Visiteur": who(e["u"]), "Quoi": label,
+                         "Nuit": night_label(date.fromisoformat(e["d"]), zone) if e.get("d") else "", "Détail": e.get("x", "")})
+        if rows:
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+
+    # Ce qui ne marche pas
+    st.markdown("#### Erreurs")
+    if errs:
+        st.dataframe(pd.DataFrame([{"Heure": hm(e["t"]), "Erreur": e["x"]} for e in sorted(errs, key=lambda e: -e["t"])[:60]]),
+                     hide_index=True, width="stretch")
+    else:
+        st.caption("Aucune erreur sur la période.")
+    w = video_watcher()
+    if not _secret("youtube", "api_key", ""):
+        yt = "⚠️ Pas de clé YouTube : seulement les 15 dernières vidéos de chaque chaîne (+ la veille)."
+    elif API_STATUS["ok"] is False:
+        yt = f"⚠️ {API_STATUS['msg']}"
+    else:
+        yt = "✅ Clé YouTube active"
+    nb = sum(len(v) for v in w["seen"].values())
+    st.caption(f"{yt} · veille : {nb} vidéos gardées"
+               + (f", dernier passage à {fr_hour(datetime.fromtimestamp(w['last'], tz))}" if w["last"] else ""))
+    st.caption(("✅ Statistiques enregistrées sur GitHub (branche « " + store.branch + " », dossier stats/)") if store.remote
+               else "⚠️ Pas de jeton GitHub ([github] token / repo) : statistiques gardées sur le disque, perdues au redémarrage du site.")
+    st.caption(f"Version {APP_VERSION}")
+
+
 def main():
     st.set_page_config(page_title="Bada Bing NBA", page_icon="🏀", layout="wide")
     st.markdown(CSS, unsafe_allow_html=True)
@@ -3412,11 +3684,27 @@ def main():
         st.session_state.favs = [x for x in (cookies.get("nba_fav", "") or "").split(".") if x]
     if "seen" not in st.session_state:
         st.session_state.seen = read_seen(cookies)
+    if "opts" not in st.session_state:  # réglages gardés dans un cookie (nba_opt) ; les anciens liens ?scores=1 marchent encore
+        opt = cookies.get("nba_opt", "") or ""
+        st.session_state.opts = {"indice": "i0" not in opt and st.query_params.get("indice") != "0",
+                                 "scores": "s1" in opt or st.query_params.get("scores") == "1"}
+        st.query_params.pop("indice", None)
+        st.query_params.pop("scores", None)
     zone = user_zone()
+    trk = start_tracking(cookies)
     today = datetime.now(NY).date()
     season = season_of(today)
-    show_all = st.query_params.get("scores") == "1"
-    interest = st.query_params.get("indice") != "0"
+    show_all = st.session_state.opts["scores"]
+    interest = st.session_state.opts["indice"]
+
+    # Page admin : seulement avec le lien secret ?admin=<code> ([admin] code dans les secrets), aucun bouton pour y aller
+    code = str(_secret("admin", "code", ""))
+    if code and hmac.compare_digest(str(st.query_params.get("admin", "")), code):
+        trk["me"] = True
+        admin_page(zone)
+        set_cookie("nba_me", "1")
+        finish_run(today)
+        return
 
     with st.spinner("Chargement du calendrier…"):
         schedule = season_games(season, bucket(3600))
@@ -3438,6 +3726,10 @@ def main():
         st.query_params["vue"] = view
     else:
         st.query_params.pop("vue", None)
+    if trk.get("last") != (view, day):  # arrivée, puis chaque changement de nuit ou de vue
+        track("nav" if trk.get("last") else "open", d=day.isoformat(), x=view,
+              **({} if trk.get("last") else {"z": trk["z"], "dev": trk["dev"], "n": 1 if trk["new"] else None}))
+        trk["last"] = (view, day)
 
     def go(d, v="nuit"):
         st.session_state.day, st.session_state.view = d, v
@@ -3468,36 +3760,23 @@ def main():
             if favs != st.session_state.favs:
                 st.session_state.favs = favs
                 st.session_state.fav_changed = True
+                track("set", x="équipes:" + ".".join(favs))
             new_interest = st.toggle("🔥 Indice « à voir » (sans dire qui gagne)", value=interest,
                                      help="Note chaque match terminé, de 🔥🔥🔥 à ⛔, et range les meilleurs en premier.")
             new_show = st.toggle("👁 Toujours montrer les scores", value=show_all)
             if new_interest != interest or new_show != show_all:
-                if new_interest:
-                    st.query_params.pop("indice", None)
-                else:
-                    st.query_params["indice"] = "0"
-                if new_show:
-                    st.query_params["scores"] = "1"
-                else:
-                    st.query_params.pop("scores", None)
+                st.session_state.opts = {"indice": new_interest, "scores": new_show}
+                st.session_state.opt_changed = True
+                track("set", x=("indice:" + ("oui" if new_interest else "non")) if new_interest != interest
+                      else ("scores:" + ("oui" if new_show else "non")))
                 st.rerun()
-            w = video_watcher()
-            if not _secret("youtube", "api_key", ""):
-                yt = "⚠️ Pas de clé YouTube : seulement les 15 dernières vidéos de chaque chaîne (+ la veille)."
-            elif API_STATUS["ok"] is False:
-                yt = f"⚠️ {API_STATUS['msg']}"
-            else:
-                yt = "✅ Clé YouTube active"
-            nb = sum(len(v) for v in w["seen"].values())
-            st.caption(f"{yt} · veille : {nb} vidéos gardées"
-                       + (f", dernier passage à {fr_hour(datetime.fromtimestamp(w['last'], ZONES[zone]))}" if w["last"] else ""))
-            st.caption(f"Version {APP_VERSION} · ESPN, YouTube")
+            st.caption(f"Version {APP_VERSION} · ESPN, YouTube · statistiques de visite anonymes")
+    video_watcher()  # la veille des vidéos tourne en fond (son état est sur la page admin)
 
 
     if view == "fantasy":
         fantasy_page(schedule, idx, opening, today, zone, show_all)
-        if st.session_state.pop("fav_changed", False):
-            set_cookie("nba_fav", ".".join(st.session_state.favs))
+        finish_run(day)
         return
 
     # Bandeau sur une ligne : ‹  Semaine N  |  7 nuits  › ; une pastille dorée = nuit terminée pas encore ouverte, rouge = en cours
@@ -3551,9 +3830,8 @@ def main():
         watch = {k: v for k, v in watch.items() if v}
         ctx.update(summ=summs, watch=watch)
         st.markdown(week_html(week_days, games_by_day, summs, watch, ctx), unsafe_allow_html=True)
-        if st.session_state.pop("fav_changed", False):
-            set_cookie("nba_fav", ".".join(st.session_state.favs))
-        auto_refresh(played)
+        finish_run(day)
+        auto_refresh(played, show_all)
         return
 
     games = games_by_day.get(day) if day in games_by_day else day_games(day)
@@ -3615,10 +3893,14 @@ def main():
 
     if st.session_state.pop("seen_changed", False):
         write_seen(seen)
-    if st.session_state.pop("fav_changed", False):
-        set_cookie("nba_fav", ".".join(st.session_state.favs))
-    auto_refresh(games)
+    finish_run(day)
+    auto_refresh(games, show_all)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:  # plantage : noté pour la page admin, puis affiché comme d'habitude
+        where = traceback.extract_tb(e.__traceback__)[-1]
+        S.add_error(f"Plantage {type(e).__name__} : {str(e)[:150]} (ligne {where.lineno}, {where.name})")
+        raise

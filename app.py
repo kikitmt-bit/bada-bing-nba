@@ -28,7 +28,7 @@ import streamlit.components.v1 as components
 import fantasy as F
 import stats as S
 
-APP_VERSION = "2026-11-v027"
+APP_VERSION = "2026-11-v029"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -1728,7 +1728,7 @@ label.pl:hover {color:var(--accent);}
 /* En-tête : marque | 📅 | ⚙️ */
 .st-key-hdr [data-testid="stHorizontalBlock"] {flex-wrap:nowrap; align-items:center; gap:8px;}
 .st-key-hdr [data-testid="stColumn"] {width:auto !important; flex:0 0 auto !important; min-width:0 !important;}
-.st-key-hdr [data-testid="stColumn"]:first-child {flex:1 1 auto !important;}
+
 .st-key-hdr button {min-height:42px; min-width:46px; border-radius:12px;}
 
 /* Bandeau sur une ligne : ‹ | Semaine | 7 nuits | › */
@@ -2888,7 +2888,7 @@ def vb(tid, sing, plur):
     return sing if team(tid)["name"] in SINGULIER else plur
 
 
-def night_story(day, games, summs, idx, watch, moves=None):
+def night_story(day, games, summs, idx, watch, moves=None, mvp=True):
     """« La nuit en bref » : jusqu'à 5 faits (icône, phrase) : match de la nuit, MVP, surprise ou remontée, raclée, série, classement."""
     done = [g for g in games if g["state"] == "post" and g["home"]["score"] is not None and g["away"]["score"] is not None]
     if not done:
@@ -2920,7 +2920,7 @@ def night_story(day, games, summs, idx, watch, moves=None):
             for r in rows:
                 if not r.get("dnp") and r.get("stats"):
                     perfs.append((game_score(r["stats"]), r, tid))
-    if perfs:
+    if perfs and mvp:
         _, r, tid = max(perfs, key=lambda x: x[0])
         out.append(("⭐", f"Le MVP de la nuit : {r['name']} ({team(tid)['name']}), {stat_line(r['stats'])}."))
     upsets = []
@@ -3000,8 +3000,8 @@ def ai_night(day, sentences, games):
         return None
 
 
-def story_html(day, games, summs, idx, watch, moves=None):
-    sentences = night_story(day, games, summs, idx, watch, moves)
+def story_html(day, games, summs, idx, watch, moves=None, mvp=True):
+    sentences = night_story(day, games, summs, idx, watch, moves, mvp)
     text = ai_night(day, sentences, games)
     if text:
         return f"<p class='story'>{esc(text)}</p>"
@@ -3765,6 +3765,12 @@ def apply_restore(q):
             trk["me"] = True
         uid = q.get("id", "")
         if re.fullmatch(r"[a-z0-9]{10}", uid) and uid != trk["u"]:
+            old_u = trk["u"]
+            with S.LOCK:  # l'arrivée déjà notée avec le numéro provisoire passe au vrai numéro de l'appareil
+                for e in S.BUFFER:
+                    if e.get("u") == old_u:
+                        e["u"] = uid
+                        e.pop("n", None)
             trk["u"], trk["new"] = uid, False
             if trk.get("pending"):
                 trk["pending"].update(u=uid)
@@ -4219,10 +4225,23 @@ def team_page(schedule, idx, season, cut, days, today, zone, show_all):
 PAGES_CSS = """
 <style>
 /* ---- v023 : en-tête, onglets, bande des nuits ---- */
-.block-container {padding-top: 1.2rem !important;}
+.block-container {padding-top: .6rem !important;}
+/* les blocs invisibles du haut (styles, scripts) ne prennent plus de place */
+div[data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style:first-child),
+div[data-testid="stElementContainer"]:has(> iframe[data-testid="stIFrame"]), div:has(> .st-key-gobox) {
+  position:absolute !important; width:0 !important; height:0 !important; overflow:hidden !important; margin:0 !important; padding:0 !important;}
+/* en-tête : titre + petite roue crantée discrète */
+.st-key-hdr [data-testid="stColumn"]:nth-child(1), .st-key-hdr [data-testid="stColumn"]:nth-child(2) {flex:0 0 auto !important; width:auto !important; min-width:0 !important;}
+.st-key-hdr [data-testid="stColumn"]:nth-child(3) {flex:1 1 auto !important;}
+.st-key-hdr [data-testid="stPopover"] button {min-height:34px !important; min-width:34px !important; padding:2px 6px !important; border:none !important;
+  background:transparent !important; color:#6f7a8f !important; box-shadow:none !important;}
+.st-key-hdr [data-testid="stPopover"] button:hover {color:#ffc75a !important;}
+.st-key-hdr [data-testid="stPopover"] {margin-top:6px;}
+.st-key-hdr [data-testid="stPopover"] button [data-testid="stIconMaterial"] {font-size:1.35rem;}
+.st-key-hdr [data-testid="stPopover"] button > div > div[aria-hidden="true"] {display:none;}
 .st-key-gobox {position:absolute !important; left:-9999px; top:0; width:1px; height:1px; overflow:hidden;}
 .st-key-hdr [data-testid="stHorizontalBlock"] {flex-wrap:nowrap; align-items:center;}
-.st-key-hdr [data-testid="stColumn"]:last-child {flex:0 0 auto !important; width:auto !important; min-width:0 !important;}
+
 .bb-brand small {display:inline-block; margin-left:10px; font-family:'Barlow', sans-serif; font-size:.72rem; font-weight:700; letter-spacing:.08em;
   color:#c3cad6; border:1px solid #2a3344; border-radius:999px; padding:3px 9px; vertical-align:middle; text-transform:uppercase;}
 .st-key-tabs {position:sticky; top:0; z-index:50; background:rgba(11,15,23,.92); backdrop-filter:blur(10px); padding:6px 0 8px; margin:-4px 0 4px;}
@@ -5032,7 +5051,7 @@ def brief_page(schedule, idx, season, days, today, zone, show_all, interest):
                 f"<div class='bs-h'><span>{title}</span><label for='bs-{sid}' class='pill'><span class='off'>👁 Voir</span><span class='on'>🙈 Cacher</span></label></div>"
                 f"<div class='bs-c'>{content}</div><div class='bs-hid'>Caché pour ne rien dévoiler.</div></div>")
     secs = ""
-    story = story_html(last, games, summs, idx, watch, moves) if done else ""
+    story = story_html(last, games, summs, idx, watch, moves, mvp=False) if done else ""
     mvp_html = ""
     if perfs:  # le MVP de la nuit : photo, équipe, adversaire et sa ligne de stats complète
         _, r, tid, _, g = perfs[0]
@@ -5047,9 +5066,10 @@ def brief_page(schedule, idx, season, days, today, zone, show_all, interest):
                     f"<small>{mini_logo(tid, 16)} {esc(team(tid)['name'])} {'contre' if g['home']['id'] == tid else 'chez'} les {esc(team(opp)['name'])}</small>"
                     f"<div class='mvp-s'>{''.join(f'<span><b>{esc(v)}</b><i>{k}</i></span>' for k, v in cells)}</div></div></div>")
     if done:
+        perf_body = (f"<div class='mvp-k'>🏆 Le MVP de la nuit</div>{mvp_html}" if mvp_html else "") + (
+            f"<div class='mvp-k'>Les autres grosses perfs</div><ul>{plist(perfs[1:7])}</ul>" if len(perfs) > 1 else "")
         secs = ("<div class='bsecs'>" + (section("story", "📝 La nuit en bref", story, "", raw=True, cls="w2") if story else "")
-                + (section("mvp", "🏆 Le MVP de la nuit", mvp_html, "", raw=True) if mvp_html else "")
-                + section("perf", "💥 Les grosses perfs", plist(perfs[1:7]), "Pas de feuille de match pour l’instant.")
+                + section("perf", "💥 Le MVP et les grosses perfs", perf_body or "<ul><li class=ok>Pas de feuille de match pour l’instant.</li></ul>", "", raw=True)
                 + section("cls", "📊 Ce qui a bougé au classement", move_html, "Rien de notable.")
                 + section("nous", f"{flag} Nos {'Français' if pays == 'FR' else 'Canadiens'} cette nuit", plist(ours), "Aucun n’a joué cette nuit.") + "</div>")
     reveal = "" if show_all or not done else (
@@ -5139,7 +5159,7 @@ BRIEF_CSS = """
 .bt-b {display:flex; align-items:center; gap:6px; margin-top:auto; padding-top:6px; border-top:1px solid rgba(255,255,255,.07); flex-wrap:nowrap; overflow:hidden;}
 .bt-b .cbtn {padding:4px 10px; font-size:.8rem; white-space:nowrap;} .bt-b a.lk {margin-left:auto; font-size:.85rem;} .bt-b .wt {font-size:.74rem;}
 /* rubriques cachées */
-.bsecs {display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:12px;} .bs.wide {grid-column:1 / -1;}
+.bsecs {display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:12px; align-items:start;} .bs.wide {grid-column:1 / -1;}
 .story {color:#e3e8f0; font-size:1rem; line-height:1.6; margin:8px 0 2px;}
 .bf-act {display:flex; align-items:center; gap:8px; flex-wrap:wrap;} .bf-act .cbtn {padding:7px 14px;}
 .bf-act .cbtn.off {opacity:.6; cursor:default;}
@@ -5165,7 +5185,8 @@ BRIEF_CSS = """
 .story-l {list-style:none; margin:8px 0 0; padding:0;} .story-l li {display:flex; gap:12px; align-items:flex-start; padding:8px 0; border-bottom:1px solid #171d29;
   font-size:.98rem; line-height:1.45; color:#e3e8f0;} .story-l li:last-child {border-bottom:none;}
 .story-l .ic {flex:none; width:34px; height:34px; border-radius:10px; background:rgba(255,199,90,.1); display:flex; align-items:center; justify-content:center; font-size:1.1rem;}
-.mvp {display:flex; gap:14px; align-items:center; margin-top:10px; padding:12px; border-radius:14px;
+.mvp-k {color:#ffc75a; font-weight:700; font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; margin:12px 0 0;}
+.mvp {display:flex; gap:14px; align-items:center; margin-top:6px; padding:12px; border-radius:14px;
   background:linear-gradient(135deg, color-mix(in srgb, var(--c) 35%, #10151f), #10151f 75%);}
 .mvp img.hs {border:3px solid rgba(255,199,90,.6); background:rgba(255,255,255,.08);} .mvp-b {min-width:0; flex:1;}
 .mvp-n a.tl {font-family:'Barlow Condensed', sans-serif; font-size:1.45rem; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;}
@@ -5243,6 +5264,9 @@ def track(kind, **fields):
     S.add(e)
 
 
+WHO = {"kiki": "Kiki", "busta": "Busta", "tom": "Tom"}  # liens personnels ?qui=… pour la page admin
+
+
 def finish_run(day):
     """Fin de page : cookies à écrire (équipes, réglages, numéro de l'appareil) et petit script qui note les clics."""
     ss = st.session_state
@@ -5260,6 +5284,10 @@ def finish_run(day):
     trk = ss.get("trk")
     if not trk:
         return
+    if ss.get("claim") and ss.get("claim_u") != trk["u"]:  # (de nouveau si `restore` a rendu le vrai n° d'appareil)
+        name, uid = ss.claim, trk["u"]
+        stats_store().update("names.json", {}, lambda d: d.__setitem__(uid, name), f"Statistiques : appareil de {name}")
+        ss.claim_u = uid
     if trk.get("pending"):  # arrivée comptée seulement quand la page s'est affichée en entier
         S.add(trk.pop("pending"))
     click_tracker(day, trk["done"])
@@ -5374,8 +5402,8 @@ def admin_page(zone):
     c1, c2 = st.columns([2, 1], vertical_alignment="bottom")
     period = c1.segmented_control("Période", [1, 7, 30, 90], default=7, key="adm_p",
                                   format_func=lambda n: "Aujourd'hui" if n == 1 else f"{n} jours") or 7
-    mine = c2.toggle("Compter mes appareils", value=False,
-                     help="Un appareil qui ouvre cette page est reconnu comme le tien. Tu peux en marquer d'autres plus bas.")
+    hide_me = c2.toggle("Exclure mes visites (Kiki)", value=False,
+                        help="Un appareil qui ouvre cette page est reconnu comme le tien (Kiki).")
     now = time.time()
     since = now - period * 86400
     months = sorted({S.month_of(since + i * 86400) for i in range(period + 1)} | {S.month_of(now)})
@@ -5385,11 +5413,30 @@ def admin_page(zone):
     if me_trk.get("u") and me_trk["u"] not in names.get("_moi", []):  # l'appareil qui ouvre cette page est à toi
         names = store.update("names.json", {}, lambda d: d.setdefault("_moi", []).append(me_trk["u"]),
                              "Statistiques : un appareil de l'admin") or names
-    moi = set(names.get("_moi", []))
+    moi = set(names.get("_moi", [])) | {e["u"] for e in raw if e.get("me") and e.get("u")}
     errs = [e for e in raw if e["k"] == "err"]
-    # Un même nom donné à plusieurs numéros (téléphone + PC, navigation privée…) = une seule personne
-    evs = [dict(e, u=names.get(e["u"]) or e["u"]) if e.get("u") else e
-           for e in raw if e["k"] != "err" and (mine or not (e.get("me") or e.get("u") in moi))]
+    # Qui est qui : un nom donné (page admin ou lien ?qui=), sinon Kiki = appareils de l'admin, Busta = fuseau d'Amérique (Montréal),
+    # « Tom ? » = appareil français revenu au moins 2 jours (à confirmer avec le lien ?qui=tom ou le bouton plus bas)
+    tz_of, days_of = {}, defaultdict(set)
+    for e in raw:
+        if e.get("u") and e["k"] == "open":
+            tz_of[e["u"]] = e.get("z") or tz_of.get(e["u"], "")
+            days_of[e["u"]].add(datetime.fromtimestamp(e["t"], tz).date())
+
+    def person(u):
+        if names.get(u):
+            return names[u]
+        if u in moi:
+            return "Kiki"
+        if tz_of.get(u, "").startswith("America/"):
+            return "Busta"
+        if tz_of.get(u, "").startswith("Europe/") and len(days_of[u]) >= 2:
+            return "Tom ?"
+        return u
+    # Un même nom pour plusieurs numéros (téléphone + PC, navigation privée…) = une seule personne
+    evs = [dict(e, u=person(e["u"])) if e.get("u") else e for e in raw if e["k"] != "err"]
+    if hide_me:
+        evs = [e for e in evs if e.get("u") != "Kiki"]
     info = {}
     for e in evs:
         if e["k"] == "open":
@@ -5475,14 +5522,15 @@ def admin_page(zone):
         st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
         with st.expander("✏️ Nommer, regrouper ou retirer des visiteurs"):
             st.caption("Un même nom pour plusieurs lignes = une seule personne (son téléphone et son PC, par exemple). "
-                       "« Ce sont mes appareils » les retire des chiffres.")
+                       "Plus simple : envoie à Tom le lien https://badabingnba.streamlit.app/?qui=tom et à Busta "
+                       "https://badabingnba.streamlit.app/?qui=busta : en l'ouvrant une fois sur chaque appareil, il est reconnu.")
             first = {p: min(v["start"] for v in vs) for p, vs in per_u.items()}
             sel = st.multiselect("Visiteurs", list(per_u), key="adm_u", placeholder="Choisir une ou plusieurs lignes",
                                  format_func=lambda p: f"{who(p)} · {info.get(p, {}).get('z', '')} · {hm(first[p])}")
-            nm = st.text_input("Nom", key="adm_nm", placeholder="Ex. : Pote Montréal")
-            is_me = st.checkbox("Ce sont mes appareils (ne pas les compter)", key="adm_me")
+            nm = st.text_input("Nom", key="adm_nm", placeholder="Ex. : Tom, Busta…")
+            is_me = st.checkbox("C'est moi (Kiki)", key="adm_me")
             if st.button("Enregistrer", key="adm_save", disabled=not sel):
-                real = {u for u in ids if u in sel or names.get(u) in sel}   # numéros derrière les lignes choisies
+                real = {u for u in ids if u in sel or person(u) in sel}   # numéros derrière les lignes choisies
 
                 def change(d):
                     for u in real:
@@ -5557,6 +5605,13 @@ def main():
         st.query_params.pop("scores", None)
     zone = user_zone()
     trk = start_tracking(cookies)
+    if go_cmd and "restore=1" in go_cmd:  # réglages renvoyés par la page : tout de suite (la page admin s'arrête avant le reste)
+        apply_go(go_cmd)
+        go_cmd = ""
+    qui = str(st.query_params.get("qui", "")).strip().lower()
+    if qui in WHO:  # lien personnel (?qui=tom) : l'appareil est nommé dans les statistiques
+        st.session_state.claim = WHO[qui]
+        st.query_params.pop("qui", None)
     if trk["new"]:  # numéro de l'appareil écrit tout de suite, sauf si le navigateur en a déjà un (il sera renvoyé par `restore`)
         set_cookie("nba_id", trk["u"], only_if_missing=True)
     today = datetime.now(NY).date()
@@ -5632,9 +5687,9 @@ def main():
     monday, num = week_of(day, opening)
     week_days = [monday + timedelta(days=i) for i in range(7)]
     with st.container(key="hdr"):
-        c1, c3 = st.columns([1, 0.001], vertical_alignment="center")
+        c1, c3, _ = st.columns([0.001, 0.001, 1], vertical_alignment="center")  # titre, puis la roue des réglages juste à côté
         c1.markdown("<div class='bb-brand'>Bada Bing <span>NBA</span></div>", unsafe_allow_html=True)
-        with c3.popover("Réglages", icon=":material/settings:", help="Réglages"):
+        with c3.popover("", icon=":material/settings:", help="Réglages : mon équipe, pays, scores"):
             settings_panel(interest, show_all)
     with st.container(key="tabs"):
         cols = st.columns(len(TABS))

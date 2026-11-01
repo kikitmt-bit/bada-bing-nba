@@ -42,9 +42,30 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   Noms longs en plus petit (`name_cls`) pour tenir en entier.
   Fiche (`.tg-o`) : pour un match joué, l'ouvrir = vouloir le score → score (afficheur « Final ») et stats directement ; avant un match :
   avant-match + forme. Polices Barlow / Barlow Condensed / Orbitron. Mise en page `wide`, 1240 px max.
-- **En-tête (`main`)** : marque seule (pas de sous-titre), 📅 (dernière nuit / date) et ⚙️ en icônes (`key="hdr"`). Bandeau sur UNE ligne
-  (`key="nav"`, défile au doigt) : ‹ | « Semaine N » (vue Semaine, `?vue=semaine`) | 7 nuits courtes « Jeu. 22 → 23 » (`night_label`,
-  doivent tenir en entier) | ›. Semaines NBA lundi → dimanche (`season_opening`, `week_of`). État de la nuit en infobulle.
+- **Navigation (v023, « version finale », carte blanche de Kiki)** : en-tête = marque + pastille « sans spoil » + ⚙️ Réglages
+  (`key="hdr"`, `settings_panel` : équipes, indice, scores). Puis 5 ONGLETS collants (`key="tabs"`, `TABS`, icônes Material ; sur
+  téléphone icône au-dessus du mot) : Matchs (`?vue` absent) · Programme (`?vue=programme`) · Classement (`?vue=classement`) ·
+  Mon équipe (`?vue=equipe&eq=LAL`, l'onglet prend le nom de l'équipe) · Semaine (`?vue=semaine`). Re-cliquer « Matchs » = dernière nuit.
+  Bande des nuits (`key="nav"`) : ‹ | 7 nuits | › | 📅. Chaque nuit sur 2 lignes, jamais coupée (`chip_text`) : petit texte en CSS
+  `::before` (« Sam. → Dim. », ou « Nuit dernière » / « Cette nuit ») + grand texte « 31 → 1 » (Paris) ou « 31 oct. » (Montréal) ;
+  pastille `::after` (dorée = pas encore vue, rouge = en cours). Sur téléphone la bande défile et se centre sur la nuit affichée
+  (`click_tracker`). Vue Semaine : bande `key="navw"` ‹ Semaine N · du … au … ›. Semaines NBA lundi → dimanche (`week_of`).
+  Le bouton 🏆 du « 5 de la semaine » est retiré (prototype mis de côté) : le jeu reste joignable par `?vue=fantasy`.
+  Liens internes dans le HTML (`link`, `team_link`) : `<a href="/?nuit=…" target="_top">` (rechargent la page) ; boutons Streamlit
+  pour la navigation principale. Bandeau de bienvenue à la 1re visite (`welcome`, cookie `nba_hello`). Pied de page (`page_footer`).
+- **Pas de spoil dans les chiffres (`spoil_cut`)** : bilans, classement, séries comptent les matchs AVANT la dernière nuit jouée tant
+  que l'appareil ne l'a pas ouverte (cookie `nba_vues`) ; interrupteur « Inclure la dernière nuit » ; tout est à jour si elle a été
+  ouverte ou avec « Toujours montrer les scores ».
+- **Programme (`programme_page`)** : 7 prochaines nuits (scoreboard ESPN), heure locale, bilans (sans spoil), chaîne US, « ★ Mon équipe »,
+  « 🔥 L'affiche » (`quick_hype` : deux équipes qui gagnent), filtre Tous / Mes équipes, lien « Voir la nuit ›», agenda .ics
+  (`ics_calendar`, `agenda_button`, heures de `_team_schedule` → champ `utc`).
+- **Classement (`standings_page`, `standings`)** : calculé par le site depuis `team_index` (pas ESPN, pour la coupure sans spoil) :
+  V, D, %, écart, dom., ext., 10 derniers, série ; 1-6 vert (play-offs), 7-10 orange (play-in), équipes favorites surlignées.
+- **Mon équipe (`team_page`)** : sans équipe = grille des 30 (`team_picker`). Bandeau aux couleurs, 7 tuiles (bilan + rang, série,
+  10 derniers, dom., ext., attaque/défense + rang NBA), « Suivre » / autre équipe, prochain match (heure, dom./ext., 2e soir, TV),
+  infirmerie et meneurs de la saison (résumé ESPN d'avant-match), 10 prochains matchs + agenda, 10 derniers matchs (résultats cachés,
+  `.tg-r`), effectif (`team_roster`, photos ESPN), actus ESPN repliées (`team_news`, en anglais, peuvent spoiler).
+  Classes CSS des pages dans `PAGES_CSS` (attention aux noms déjà pris dans `CSS` : `.box` = box score, `.tm` = cartes).
 - **Le récap de la nuit (`night_html`, `.nrec`, v018 : « plus d'impact », demande de Kiki)** : grand bloc en tête (lueur dorée, rayures
   comme les cartes) : « Le récap de la nuit », titre « Nuit du dim. 25 au lun. 26 oct. », pastille d'état neutre (✓ Terminée, ● En cours
   rouge, À venir doré ; plus de texte vert) + nombre de matchs ; boutons vidéo larges (résumé de la nuit doré, NBA Extra aux couleurs de la
@@ -59,7 +80,7 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   perf individuelle, spectacle, enjeu, pénalité « plié tôt ») : voulu FLOU, pour qu'une note ne trahisse pas le scénario (demande de Kiki).
   Avant le score : seulement icône + nom + conseil ; les raisons s'affichent dans le panneau du score. Range les matchs terminés ;
   « L'affiche de la nuit » pour les matchs à venir (`hype`). Équipes favorites (cookie `nba_fav`) en tête. Durées des vidéos via l'API YouTube.
-- **No spoil** : score caché par défaut (rien n'est retenu d'une visite à l'autre), ou ⚙️ « Toujours montrer les scores » (`?scores=1`). Tant que c'est caché : pas de score, pas de « prolongation », bilans et séries calculés
+- **No spoil** : score caché par défaut (rien n'est retenu d'une visite à l'autre), ou ⚙️ « Toujours montrer les scores » (cookie `nba_opt`). Tant que c'est caché : pas de score, pas de « prolongation », bilans et séries calculés
   AVANT le match (`team_form`, `head_to_head` sur `team_index`), jamais ceux d'ESPN (qui incluent le résultat).
 - Vidéos : résumé du match = **GAMETIME HIGHLIGHTS d'abord** (choix de Kiki v014, chaîne `GT_CHANNEL` UC0LrZO9wORIqn_aRJtKdgfA,
   « Utah Jazz vs New Orleans Pelicans Full Game Highlights - October 23, 2026 | NBA Season », marquées `gt`, recherche dédiée si absent),
@@ -69,7 +90,7 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   Sources, dans l'ordre : veille (`video_watcher`, fil d'exécution qui relit les 3 chaînes toutes les 10 min même sans visiteur et garde
   10 jours de vidéos dans `.cache/seen.json`), flux public (15 dernières), API YouTube avec `[youtube] api_key` (seule source complète :
   la NBA publie plus de 15 vidéos par nuit), puis recherche YouTube sans clé (`yt_search`, peu fiable, filet de sécurité) ; vidéos trouvées
-  gardées dans `.cache/videos.json`. État de la clé affiché dans ⚙️ Réglages (`API_STATUS`).
+  gardées dans `.cache/videos.json`. État de la clé affiché sur la page admin (`API_STATUS`).
   **Vidéos bloquées** (v012) : les résumés NBA sont souvent bloqués en France (« bloquée dans votre pays »). `video_info` lit
   `regionRestriction` via l'API YouTube (clé nécessaire) ; pays = FR (Paris) ou CA (Montréal). Résumé NBA bloqué → `alt_video`
   cherche un autre résumé du même match sur une autre chaîne et ne garde que ceux qui passent dans le pays ; sinon bouton
@@ -88,7 +109,7 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - Facultatif : avec `[anthropic] api_key` (et `model`, par défaut `claude-opus-5-5`), Claude réécrit preview et analyse en français
   à partir de l'article AP (`ai_points`, gardé dans `.cache/ai_*.json`). Jamais de preview IA écrite après le coup d'envoi.
 
-- **Le 5 de la semaine (v015, la fantasy, `fantasy.py` + `fantasy_page` dans app.py, bouton 🏆 dans l'en-tête, `?vue=fantasy`)** :
+- **Le 5 de la semaine (v015, la fantasy, `fantasy.py` + `fantasy_page` dans app.py, PROTOTYPE MIS DE CÔTÉ en v023 : plus de bouton, seulement `?vue=fantasy`)** :
   règles décidées avec Kiki : une équipe par semaine NBA (lundi → dimanche), verrouillée au 1er match de la semaine ; 2 arrières,
   2 ailiers, 1 pivot + 6e homme (tout poste) ; budget 100 000 € ; chaque joueur rapporte sa MOYENNE de points fantasy par match joué
   (toute apparition compte) ; le 6e homme remplace un des 5 qui n'a joué aucun match ; « coup de cœur » 💘 = un des 5 à 10 000 € ou
@@ -122,9 +143,13 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 
 - `python tests/test_sans_spoil.py` : vérifie qu'une carte au score caché ne trahit rien (score, « prolongation », « remontée »…). À lancer avant chaque envoi.
 - `python tests/scenarios.py` : note d'intérêt de matchs inventés, pour régler les seuils.
-- `python tests/page_complete.py` : exécute toute la page (Nuit et Semaine) avec un faux Streamlit, pour attraper les erreurs.
+- `python tests/page_complete.py` : exécute toutes les vues (Nuit, Semaine, Programme, Classement, Mon équipe) avec un faux Streamlit.
+- **Voir le site sans ESPN** : `BB_FAUX_ESPN=1 python -m streamlit run app.py --server.port 8531` (saison inventée, `tests/faux_espn.py`).
 - `python tests/test_stats.py` : statistiques de visite (cookies, visites, activité par nuit).
 - `python tests/test_fantasy.py` : règles du « 5 de la semaine » ; `python tests/page_fantasy.py` : la page du jeu avec une saison inventée.
 
 
 `python -m streamlit run app.py --server.port 8531`, puis vérifier à l'écran (PC et téléphone). Incrémenter `APP_VERSION` à chaque changement.
+
+Scripts invisibles (cookies, rechargement, clics) : `run_js` → `st.iframe` (Streamlit récent) sinon `components.html` (retiré bientôt).
+Le code doit rester lisible par Python 3.11 (pas de f-strings imbriquées avec les mêmes guillemets) : `python3.11 -c "import ast; ast.parse(open('app.py').read())"`.

@@ -19,6 +19,7 @@ class W:
             if name == "date_input": return k.get("value")
             if name == "radio": return a[1][k.get("index", 0)]
             if name == "multiselect": return k.get("default")
+            if name == "selectbox": return a[1][k.get("index", 0)]
             if name == "toggle": return k.get("value")
             if name in ("popover", "container", "spinner"): return contextlib.nullcontext()
             if name == "columns": n = a[0] if isinstance(a[0], int) else len(a[0]); return [W() for _ in range(n)]
@@ -28,7 +29,7 @@ class W:
     def __exit__(self, *a): return False
 w = W()
 for n in ("set_page_config", "markdown", "columns", "popover", "radio", "multiselect", "toggle", "caption", "date_input", "button",
-          "segmented_control", "spinner", "info", "container"):
+          "segmented_control", "spinner", "info", "container", "selectbox", "download_button", "caption", "toggle"):
     setattr(st, n, getattr(w, n))
 st.rerun = lambda: (_ for _ in ()).throw(RuntimeError("rerun"))
 st.context = types.SimpleNamespace(cookies={"nba_vues": "261021.261024"}, timezone="Europe/Paris")
@@ -39,7 +40,7 @@ g3 = dict(g1, id="997", state="pre", completed=False, utc="2026-10-27T23:30Z")
 D = today - timedelta(days=1)
 for g in (g1, g2): g["day"] = D
 g3["day"] = today
-sched = [{"id": g["id"], "day": g["day"], "home": "2", "away": "1", "hs": 1, "as": 0, "done": True, "kind": "R"} for g in (g1, g2, g3)]
+sched = [{"id": g["id"], "day": g["day"], "utc": g["utc"], "home": "2", "away": "1", "hs": 1, "as": 0, "done": g["state"] == "post", "kind": "R"} for g in (g1, g2, g3)]
 sched.append({"id": "1", "day": today - timedelta(days=6), "home": "2", "away": "1", "hs": 1, "as": 0, "done": True, "kind": "R"})
 app["season_games"] = lambda season, b: sched
 app["team_index"] = lambda season, b: {}
@@ -60,3 +61,16 @@ for vue in ("nuit", "semaine"):
     html = "\n".join(o for o in out if isinstance(o, str))
     print(vue, "OK", len(html), "car. ·", [o for o in out if str(o).startswith("COOKIE")], "· carte(s):", html.count("class='gc'"),
           "· semaine:", "meilleurs matchs de la semaine" in html, "· barre de nuit:", "nrec" in html)
+
+# Nouvelles pages (v023) : Programme, Classement, page d'équipe (choix d'une équipe, puis la page)
+app["team_roster"] = lambda tid: [{"id": "7", "name": "Joueur Test", "pos": "G", "num": "7", "inj": "Out", "photo": ""}]
+app["team_news"] = lambda tid: [{"title": "Titre", "desc": "Texte", "href": "https://example.com", "when": None}]
+app["summary"] = lambda gid, b: s1
+for vue, extra in (("programme", {}), ("classement", {}), ("equipe", {}), ("equipe", {"eq": "BBB"})):
+    out.clear(); st.session_state.clear(); st.query_params.clear()
+    st.query_params.update({"vue": vue, **extra})
+    app["main"]()
+    html = "\n".join(o for o in out if isinstance(o, str))
+    assert "Traceback" not in html
+    print(vue, extra, "OK", len(html), "car. ·", "programme:", "class='pd'" in html, "· classement:", "class='stt'" in html,
+          "· équipe:", "class='th'" in html, "· choix d'équipe:", "<div class='pick-h'>" in html)

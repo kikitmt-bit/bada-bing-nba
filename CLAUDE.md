@@ -42,7 +42,9 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   Noms longs en plus petit (`name_cls`) pour tenir en entier.
   Fiche (`.tg-o`) : pour un match joué, l'ouvrir = vouloir le score → score (afficheur « Final ») et stats directement ; avant un match :
   avant-match + forme. Polices Barlow / Barlow Condensed / Orbitron. Mise en page `wide`, 1240 px max.
-- **Navigation (v023-v024, carte blanche de Kiki)** : en-tête = marque seule (v024 : plus de pastille « sans spoil ») + ⚙️ Réglages
+- **Navigation (v023-v029, carte blanche de Kiki)** : en-tête = marque seule (v024 : plus de pastille « sans spoil ») + v029 : petite roue crantée
+  discrète collée au titre (popover sans texte ni flèche), plus de bouton « Réglages » à droite ; haut de page remonté (les blocs
+  invisibles du haut : styles, scripts `run_js`, champ caché `gobox`, sont sortis du flux) ; ⚙️ Réglages
   (`key="hdr"`, `settings_panel` : UNE équipe (v024, cookie `nba_fav`), pays 🇫🇷/🇨🇦 (`opts["pays"]`, cookie `nba_opt` « cFR/cCA »,
   par défaut d'après le fuseau), indice, scores). Puis 6 ONGLETS collants (`key="tabs"`, `TABS`, icônes Material ; sur téléphone
   icône au-dessus du mot) : Le brief (`?vue=brief`) · Matchs (`?vue` absent) · Programme · Classement · Équipes (`?vue=equipe&eq=LAL`,

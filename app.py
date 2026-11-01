@@ -28,7 +28,7 @@ import streamlit.components.v1 as components
 import fantasy as F
 import stats as S
 
-APP_VERSION = "2026-11-v028"
+APP_VERSION = "2026-11-v029"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -1728,7 +1728,7 @@ label.pl:hover {color:var(--accent);}
 /* En-tête : marque | 📅 | ⚙️ */
 .st-key-hdr [data-testid="stHorizontalBlock"] {flex-wrap:nowrap; align-items:center; gap:8px;}
 .st-key-hdr [data-testid="stColumn"] {width:auto !important; flex:0 0 auto !important; min-width:0 !important;}
-.st-key-hdr [data-testid="stColumn"]:first-child {flex:1 1 auto !important;}
+
 .st-key-hdr button {min-height:42px; min-width:46px; border-radius:12px;}
 
 /* Bandeau sur une ligne : ‹ | Semaine | 7 nuits | › */
@@ -4225,10 +4225,23 @@ def team_page(schedule, idx, season, cut, days, today, zone, show_all):
 PAGES_CSS = """
 <style>
 /* ---- v023 : en-tête, onglets, bande des nuits ---- */
-.block-container {padding-top: 1.2rem !important;}
+.block-container {padding-top: .6rem !important;}
+/* les blocs invisibles du haut (styles, scripts) ne prennent plus de place */
+div[data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style:first-child),
+div[data-testid="stElementContainer"]:has(> iframe[data-testid="stIFrame"]), div:has(> .st-key-gobox) {
+  position:absolute !important; width:0 !important; height:0 !important; overflow:hidden !important; margin:0 !important; padding:0 !important;}
+/* en-tête : titre + petite roue crantée discrète */
+.st-key-hdr [data-testid="stColumn"]:nth-child(1), .st-key-hdr [data-testid="stColumn"]:nth-child(2) {flex:0 0 auto !important; width:auto !important; min-width:0 !important;}
+.st-key-hdr [data-testid="stColumn"]:nth-child(3) {flex:1 1 auto !important;}
+.st-key-hdr [data-testid="stPopover"] button {min-height:34px !important; min-width:34px !important; padding:2px 6px !important; border:none !important;
+  background:transparent !important; color:#6f7a8f !important; box-shadow:none !important;}
+.st-key-hdr [data-testid="stPopover"] button:hover {color:#ffc75a !important;}
+.st-key-hdr [data-testid="stPopover"] {margin-top:6px;}
+.st-key-hdr [data-testid="stPopover"] button [data-testid="stIconMaterial"] {font-size:1.35rem;}
+.st-key-hdr [data-testid="stPopover"] button > div > div[aria-hidden="true"] {display:none;}
 .st-key-gobox {position:absolute !important; left:-9999px; top:0; width:1px; height:1px; overflow:hidden;}
 .st-key-hdr [data-testid="stHorizontalBlock"] {flex-wrap:nowrap; align-items:center;}
-.st-key-hdr [data-testid="stColumn"]:last-child {flex:0 0 auto !important; width:auto !important; min-width:0 !important;}
+
 .bb-brand small {display:inline-block; margin-left:10px; font-family:'Barlow', sans-serif; font-size:.72rem; font-weight:700; letter-spacing:.08em;
   color:#c3cad6; border:1px solid #2a3344; border-radius:999px; padding:3px 9px; vertical-align:middle; text-transform:uppercase;}
 .st-key-tabs {position:sticky; top:0; z-index:50; background:rgba(11,15,23,.92); backdrop-filter:blur(10px); padding:6px 0 8px; margin:-4px 0 4px;}
@@ -5674,9 +5687,9 @@ def main():
     monday, num = week_of(day, opening)
     week_days = [monday + timedelta(days=i) for i in range(7)]
     with st.container(key="hdr"):
-        c1, c3 = st.columns([1, 0.001], vertical_alignment="center")
+        c1, c3, _ = st.columns([0.001, 0.001, 1], vertical_alignment="center")  # titre, puis la roue des réglages juste à côté
         c1.markdown("<div class='bb-brand'>Bada Bing <span>NBA</span></div>", unsafe_allow_html=True)
-        with c3.popover("Réglages", icon=":material/settings:", help="Réglages"):
+        with c3.popover("", icon=":material/settings:", help="Réglages : mon équipe, pays, scores"):
             settings_panel(interest, show_all)
     with st.container(key="tabs"):
         cols = st.columns(len(TABS))

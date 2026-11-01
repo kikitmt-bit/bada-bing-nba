@@ -42,21 +42,29 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   Noms longs en plus petit (`name_cls`) pour tenir en entier.
   Fiche (`.tg-o`) : pour un match joué, l'ouvrir = vouloir le score → score (afficheur « Final ») et stats directement ; avant un match :
   avant-match + forme. Polices Barlow / Barlow Condensed / Orbitron. Mise en page `wide`, 1240 px max.
-- **Navigation (v023, « version finale », carte blanche de Kiki)** : en-tête = marque + pastille « sans spoil » + ⚙️ Réglages
-  (`key="hdr"`, `settings_panel` : équipes, indice, scores). Puis 5 ONGLETS collants (`key="tabs"`, `TABS`, icônes Material ; sur
-  téléphone icône au-dessus du mot) : Matchs (`?vue` absent) · Programme (`?vue=programme`) · Classement (`?vue=classement`) ·
-  Mon équipe (`?vue=equipe&eq=LAL`, l'onglet prend le nom de l'équipe) · Semaine (`?vue=semaine`). Re-cliquer « Matchs » = dernière nuit.
-  Bande des nuits (`key="nav"`) : ‹ | 7 nuits | › | 📅. Chaque nuit sur 2 lignes, jamais coupée (`chip_text`) : petit texte en CSS
+- **Navigation (v023-v024, carte blanche de Kiki)** : en-tête = marque seule (v024 : plus de pastille « sans spoil ») + ⚙️ Réglages
+  (`key="hdr"`, `settings_panel` : UNE équipe (v024, cookie `nba_fav`), pays 🇫🇷/🇨🇦 (`opts["pays"]`, cookie `nba_opt` « cFR/cCA »,
+  par défaut d'après le fuseau), indice, scores). Puis 6 ONGLETS collants (`key="tabs"`, `TABS`, icônes Material ; sur téléphone
+  icône au-dessus du mot) : Le brief (`?vue=brief`) · Matchs (`?vue` absent) · Programme · Classement · Équipes (`?vue=equipe&eq=LAL`,
+  l'onglet prend le nom de mon équipe) · Joueurs (`?vue=joueurs&joueur=<id>` ou `&rub=meilleurs|nous|infirmerie`).
+  Re-cliquer « Matchs » = dernière nuit. Semaine (`?vue=semaine`) : bouton 📈 au bout de la bande des nuits.
+  Bande des nuits (`key="nav"`) : ‹ | 7 nuits | › | 📅 | 📈. Chaque nuit sur 2 lignes, jamais coupée (`chip_text`) : petit texte en CSS
   `::before` (« Sam. → Dim. », ou « Nuit dernière » / « Cette nuit ») + grand texte « 31 → 1 » (Paris) ou « 31 oct. » (Montréal) ;
   pastille `::after` (dorée = pas encore vue, rouge = en cours). Sur téléphone la bande défile et se centre sur la nuit affichée
   (`click_tracker`). Vue Semaine : bande `key="navw"` ‹ Semaine N · du … au … ›. Semaines NBA lundi → dimanche (`week_of`).
   Le bouton 🏆 du « 5 de la semaine » est retiré (prototype mis de côté) : le jeu reste joignable par `?vue=fantasy`.
-  Liens internes dans le HTML (`link`, `team_link`) : `<a href="/?nuit=…" target="_top">` (rechargent la page) ; boutons Streamlit
-  pour la navigation principale. Bandeau de bienvenue à la 1re visite (`welcome`, cookie `nba_hello`). Pied de page (`page_footer`).
+  **Liens internes dans le HTML (v024, `link`, `team_link`, `player_link`)** : `<a href="#go?nuit=…&vue=…&open=<match>">`.
+  `target="_top"` ne marchait PAS sur Streamlit Cloud (la page est dans un cadre) : le clic est intercepté par `click_tracker`,
+  qui écrit la commande dans le champ caché `go_to` (`key="gobox"`, hors écran) → nouveau passage → `apply_go` (nuit, vue, équipe,
+  joueur, rubrique, match à ouvrir : `open` coche `.tg-o`). Pas de rechargement de page. Bandeau de bienvenue à la 1re visite (`welcome`, cookie `nba_hello`). Pied de page (`page_footer`).
 - **Pas de spoil dans les chiffres (`spoil_cut`)** : bilans, classement, séries comptent les matchs AVANT la dernière nuit jouée tant
   que l'appareil ne l'a pas ouverte (cookie `nba_vues`) ; interrupteur « Inclure la dernière nuit » ; tout est à jour si elle a été
   ouverte ou avec « Toujours montrer les scores ».
-- **Programme (`programme_page`)** : 7 prochaines nuits (scoreboard ESPN), heure locale, bilans (sans spoil), chaîne US, « ★ Mon équipe »,
+- **Où regarder (v024, `watch_on`, `watch_badge`)** : selon le pays des réglages, beIN SPORTS (FR) ou TSN / Sportsnet / RDS / TVA Sports
+  (CA) quand une source le dit (ESPN `broadcasts` + `geoBroadcasts` → `tv_all`, et calendrier officiel `cdn.nba.com` scheduleLeagueV2,
+  `nba_schedule_tv`, sigles NBA via `NBA_TRI`), sinon « NBA League Pass ». En doré quand la chaîne est connue. Sources non vérifiées
+  depuis l'environnement de test (bloquées) : à surveiller en ligne.
+- **Programme (`programme_page`)** : 7 prochaines nuits (scoreboard ESPN), heure locale, bilans (sans spoil), où regarder, « ★ Mon équipe »,
   « 🔥 L'affiche » (`quick_hype` : deux équipes qui gagnent), filtre Tous / Mes équipes, lien « Voir la nuit ›», agenda .ics
   (`ics_calendar`, `agenda_button`, heures de `_team_schedule` → champ `utc`).
 - **Classement (`standings_page`, `standings`)** : calculé par le site depuis `team_index` (pas ESPN, pour la coupure sans spoil) :
@@ -64,7 +72,21 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 - **Mon équipe (`team_page`)** : sans équipe = grille des 30 (`team_picker`). Bandeau aux couleurs, 7 tuiles (bilan + rang, série,
   10 derniers, dom., ext., attaque/défense + rang NBA), « Suivre » / autre équipe, prochain match (heure, dom./ext., 2e soir, TV),
   infirmerie et meneurs de la saison (résumé ESPN d'avant-match), 10 prochains matchs + agenda, 10 derniers matchs (résultats cachés,
-  `.tg-r`), effectif (`team_roster`, photos ESPN), actus ESPN repliées (`team_news`, en anglais, peuvent spoiler).
+  `.tg-r`), effectif (`team_roster`, photos ESPN, noms cliquables vers la fiche), actus ESPN repliées (`team_news`, en anglais, peuvent spoiler).
+  Une autre équipe s'ouvre par la liste « Autre équipe » ou un clic sur son nom (programme, classement…) ; bouton « Revenir aux … ».
+- **Le brief (v024, `brief_page`, `BRIEF_CSS`)** : la dernière nuit en un coup d'œil : « À voir en priorité » (3 meilleurs matchs selon
+  l'indice, sans score, boutons Résumé / NBA Extra / Stats ›), mon équipe (son match + son prochain match et la chaîne), une grande barre
+  « Révéler les résultats » (`.tg-b`, cochée si la nuit a été ouverte) : scores, grosses perfs (`game_score`), mouvements du classement
+  (avant/après la nuit), nos joueurs (FR/CA) ; puis les grosses absences et « Ce soir » (programme + affiche + chaîne).
+- **Joueurs (v024, `players_page`, `PLAYERS_CSS`)** : rubriques Fiches · Les meilleurs · Les Français (ou Canadiens selon le pays) ·
+  Infirmerie. Journal de toutes les feuilles de match de la saison (`players_db`, fil de fond « joueurs » toutes les 15 min,
+  `_players_tick` lit le scoreboard jour par jour puis `summary_raw`, `_box_line`) gardé sur GitHub `joueurs/log.json` (branche data,
+  secrets `[github]`), sinon disque. `season_table` (moyennes avant la coupure sans spoil, mémorisées par version), `player_games`.
+  Fiche (`player_page`) : photo, équipe, bio (âge, taille, poids, lieu de naissance, saison, université : `team_roster`), blessure,
+  8 tuiles + rang NBA, courbe des points match après match, prochain match, « En feu / En petite forme », 10 derniers matchs (▶ ouvre
+  la feuille du match). Meilleurs (`leaders_html`). Nos joueurs : `league_players` (30 effectifs) par pays de naissance.
+  Infirmerie (`injuries_section`, `league_injuries` : ESPN `/injuries`, sinon les effectifs) : grosses absences (≥ 16 pts), par équipe.
+- **Semaine (v024)** : chaque match conseillé a « ▶ Résumé » et « Stats › » (`ctx["wv"]`) ; sans indice, la liste des matchs joués.
   Classes CSS des pages dans `PAGES_CSS` (attention aux noms déjà pris dans `CSS` : `.box` = box score, `.tm` = cartes).
 - **Le récap de la nuit (`night_html`, `.nrec`, v018 : « plus d'impact », demande de Kiki)** : grand bloc en tête (lueur dorée, rayures
   comme les cartes) : « Le récap de la nuit », titre « Nuit du dim. 25 au lun. 26 oct. », pastille d'état neutre (✓ Terminée, ● En cours

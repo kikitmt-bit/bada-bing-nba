@@ -28,7 +28,7 @@ import streamlit.components.v1 as components
 import fantasy as F
 import stats as S
 
-APP_VERSION = "2026-11-v024"
+APP_VERSION = "2026-11-v025"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -2080,13 +2080,12 @@ label.mt {cursor:pointer;}
 .nr-v a.cbtn:not(.fr):not(.ghost) {background:linear-gradient(180deg, #ffd56e, #f0a92e); border-color:#ffd56e; color:#1a1205 !important;}
 .nr-v .cbtn.fr {background:linear-gradient(90deg, rgba(0,85,164,.55), rgba(255,255,255,.08) 50%, rgba(239,65,53,.5)); border-color:rgba(255,255,255,.25);}
 .nr-v .cbtn.off {opacity:.6;}
-.nr-rev {display:flex; align-items:center; justify-content:center; margin-top:16px; min-height:58px; padding:8px 16px; border-radius:14px; cursor:pointer; text-align:center;
-         background:linear-gradient(115deg, #b8860b, #ffe9a3, #f7c948, #fff8dc, #d4a017, #ffe9a3, #b8860b); background-size:300% 100%; animation:holo 8s linear infinite;
-         color:#241800; font-weight:800; font-size:1.08rem; box-shadow:0 0 28px rgba(247,200,80,.28);}
-.nr-rev:hover {filter:brightness(1.06);}
-.nr-rev small {display:block; font-weight:600; font-size:.78rem; opacity:.8; margin-top:2px;}
+.nr-rev {display:inline-flex; align-items:center; gap:10px; margin-top:14px; padding:8px 16px; border-radius:999px; cursor:pointer;
+         background:rgba(255,199,90,.08); border:1px solid #6b5520; color:#ffd98a; font-weight:700; font-size:.92rem;}
+.nr-rev:hover {background:rgba(255,199,90,.16);}
+.nr-rev small {font-weight:500; font-size:.8rem; color:#a8926a; margin-left:4px;}
 .nr-rev .on {display:none;}
-.tg-n:checked ~ .nr-rev {background:rgba(255,255,255,.06); animation:none; color:#c3cad6; min-height:40px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.14); font-size:.9rem;}
+.tg-n:checked ~ .nr-rev {background:transparent; border-color:#2a3344; color:#c3cad6;}
 .tg-n:checked ~ .nr-rev .on {display:inline;} .tg-n:checked ~ .nr-rev .off {display:none;}
 .nrec .ess-hid {border-top:none; padding-top:0; margin-top:14px;}
 .nt-grid {display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px;}
@@ -2959,8 +2958,18 @@ def ai_material(g, summ, points):
     return "\n".join(lines)
 
 
+KEEP = ("nba_fav", "nba_opt", "nba_hello", "nba_id")  # réglages aussi copiés dans le stockage du navigateur (restaurés si le cookie saute)
+
+
 def set_cookie(name, value):
-    run_js(f"<script>parent.document.cookie='{name}={value}; path=/; max-age=31536000; SameSite=Lax';</script>")
+    """Écrit un cookie (et une copie dans localStorage pour les réglages). L'ordre est gardé pour toute la visite et réécrit
+    à chaque fin de page (`finish_run`) : s'il a été coupé par un changement de page, il passe au tour suivant."""
+    keep = f"try {{ parent.localStorage.setItem('{name}', '{value}'); }} catch (e) {{}}" if name in KEEP else ""
+    run_js(f"<script>parent.document.cookie='{name}={value}; path=/; max-age=31536000; SameSite=Lax';{keep}</script>")
+    try:
+        st.session_state.setdefault("_cookies", {})[name] = value
+    except Exception:
+        pass
 
 
 def run_js(code):
@@ -4628,6 +4637,8 @@ svg.spark {width:100%; height:auto; display:block; margin:8px 0 4px;} .spark pol
 # LE BRIEF DU MATIN (v024) : ce qu'il faut savoir de la dernière nuit, sans spoil tant qu'on ne révèle pas
 # =========================================================================
 def brief_page(schedule, idx, season, days, today, zone, show_all, interest):
+    """La page d'accueil : la dernière nuit en un coup d'œil. Tout ce qui dévoile un résultat est caché tant qu'on ne clique pas :
+    « Tout révéler » en haut, ou rubrique par rubrique, ou match par match (clic sur les « ? »)."""
     ss = st.session_state
     pays = ss.opts.get("pays", "FR")
     favs = fav_ids()
@@ -4635,172 +4646,211 @@ def brief_page(schedule, idx, season, days, today, zone, show_all, interest):
     games = day_games(last)
     done = [g for g in games if g["state"] == "post"]
     key, state_txt = night_state(games, zone)
-    page_head("Le brief", f"{night_title(last, zone)} · {len(games)} matchs · {state_txt.lower()}. Tout ce qu'il faut savoir, sans spoil.",
-              "☕ " + (rel_label(last, zone, today) or "La dernière nuit"))
+    tz = ZONES[zone]
     with ThreadPoolExecutor(8) as pool:
-        summs = dict(zip([g["id"] for g in done], pool.map(game_summary, done)))
+        summs = dict(zip([g["id"] for g in games], pool.map(game_summary, games)))
     watch = {g["id"]: watch_score(g, summs.get(g["id"]), idx) for g in done} if interest else {}
     watch = {k: v for k, v in watch.items() if v}
     nba_vids, extra_vids = videos_since(last)
-    seen_night = last in ss.seen or show_all
+    with ThreadPoolExecutor(8) as pool:
+        vids = dict(zip([g["id"] for g in done], pool.map(lambda g: game_videos(g, nba_vids, extra_vids), done)))
+    players = league_players()
 
-    def vids(g):
-        try:
-            return game_videos(g, nba_vids, extra_vids)
-        except Exception:
-            return None, None
+    # Bandeau : titre, état de la nuit, mon équipe, « Tout révéler »
+    me_html = ""
+    for tid in favs:
+        nxt = next((g for g in schedule if tid in (g["home"], g["away"]) and not g["done"] and g["day"] > last), None)
+        if nxt:
+            opp = nxt["away"] if nxt["home"] == tid else nxt["home"]
+            tip = parse_dt(nxt.get("utc"))
+            rel = rel_label(nxt["day"], zone, today)
+            when = (rel.lower() if rel else short_date(nxt["day"])) + (f" à {fr_hour(tip.astimezone(tz))}" if tip else "")
+            live = next((g for g in day_games(nxt["day"]) if g["id"] == nxt["id"]), None)
+            me_html = (f"<div class='bf-me'>{mini_logo(tid, 22)}<span><b>{esc(team(tid)['name'])}</b> · prochain match {esc(when)}, "
+                       f"{'contre' if nxt['home'] == tid else 'chez'} les {team_link(opp)}</span>{watch_badge(live, pays) if live else ''}</div>")
 
-    def match_card(g, big=False):
-        a, h = g["away"]["id"], g["home"]["id"]
+    def tile(g):
+        a, h = g["away"], g["home"]
+        ta, th = team(a["id"]), team(h["id"])
+        played = g["state"] != "pre"
+        tip = parse_dt(g["utc"])
+        status = ("Final" if g["state"] == "post" else ("<span class='live'>● En direct</span>" if g["state"] == "in" else
+                  (fr_hour(tip.astimezone(tz)) if tip else "")))
         lv = watch.get(g["id"])
         badge = ""
         if lv:
             icon, label, advice = WATCH_LEVELS[lv[0]]
             badge = f"<span class='lvl L{lv[0]}' title='{esc(advice)}'>{icon} {esc(label)}</span>"
-        nba, extra = vids(g) if g["state"] == "post" else (None, None)
+        win = None
+        if g["state"] == "post" and a["score"] is not None and h["score"] is not None:
+            win = "a" if a["score"] > h["score"] else "h"
+        gid = g["id"]
+
+        def row(s_, t, side):
+            rec = team_record(idx, s_["id"], g["day"], g["season"])
+            score = ""
+            if played and s_["score"] is not None:
+                cls = "w" if win == side else ("l" if win else "")
+                score = (f"<label for='bt{gid}' class='sq' title='Voir le score'><span class='q'>?</span>"
+                         f"<span class='sc-r {cls}'>{s_['score']}</span></label>")
+            return (f"<div class='bt-row'>{mini_logo(s_['id'], 30)}<span class='nm'>{team_link(s_['id'])}"
+                    f"{f' <i>({esc(rec)})</i>' if rec else ''}</span>{score}</div>")
+        pre = pre_info(g, summs.get(gid))
+        fact = key_fact(g, idx, pre) or ""
+        nba, extra = vids.get(gid) or (None, None)
         btns = []
         if nba:
             btns.append(f"<a class='cbtn main' href='{yt_url(nba)}' target='_blank'>▶ Résumé</a>")
+        elif g["state"] == "post":
+            btns.append(f"<a class='cbtn ghost' href='{yt_search_url(g)}' target='_blank'>🔎 Résumé</a>")
         if extra and pays == "FR":
             btns.append(f"<a class='cbtn fr' href='{yt_url(extra)}' target='_blank'><span class='frf'></span> NBA Extra</a>")
-        btns.append(link(f"/?nuit={g['day'].isoformat()}&open={g['id']}", "Stats ›", "lk"))
-        fav = " fav" if {a, h} & favs else ""
-        return (f"<div class='bc{fav}{' big' if big else ''}' style='--ca:{team_color(a)}; --ch:{team_color(h)}'>"
-                f"<div class='bc-m'>{mini_logo(a, 40 if big else 30)}<b>{team_link(a)}</b><span>@</span><b>{team_link(h)}</b>{mini_logo(h, 40 if big else 30)}</div>"
-                f"<div class='bc-x'>{badge}<span class='bc-b'>{''.join(btns)}</span></div></div>")
+        if not played:
+            btns.append(watch_badge(g, pays))
+        btns.append(link(f"/?nuit={g['day'].isoformat()}&open={gid}", "Stats ›" if played else "Avant-match ›", "lk"))
+        fav = " fav" if {a["id"], h["id"]} & favs else ""
+        return (f"<div class='bt{fav}' id='g{gid}' style='--ca:{team_color(a['id'])}; --ch:{team_color(h['id'])}'>"
+                f"<input type='checkbox' class='tg tg-t' id='bt{gid}'>"
+                f"<div class='bt-top'>{badge or '<span></span>'}<span class='bt-st'>{status}</span></div>"
+                f"{row(a, ta, 'a')}{row(h, th, 'h')}"
+                f"<div class='bt-kf' title='{esc(fact)}'>{esc(fact) or '&nbsp;'}</div>"
+                f"<div class='bt-b'>{''.join(btns)}</div></div>")
 
-    # 1. À voir en priorité (sans spoil)
+    order = sorted(games, key=lambda g: (0 if {g["home"]["id"], g["away"]["id"]} & favs else 1,
+                                         -(watch.get(g["id"]) or (0, 0, -99))[2] if watch else 0, g["utc"] or ""))
+    tiles = "".join(tile(g) for g in order)
+
+    # Rubriques cachées : grosses perfs, classement, nos joueurs
+    perfs, ours = [], []
+    country = COUNTRY[pays][0]
+    for g in done:
+        for tid, prows in ((summs.get(g["id"]) or {}).get("box") or {}).items():
+            for r in prows:
+                if r.get("dnp"):
+                    continue
+                item = (game_score(r["stats"]), r, tid, stat_line(r["stats"]))
+                perfs.append(item)
+                if (players.get(str(r.get("id"))) or {}).get("country") == country:
+                    ours.append(item)
+    perfs.sort(key=lambda x: -x[0])
+    ours.sort(key=lambda x: -x[0])
+
+    def plist(items):
+        return "".join(f"<li>{headshot(players.get(str(r.get('id'))), 30)}<span class='nm'>{player_link(str(r.get('id') or ''), r['name'])}"
+                       f"<small>{mini_logo(tid, 14)} {esc(team(tid)['name'])}</small></span><span class='sl'>{esc(line)}</span></li>" for _, r, tid, line in items)
+    before, after = standings(idx, season, last), standings(idx, season, last + timedelta(days=1))
+    moves = []
+    for conf in ("Est", "Ouest"):
+        rb = {r["tid"]: r["rank"] for r in before.get(conf, [])}
+        for r in after.get(conf, []):
+            old = rb.get(r["tid"])
+            if old and old != r["rank"] and (abs(old - r["rank"]) >= 2 or {old, r["rank"]} & {6, 7, 10, 11}):
+                moves.append((abs(old - r["rank"]), conf, r["tid"], old, r["rank"]))
+    moves.sort(key=lambda m: -m[0])
+    move_html = "".join(f"<li>{mini_logo(t, 22)}<span class='nm'>{team_link(t)}<small>{'Est' if c == 'Est' else 'Ouest'}</small></span>"
+                        f"<span class='mv {'up' if new < old else 'dn'}'>{'▲' if new < old else '▼'} {old}e → {new}e</span></li>" for _, c, t, old, new in moves[:8])
+    flag, ours_title = COUNTRY[pays][1], COUNTRY[pays][2]
+
+    def section(sid, title, body, empty):
+        return (f"<div class='bs'><input type='checkbox' class='tg tg-x' id='bs-{sid}'>"
+                f"<div class='bs-h'><span>{title}</span><label for='bs-{sid}' class='pill'><span class='off'>👁 Voir</span><span class='on'>🙈 Cacher</span></label></div>"
+                f"<div class='bs-c'><ul>{body or f'<li class=ok>{empty}</li>'}</ul></div><div class='bs-hid'>Caché pour ne rien dévoiler.</div></div>")
+    secs = ""
     if done:
-        ranked = sorted(done, key=lambda g: -(watch.get(g["id"]) or (0, 0, -99))[2])
-        top = ranked[:3]
-        st.markdown("<div class='sec-h'>🍿 À voir en priorité <span>sans rien dévoiler</span></div>"
-                    + f"<div class='bgrid'>{''.join(match_card(g, i == 0) for i, g in enumerate(top))}</div>", unsafe_allow_html=True)
-    elif games:
-        st.info("La nuit n'est pas encore terminée : reviens après les matchs, ou suis-les dans l'onglet Matchs.")
+        secs = ("<div class='bsecs'>" + section("perf", "💥 Les grosses perfs", plist(perfs[:6]), "Pas de feuille de match pour l’instant.")
+                + section("cls", "📊 Ce qui a bougé au classement", move_html, "Rien de notable.")
+                + section("nous", f"{flag} Nos {'Français' if pays == 'FR' else 'Canadiens'} cette nuit", plist(ours), "Aucun n’a joué cette nuit.") + "</div>")
+    reveal = "" if show_all or not done else (
+        "<label for='b-all' class='pill big'><span class='off'>👁 Tout révéler</span><span class='on'>🙈 Tout cacher</span></label>")
+    st.markdown(
+        f"<div class='bf{' all' if show_all else ''}'><input type='checkbox' class='tg tg-all' id='b-all'>"
+        f"<div class='bf-bar'><div><div class='pg-k'>☕ Le brief · {esc(rel_label(last, zone, today) or 'la dernière nuit')}</div>"
+        f"<h1>{esc(night_short_title(last, zone))}</h1><p>{len(games)} matchs · {esc(state_txt.lower())} · tout est caché tant que tu ne cliques pas</p></div>{reveal}</div>"
+        f"{me_html}<div class='bt-grid'>{tiles or '<p>Pas de match cette nuit.</p>'}</div>{secs}</div>", unsafe_allow_html=True)
 
-    # 2. Mon équipe
-    for tid in favs:
-        mine = next((g for g in games if tid in (g["home"]["id"], g["away"]["id"])), None)
-        nxt = next_game_of(schedule, tid, today + timedelta(days=0 if not mine else 1))
-        parts = []
-        if mine and mine["state"] == "post":
-            parts.append(f"<p>Les {esc(team(tid)['name'])} ont joué cette nuit :</p>{match_card(mine)}")
-        elif mine:
-            parts.append(f"<p>Les {esc(team(tid)['name'])} jouent cette nuit.</p>{match_card(mine)}")
-        if nxt:
-            opp = nxt["away"] if nxt["home"] == tid else nxt["home"]
-            tip = parse_dt(nxt.get("utc"))
-            when = (rel_label(nxt["day"], zone, today) or night_short_title(nxt["day"], zone)) + (f" à {fr_hour(tip.astimezone(ZONES[zone]))}" if tip else "")
-            live = next((g for g in day_games(nxt["day"]) if g["id"] == nxt["id"]), None)
-            parts.append(f"<p class='bnx'>Prochain match : <b>{esc(when)}</b>, {'contre' if nxt['home'] == tid else 'chez'} les "
-                         f"{team_link(opp)} {watch_badge(live, pays) if live else ''}</p>")
-        if parts:
-            st.markdown(f"<div class='sec-h'>⭐ {esc(team(tid)['full'])}</div><div class='tbox'>{''.join(parts)}</div>", unsafe_allow_html=True)
-
-    # 3. Les résultats (cachés) : scores, perfs, classement, nos joueurs
-    if done:
-        rows = []
-        for g in done:
-            a, h = g["away"], g["home"]
-            wa = (a["score"] or 0) > (h["score"] or 0)
-            rows.append(f"<li><span class='{'w' if wa else ''}'>{mini_logo(a['id'], 22)} {esc(team(a['id'])['name'])} <b>{a['score']}</b></span>"
-                        f"<span class='{'w' if not wa else ''}'><b>{h['score']}</b> {esc(team(h['id'])['name'])} {mini_logo(h['id'], 22)}</span></li>")
-        perfs = []
-        players = league_players()
-        country = COUNTRY[pays][0]
-        ours = []
-        for g in done:
-            for tid, prows in ((summs.get(g["id"]) or {}).get("box") or {}).items():
-                for r in prows:
-                    if r.get("dnp"):
-                        continue
-                    gs = game_score(r["stats"])
-                    line = stat_line(r["stats"])
-                    perfs.append((gs, r, tid, line))
-                    if (players.get(str(r.get("id"))) or {}).get("country") == country:
-                        ours.append((gs, r, tid, line))
-        perfs.sort(key=lambda x: -x[0])
-        ours.sort(key=lambda x: -x[0])
-        perf_html = "".join(f"<li>{headshot(players.get(str(r.get('id'))), 30)}<span class='nm'>{player_link(str(r.get('id') or ''), r['name'])}"
-                            f"<small>{esc(team(tid)['name'])}</small></span><span class='sl'>{esc(line)}</span></li>" for _, r, tid, line in perfs[:6])
-        ours_html = "".join(f"<li>{headshot(players.get(str(r.get('id'))), 30)}<span class='nm'>{player_link(str(r.get('id') or ''), r['name'])}"
-                            f"<small>{esc(team(tid)['name'])}</small></span><span class='sl'>{esc(line)}</span></li>" for _, r, tid, line in ours)
-        before, after = standings(idx, season, last), standings(idx, season, today + timedelta(days=1))
-        moves = []
-        for conf in ("Est", "Ouest"):
-            rb = {r["tid"]: r["rank"] for r in before.get(conf, [])}
-            for r in after.get(conf, []):
-                old = rb.get(r["tid"])
-                if old and old != r["rank"] and (abs(old - r["rank"]) >= 2 or {old, r["rank"]} & {6, 7, 10, 11}):
-                    moves.append((conf, r["tid"], old, r["rank"]))
-        move_html = "".join(f"<li>{mini_logo(t, 22)} {team_link(t)} <span class='mv {'up' if new < old else 'dn'}'>{'▲' if new < old else '▼'} "
-                            f"{old}e → {new}e</span> <small>à {'l’Est' if c == 'Est' else 'l’Ouest'}</small></li>" for c, t, old, new in moves[:10])
-        checked = " checked" if seen_night else ""
-        flag, ours_title = COUNTRY[pays][1], COUNTRY[pays][2]
-        st.markdown(
-            f"<div class='brev'><input type='checkbox' class='tg tg-b' id='brev'{checked}>"
-            f"<label for='brev' class='nr-rev'><span class='off'>👁 Révéler les résultats de la nuit<small>scores, grosses perfs, "
-            f"classement, nos joueurs</small></span><span class='on'>🙈 Cacher les résultats</span></label>"
-            f"<div class='brev-in'><div class='bcols'><div class='tbox'><div class='tbox-h'>🏁 Les résultats</div><ul class='res-l'>{''.join(rows)}</ul></div>"
-            f"<div class='tbox'><div class='tbox-h'>💥 Les grosses perfs</div><ul class='pf-l'>{perf_html}</ul></div></div>"
-            f"<div class='bcols'><div class='tbox'><div class='tbox-h'>📊 Ce qui a bougé au classement</div><ul class='mv-l'>{move_html or '<li>Rien de notable.</li>'}</ul></div>"
-            f"<div class='tbox'><div class='tbox-h'>{flag} {esc(ours_title)} cette nuit</div><ul class='pf-l'>{ours_html or '<li>Aucun n’a joué cette nuit.</li>'}</ul></div></div>"
-            f"</div></div>", unsafe_allow_html=True)
-
-    # 4. Infirmerie : les grosses absences
+    # Infirmerie : les grosses absences (rien n'y dévoile un résultat)
     table = season_table(players_db(), last)
     inj = [i for i in league_injuries() if i["pid"] and (table.get(i["pid"]) or {}).get("pts", 0) >= 15 and INJ_ORDER.get(status_fr(i["status"]), 5) <= 3]
+    inj.sort(key=lambda i: -table[i["pid"]]["pts"])
     if inj:
-        inj.sort(key=lambda i: -table[i["pid"]]["pts"])
-        st.markdown("<div class='sec-h'>🩹 Les grosses absences <span>joueurs à 15 points ou plus, blessés ou incertains</span></div><div class='tbox'><div class='stars'>"
-                    + "".join(f"<div>{headshot(league_players().get(i['pid']), 40)}<span>{player_link(i['pid'], i['name'])}<small>{esc(team(i['tid'])['name'])} · "
+        st.markdown("<div class='sec-h'>🩹 Les grosses absences <span>15 points ou plus de moyenne · "
+                    + link("/?vue=joueurs&rub=infirmerie", "toute l'infirmerie ›", "lk") + "</span></div><div class='tbox'><div class='stars'>"
+                    + "".join(f"<div>{headshot(players.get(i['pid']), 40)}<span>{player_link(i['pid'], i['name'])}<small>{esc(team(i['tid'])['name'])} · "
                               f"<span class='inj {'o' if INJ_ORDER.get(status_fr(i['status']), 5) <= 1 else 'q'}'>{esc(status_fr(i['status']))}</span></small></span></div>"
                               for i in inj[:8]) + "</div></div>", unsafe_allow_html=True)
-        st.markdown(link("/?vue=joueurs&rub=infirmerie", "Toute l'infirmerie ›", "pd-go"), unsafe_allow_html=True)
 
-    # 5. Ce soir
-    tonight_day = last + timedelta(days=1) if key == "done" else last
-    tonight = [g for g in day_games(tonight_day) if g["state"] == "pre"]
+    # La nuit prochaine
+    nxt_day = next((d for d in days if d > last), None)
+    tonight = [g for g in day_games(nxt_day) if g["state"] == "pre"] if nxt_day else []
     if tonight:
         cut = spoil_cut(days, today, ss.seen, show_all)[0]
         best = max(tonight, key=lambda g: quick_hype(idx, g, season, cut))
         tips = [parse_dt(g["utc"]) for g in tonight if parse_dt(g["utc"])]
-        first = fr_hour(min(tips).astimezone(ZONES[zone])) if tips else "?"
-        tz = ZONES[zone]
-        lines = "".join(f"<li><span class='t'>{fr_hour(parse_dt(g['utc']).astimezone(tz)) if parse_dt(g['utc']) else '?'}</span>"
+        first = fr_hour(min(tips).astimezone(tz)) if tips else "?"
+        lines = "".join(f"<li class='{'fav' if {g['home']['id'], g['away']['id']} & favs else ''}'><span class='t'>{fr_hour(parse_dt(g['utc']).astimezone(tz)) if parse_dt(g['utc']) else '?'}</span>"
                         f"{mini_logo(g['away']['id'], 22)} {team_link(g['away']['id'])} <span class='at'>@</span> {team_link(g['home']['id'])} {mini_logo(g['home']['id'], 22)}"
                         f"{'<span class=bdg>🔥 L’affiche</span>' if g is best else ''}{watch_badge(g, pays)}</li>" for g in tonight)
-        st.markdown(f"<div class='sec-h'>🌙 {esc(rel_label(tonight_day, zone, today) or night_short_title(tonight_day, zone))} "
-                    f"<span>{len(tonight)} matchs, premier coup d'envoi à {first}</span></div><div class='tbox'><ul class='tn-l'>{lines}</ul>"
-                    f"{link('/?vue=programme', 'Tout le programme ›', 'pd-go')}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='sec-h'>🌙 {esc(rel_label(nxt_day, zone, today) or night_short_title(nxt_day, zone))} "
+                    f"<span>{len(tonight)} matchs, premier coup d'envoi à {first} · {link('/?vue=programme', 'tout le programme ›', 'lk')}</span></div>"
+                    f"<div class='tbox'><ul class='tn-l'>{lines}</ul></div>", unsafe_allow_html=True)
 
 
 BRIEF_CSS = """
 <style>
-.bgrid {display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:10px;}
-@media (max-width: 900px) {.bgrid {grid-template-columns:1fr;}}
-.bc {background:linear-gradient(rgba(10,13,20,.62), rgba(10,13,20,.7)), linear-gradient(105deg, var(--ca) 0%, var(--ca) 49.5%, var(--ch) 50.5%, var(--ch) 100%);
-  border:1px solid rgba(255,255,255,.1); border-radius:18px; padding:14px; display:flex; flex-direction:column; gap:10px; justify-content:space-between;}
-.bc.fav {border-color:rgba(255,199,90,.6);} .bc-m {display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:1.05rem;}
-.bc.big .bc-m {font-size:1.3rem;} .bc-m span {color:rgba(255,255,255,.55); font-weight:700;} .bc-m a.tl {color:#fff !important;}
-.bc-x {display:flex; align-items:center; gap:8px; flex-wrap:wrap;} .bc-b {display:flex; gap:6px; align-items:center; margin-left:auto; flex-wrap:wrap;}
-.lvl {font-weight:800; font-size:.85rem; padding:4px 10px; border-radius:999px; background:rgba(8,10,16,.55); color:#ffd98a;}
-.bnx {margin:.6rem 0 0;} .tbox p {margin:.2rem 0 .5rem;}
-.brev {margin:18px 0 6px;} .brev .tg {display:none;} .brev-in {display:none; margin-top:10px;}
-.tg-b:checked ~ .brev-in {display:block;} .tg-b:checked ~ .nr-rev .on {display:inline;} .tg-b:checked ~ .nr-rev .off {display:none;}
-.brev .nr-rev {display:flex; justify-content:center; align-items:center; text-align:center; min-height:64px; border-radius:16px; cursor:pointer; font-weight:800; font-size:1.1rem;
-  background:linear-gradient(100deg, #f5c04e, #ffe3a1 45%, #f5c04e); color:#1a1205;}
-.brev .nr-rev small {display:block; font-weight:600; font-size:.8rem; opacity:.8;} .brev .nr-rev .on {display:none;}
-.tg-b:checked ~ .nr-rev {background:rgba(255,255,255,.06); color:#c3cad6; min-height:44px; font-size:.95rem;}
-.bcols {display:grid; grid-template-columns:1fr 1fr; gap:10px;} @media (max-width: 900px) {.bcols {grid-template-columns:1fr;}}
-.res-l li {justify-content:space-between;} .res-l li span {display:flex; align-items:center; gap:6px; color:#8a94a8;} .res-l li span.w {color:#fff; font-weight:700;}
-.res-l b {font-family:'Barlow Condensed', sans-serif; font-size:1.2rem;}
-.pf-l .nm {display:flex; flex-direction:column; flex:1; min-width:0; line-height:1.2;} .pf-l .nm small {color:#8a94a8;}
-.pf-l .sl {color:#e8ecf3; font-size:.85rem; text-align:right; max-width:55%;}
-.mv {font-weight:800; font-size:.85rem; padding:2px 8px; border-radius:7px;} .mv.up {background:rgba(34,197,94,.16); color:#4ade80;}
-.mv.dn {background:rgba(239,68,68,.15); color:#f87171;} .mv-l small {color:#8a94a8;}
-.tn-l .t {width:52px; font-family:'Barlow Condensed', sans-serif; font-weight:700; font-size:1.15rem;} .tn-l .at {color:#5d6880;}
-.tn-l .wt {margin-left:auto;} .tn-l .bdg {margin-left:6px;}
+.bf {margin-top:6px;} .bf .tg {display:none;}
+.bf-bar {display:flex; align-items:flex-end; gap:16px; justify-content:space-between; flex-wrap:wrap; margin:6px 0 10px;}
+.bf-bar h1 {font-family:'Barlow Condensed', sans-serif; text-transform:uppercase; font-size:2rem; margin:0; padding:0; line-height:1.05;}
+.bf-bar p {color:#8a94a8; margin:.15rem 0 0; font-size:.9rem;}
+.pill {display:inline-flex; align-items:center; gap:6px; cursor:pointer; user-select:none; border:1px solid #3a3320; color:#ffd98a; background:rgba(255,199,90,.08);
+  border-radius:999px; padding:5px 12px; font-weight:700; font-size:.85rem; white-space:nowrap;}
+.pill:hover {background:rgba(255,199,90,.16); border-color:#6b5520;} .pill .on {display:none;}
+.pill.big {padding:9px 18px; font-size:.95rem;}
+.tg-all:checked ~ .bf-bar .pill .on {display:inline;} .tg-all:checked ~ .bf-bar .pill .off {display:none;}
+.bf-me {display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:#10151f; border:1px solid rgba(255,199,90,.35); border-radius:14px;
+  padding:9px 14px; margin:0 0 12px; color:#d5dbe6; font-size:.92rem;} .bf-me .wt {margin-left:auto;}
+.bf-me > span:not(.wt) {flex:1 1 220px; min-width:0;} .bf-me img.ml {align-self:flex-start; margin-top:2px;}
+@media (max-width: 640px) {.bt {gap:4px; padding:8px 10px 8px 12px;} .bt-row {min-height:32px;} .bf-me {font-size:.88rem;}}
+/* tuiles des matchs : toutes de la même taille */
+.bt-grid {display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px; grid-auto-rows:1fr;}
+.bt {position:relative; display:flex; flex-direction:column; gap:6px; padding:10px 12px 10px 14px; border-radius:16px; border:1px solid #1f2736; overflow:hidden;
+  background:linear-gradient(rgba(12,15,22,.86), rgba(12,15,22,.9)), linear-gradient(105deg, var(--ca) 0%, var(--ca) 49.5%, var(--ch) 50.5%, var(--ch) 100%);}
+.bt::before {content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:linear-gradient(var(--ca), var(--ch));}
+.bt.fav {border-color:rgba(255,199,90,.55);}
+.bt-top {display:flex; justify-content:space-between; align-items:center; min-height:24px;}
+.bt-st {color:#8a94a8; font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em;} .bt-st .live {color:#ff6b6b;}
+.bt .lvl {font-size:.78rem; padding:3px 9px;}
+.bt-row {display:flex; align-items:center; gap:9px; min-height:36px;}
+.bt-row .nm {flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:1.02rem;}
+.bt-row .nm i {color:#8a94a8; font-style:normal; font-size:.85rem;}
+.sq {min-width:46px; height:32px; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; cursor:pointer;
+  background:repeating-linear-gradient(135deg, rgba(255,255,255,.07) 0 4px, rgba(255,255,255,.02) 4px 8px); border:1px solid #2a3344;
+  font-family:'Barlow Condensed', sans-serif; font-weight:800; font-size:1.35rem; color:#5d6880;}
+.sq .sc-r {display:none; color:#fff;} .sq .sc-r.l {color:#7c879b;}
+.tg-t:checked ~ .bt-row .sq .q, .tg-all:checked ~ .bt-grid .sq .q, .bf.all .sq .q {display:none;}
+.tg-t:checked ~ .bt-row .sq .sc-r, .tg-all:checked ~ .bt-grid .sq .sc-r, .bf.all .sq .sc-r {display:inline;}
+.tg-t:checked ~ .bt-row .sq, .tg-all:checked ~ .bt-grid .sq, .bf.all .sq {background:rgba(8,10,16,.55); border-color:transparent;}
+.bt-kf {color:#c3cad6; font-size:.82rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:1.2em;}
+.bt-b {display:flex; align-items:center; gap:6px; margin-top:auto; padding-top:6px; border-top:1px solid rgba(255,255,255,.07); flex-wrap:nowrap; overflow:hidden;}
+.bt-b .cbtn {padding:4px 10px; font-size:.8rem; white-space:nowrap;} .bt-b a.lk {margin-left:auto; font-size:.85rem;} .bt-b .wt {font-size:.74rem;}
+/* rubriques cachées */
+.bsecs {display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:12px;}
+@media (max-width: 1000px) {.bsecs {grid-template-columns:1fr;}}
+.bs {background:#10151f; border:1px solid #1f2736; border-radius:16px; padding:10px 14px;}
+.bs-h {display:flex; align-items:center; justify-content:space-between; gap:8px; font-weight:700;}
+.bs-c {display:none;} .bs-hid {color:#5d6880; font-size:.85rem; padding:8px 0 2px;}
+.tg-x:checked ~ .bs-c, .tg-all:checked ~ .bsecs .bs-c, .bf.all .bs-c {display:block;}
+.tg-x:checked ~ .bs-hid, .tg-all:checked ~ .bsecs .bs-hid, .bf.all .bs-hid {display:none;}
+.tg-x:checked ~ .bs-h .pill .on {display:inline;} .tg-x:checked ~ .bs-h .pill .off {display:none;}
+.tg-all:checked ~ .bsecs .bs-h .pill, .bf.all .bs-h .pill {display:none;}
+.bs ul {list-style:none; margin:6px 0 0; padding:0;} .bs li {display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #171d29;}
+.bs li:last-child {border-bottom:none;} .bs .nm {display:flex; flex-direction:column; flex:1; min-width:0; line-height:1.2;} .bs .nm small {color:#8a94a8;}
+.bs .sl {color:#e8ecf3; font-size:.8rem; text-align:right; max-width:52%;} .bs .ok {color:#8a94a8;}
+.mv {font-weight:800; font-size:.8rem; padding:2px 8px; border-radius:7px; white-space:nowrap;} .mv.up {background:rgba(34,197,94,.16); color:#4ade80;}
+.mv.dn {background:rgba(239,68,68,.15); color:#f87171;}
+.tn-l li.fav {background:rgba(255,199,90,.07);} .tn-l .t {width:52px; font-family:'Barlow Condensed', sans-serif; font-weight:700; font-size:1.15rem;}
+.tn-l .at {color:#5d6880;} .tn-l .wt {margin-left:auto;} .tn-l .bdg {margin-left:6px;}
+.lvl {font-weight:800; font-size:.85rem; padding:4px 10px; border-radius:999px; background:rgba(8,10,16,.55); color:#ffd98a; white-space:nowrap;}
+@media (max-width: 640px) {.bt-grid {grid-template-columns:1fr; grid-auto-rows:auto;} .bf-bar h1 {font-size:1.6rem;}}
 </style>
 """
 
@@ -4861,6 +4911,10 @@ def finish_run(day):
         set_cookie("nba_hello", "1")
     if ss.pop("opt_changed", False):
         set_cookie("nba_opt", ("i1" if ss.opts["indice"] else "i0") + ("s1" if ss.opts["scores"] else "s0") + "c" + ss.opts.get("pays", "FR"))
+    pend = {k: v for k, v in (ss.get("_cookies") or {}).items() if k in KEEP}
+    if pend:  # même contenu d'un passage à l'autre : le cadre n'est pas recréé, l'écriture est seulement assurée
+        run_js("<script>" + "".join(f"parent.document.cookie='{k}={v}; path=/; max-age=31536000; SameSite=Lax';"
+                                    f"try {{ parent.localStorage.setItem('{k}', '{v}'); }} catch (e) {{}}" for k, v in sorted(pend.items())) + "</script>")
     trk = ss.get("trk")
     if not trk:
         return
@@ -4875,6 +4929,13 @@ def click_tracker(day, done):
     run_js(f"""<script>
 const P = window.parent, D = P.document;
 D.documentElement.lang = 'fr';
+try {{  // réglages perdus (cookie effacé) mais gardés dans le navigateur : on les remet, puis on recharge une seule fois
+  const lost = {json.dumps(list(KEEP))}.filter(n => !D.cookie.split('; ').some(c => c.startsWith(n + '=')) && P.localStorage.getItem(n));
+  lost.forEach(n => {{ D.cookie = n + '=' + P.localStorage.getItem(n) + '; path=/; max-age=31536000; SameSite=Lax'; }});
+  if (lost.includes('nba_fav') || lost.includes('nba_opt')) {{
+    if (!P.sessionStorage.getItem('bb_restored')) {{ P.sessionStorage.setItem('bb_restored', '1'); P.location.reload(); }}
+  }}
+}} catch (e) {{}}
 const center = () => {{  // bande des nuits (téléphone) : la nuit affichée au milieu
   const act = D.querySelector('.st-key-nav button[data-testid="stBaseButton-primary"]');
   const row = act && act.closest('[data-testid="stHorizontalBlock"]');
@@ -5165,13 +5226,16 @@ def main():
         except ValueError:
             st.session_state.day = default_day(days, today)
     if "view" not in st.session_state:
-        st.session_state.view = st.query_params.get("vue") if st.query_params.get("vue") in VIEWS else "nuit"
+        st.session_state.view = (st.query_params.get("vue") if st.query_params.get("vue") in VIEWS
+                                 else ("nuit" if st.query_params.get("nuit") else "brief"))
     if "team" not in st.session_state:
         st.session_state.team = team_by_abbr(st.query_params.get("eq", "")) or team_by_abbr((st.session_state.favs or [""])[0])
     day, view = st.session_state.day, st.session_state.view
-    if st.query_params.get("nuit") != day.isoformat():
+    if view in ("nuit", "semaine"):  # l'adresse garde la nuit choisie ; sans rien, c'est le brief (page d'accueil)
         st.query_params["nuit"] = day.isoformat()
-    if view != "nuit":
+    else:
+        st.query_params.pop("nuit", None)
+    if view not in ("nuit", "brief"):
         st.query_params["vue"] = view
     else:
         st.query_params.pop("vue", None)

@@ -74,10 +74,20 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   infirmerie et meneurs de la saison (résumé ESPN d'avant-match), 10 prochains matchs + agenda, 10 derniers matchs (résultats cachés,
   `.tg-r`), effectif (`team_roster`, photos ESPN, noms cliquables vers la fiche), actus ESPN repliées (`team_news`, en anglais, peuvent spoiler).
   Une autre équipe s'ouvre par la liste « Autre équipe » ou un clic sur son nom (programme, classement…) ; bouton « Revenir aux … ».
-- **Le brief (v024, `brief_page`, `BRIEF_CSS`)** : la dernière nuit en un coup d'œil : « À voir en priorité » (3 meilleurs matchs selon
-  l'indice, sans score, boutons Résumé / NBA Extra / Stats ›), mon équipe (son match + son prochain match et la chaîne), une grande barre
-  « Révéler les résultats » (`.tg-b`, cochée si la nuit a été ouverte) : scores, grosses perfs (`game_score`), mouvements du classement
-  (avant/après la nuit), nos joueurs (FR/CA) ; puis les grosses absences et « Ce soir » (programme + affiche + chaîne).
+- **Le brief = PAGE D'ACCUEIL (v025, `brief_page`, `BRIEF_CSS`, « la page la plus importante » pour Kiki)** : adresse sans `vue`
+  ni `nuit` = le brief (un ancien lien `?nuit=` seul ouvre la nuit). Tout dans UN seul bloc HTML (les cases à cocher CSS ne voient
+  que leurs voisins) : titre de la nuit + pastille « 👁 Tout révéler » (`#b-all`, `.tg-all`, discrète), bandeau de mon équipe
+  (prochain match + chaîne), TOUS les matchs de la nuit en tuiles de MÊME taille (`.bt-grid`, `grid-auto-rows:1fr`, une ligne par
+  équipe avec bilan d'avant-match, cases « ? » cliquables par match `.tg-t`, indice « à voir », info clé `key_fact` sur une ligne,
+  Résumé / NBA Extra / Stats ›), triées mon équipe puis indice. Rubriques cachées, chacune avec sa pastille « 👁 Voir » (`.tg-x`) :
+  grosses perfs, ce qui a bougé au classement, nos Français/Canadiens. Puis grosses absences et la nuit prochaine. TOUT est caché
+  par défaut (sauf « Toujours montrer les scores », classe `.bf.all`).
+  ⚠️ Ne jamais écrire `checked` dans le HTML d'une case à cocher : React la verrouille (impossible de la décocher : bug « Cacher »
+  du brief v024). Pour un état ouvert par défaut, utiliser une classe CSS sur le bloc.
+- **Réglages qui tiennent (v025)** : `set_cookie` copie `nba_fav`, `nba_opt`, `nba_hello`, `nba_id` dans `localStorage`
+  (`KEEP`) et `finish_run` les réécrit à chaque fin de page ; au chargement, `click_tracker` remet un cookie disparu depuis la
+  copie et recharge une fois (`sessionStorage bb_restored`).
+- Bouton « Révéler le récap de la nuit » de la page Matchs : pastille sobre (v025, plus de grande barre dorée animée).
 - **Joueurs (v024, `players_page`, `PLAYERS_CSS`)** : rubriques Fiches · Les meilleurs · Les Français (ou Canadiens selon le pays) ·
   Infirmerie. Journal de toutes les feuilles de match de la saison (`players_db`, fil de fond « joueurs » toutes les 15 min,
   `_players_tick` lit le scoreboard jour par jour puis `summary_raw`, `_box_line`) gardé sur GitHub `joueurs/log.json` (branche data,

@@ -156,8 +156,26 @@ def _news(tid=None):
     return {"articles": arts}
 
 
+NBA_TRI = {"GS": "GSW", "NO": "NOP", "NY": "NYK", "SA": "SAS", "UTAH": "UTA", "WSH": "WAS"}
+
+
+def _nba_schedule():
+    """Calendrier façon cdn.nba.com : beIN SPORTS (France) sur un match sur trois, TSN / Sportsnet pour les Raptors."""
+    dates = {}
+    for g in GAMES:
+        h, a = BY_ID[g["home"]][1], BY_ID[g["away"]][1]
+        intl = [{"broadcasterDisplay": "beIN SPORTS"}] if int(g["id"]) % 3 == 0 else []
+        home = [{"broadcasterDisplay": random.Random(int(g["id"])).choice(["TSN", "Sportsnet"])}] if "28" in (g["home"], g["away"]) else []
+        dates.setdefault(g["day"], []).append({"gameDateEst": f"{g['day'].isoformat()}T00:00:00Z",
+                                                "homeTeam": {"teamTricode": NBA_TRI.get(h, h)}, "awayTeam": {"teamTricode": NBA_TRI.get(a, a)},
+                                                "broadcasters": {"intlTvBroadcasters": intl, "homeTvBroadcasters": home}})
+    return {"leagueSchedule": {"gameDates": [{"games": v} for v in dates.values()]}}
+
+
 def fake_get(url, params=None):
     params = params or {}
+    if "scheduleLeagueV2" in url:
+        return _nba_schedule()
     path = url.split("/nba", 1)[-1]
     if path == "/teams":
         return {"sports": [{"leagues": [{"teams": [{"team": {"id": t[0], "abbreviation": t[1], "name": t[2], "displayName": t[3],
@@ -179,9 +197,16 @@ def fake_get(url, params=None):
     if path.endswith("/roster"):
         tid = path.split("/")[2]
         pos = ["G", "G", "F", "F", "C", "G", "F", "C", "G", "F", "F", "G", "C"]
+        rnd = random.Random(int(tid))
+        country = lambda j: "France" if (int(tid) + j) % 23 == 0 else ("Canada" if (int(tid) + j) % 19 == 0 else "USA")
         return {"athletes": [{"id": str(int(tid) * 1000 + j), "displayName": _player(tid, j), "shortName": _player(tid, j),
                               "position": {"abbreviation": pos[j]}, "jersey": str((j * 7 + int(tid)) % 40),
-                              "injuries": [{"status": "Out"}] if j == 9 else []} for j in range(13)]}
+                              "age": 19 + (j * 3 + int(tid)) % 16, "height": 74 + (j * 5) % 13, "weight": 190 + (j * 11) % 70,
+                              "birthPlace": {"city": {"France": "Paris", "Canada": "Toronto"}.get(country(j), "Chicago"), "country": country(j)},
+                              "experience": {"years": (j + int(tid)) % 12}, "college": {"name": "" if country(j) != "USA" else "Duke"},
+                              "injuries": [{"status": "Out", "details": {"type": "Knee", "returnDate": "2026-11-20"}}] if j == 9 else
+                                          ([{"status": "Day-To-Day", "details": {"type": "Ankle"}}] if j == 2 and rnd.random() < .4 else [])}
+                             for j in range(13)]}
     if path == "/news":
         return _news(params.get("team"))
     return None

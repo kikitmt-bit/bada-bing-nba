@@ -28,7 +28,7 @@ import streamlit.components.v1 as components
 import fantasy as F
 import stats as S
 
-APP_VERSION = "2026-11-v029"
+APP_VERSION = "2026-11-v030"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -5042,36 +5042,57 @@ def brief_page(schedule, idx, season, days, today, zone, show_all, interest):
                 moves.append((abs(old - r["rank"]), conf, r["tid"], old, r["rank"]))
     moves.sort(key=lambda m: -m[0])
     move_html = "".join(f"<li>{mini_logo(t, 22)}<span class='nm'>{team_link(t)}<small>{'Est' if c == 'Est' else 'Ouest'}</small></span>"
-                        f"<span class='mv {'up' if new < old else 'dn'}'>{'▲' if new < old else '▼'} {old}e → {new}e</span></li>" for _, c, t, old, new in moves[:8])
+                        f"<span class='mv {'up' if new < old else 'dn'}'>{'▲' if new < old else '▼'} {old}e → {new}e</span></li>" for _, c, t, old, new in moves[:6])
     flag, ours_title = COUNTRY[pays][1], COUNTRY[pays][2]
 
-    def section(sid, title, body, empty, wide=False, raw=False, cls=""):
-        content = body if raw else f"<ul>{body or f'<li class=ok>{empty}</li>'}</ul>"
-        return (f"<div class='bs{' wide' if wide else ''}{' ' + cls if cls else ''}'><input type='checkbox' class='tg tg-x' id='bs-{sid}'>"
-                f"<div class='bs-h'><span>{title}</span><label for='bs-{sid}' class='pill'><span class='off'>👁 Voir</span><span class='on'>🙈 Cacher</span></label></div>"
-                f"<div class='bs-c'>{content}</div><div class='bs-hid'>Caché pour ne rien dévoiler.</div></div>")
+    def card(sid, icon, title, teaser, body, cls=""):
+        """Rubrique cachée : face « teaser » engageante (toute la carte se clique), puis le contenu avec « Cacher »."""
+        return (f"<div class='bs {cls}'><input type='checkbox' class='tg tg-x' id='bs-{sid}'>"
+                f"<label for='bs-{sid}' class='bs-t'><span class='bs-ic'>{icon}</span><span class='bs-tt'><b>{title}</b><small>{teaser}</small></span>"
+                f"<span class='pill'>👁 Révéler</span></label>"
+                f"<div class='bs-c'><div class='bs-h'><span class='bs-ic s'>{icon}</span><b>{title}</b>"
+                f"<label for='bs-{sid}' class='pill'>🙈 Cacher</label></div>{body}</div></div>")
     secs = ""
-    story = story_html(last, games, summs, idx, watch, moves, mvp=False) if done else ""
+    sentences = night_story(last, games, summs, idx, watch, moves, mvp=False) if done else []
+    ai_txt = ai_night(last, sentences, games) if sentences else None
+    story = (f"<p class='story'>{esc(ai_txt)}</p>" if ai_txt else
+             "<ul class='story-l'>" + "".join(f"<li><span class='ic'>{ic}</span><span>{esc(t)}</span></li>" for ic, t in sentences) + "</ul>")
     mvp_html = ""
     if perfs:  # le MVP de la nuit : photo, équipe, adversaire et sa ligne de stats complète
         _, r, tid, _, g = perfs[0]
         opp = g["away"]["id"] if g["home"]["id"] == tid else g["home"]["id"]
         stt = r["stats"]
         n = lambda k: str(stt.get(k, "–")).split(":")[0]
-        cells = [("Pts", n("PTS")), ("Reb", n("REB")), ("Pas", n("AST")), ("Int", n("STL")), ("Ctr", n("BLK")),
-                 ("Tirs", stt.get("FG", "–")), ("3 pts", stt.get("3PT", "–")), ("LF", stt.get("FT", "–")), ("Min", n("MIN"))]
+        cells = [("Points", n("PTS")), ("Rebonds", n("REB")), ("Passes", n("AST")), ("Interc.", n("STL")), ("Contres", n("BLK")),
+                 ("Tirs", stt.get("FG", "–")), ("À 3 pts", stt.get("3PT", "–")), ("Lancers", stt.get("FT", "–")), ("Minutes", n("MIN"))]
         p_ = players.get(str(r.get("id"))) or {"photo": f"https://a.espncdn.com/i/headshots/nba/players/full/{r.get('id')}.png" if r.get("id") else ""}
-        mvp_html = (f"<div class='mvp' style='--c:{team_color(tid)}'>{headshot(p_, 92)}<div class='mvp-b'>"
-                    f"<div class='mvp-n'>{player_link(str(r.get('id') or ''), r['name'])}</div>"
-                    f"<small>{mini_logo(tid, 16)} {esc(team(tid)['name'])} {'contre' if g['home']['id'] == tid else 'chez'} les {esc(team(opp)['name'])}</small>"
+        mvp_html = (f"<div class='mvp' style='--c:{team_color(tid)}'><div class='mvp-p'>{headshot(p_, 120)}<span class='mvp-badge'>MVP</span></div>"
+                    f"<div class='mvp-b'><div class='mvp-n'>{player_link(str(r.get('id') or ''), r['name'])}</div>"
+                    f"<div class='mvp-t'>{mini_logo(tid, 18)} {esc(team(tid)['name'])} {'contre' if g['home']['id'] == tid else 'chez'} les {esc(team(opp)['name'])}</div>"
                     f"<div class='mvp-s'>{''.join(f'<span><b>{esc(v)}</b><i>{k}</i></span>' for k, v in cells)}</div></div></div>")
     if done:
-        perf_body = (f"<div class='mvp-k'>🏆 Le MVP de la nuit</div>{mvp_html}" if mvp_html else "") + (
-            f"<div class='mvp-k'>Les autres grosses perfs</div><ul>{plist(perfs[1:7])}</ul>" if len(perfs) > 1 else "")
-        secs = ("<div class='bsecs'>" + (section("story", "📝 La nuit en bref", story, "", raw=True, cls="w2") if story else "")
-                + section("perf", "💥 Le MVP et les grosses perfs", perf_body or "<ul><li class=ok>Pas de feuille de match pour l’instant.</li></ul>", "", raw=True)
-                + section("cls", "📊 Ce qui a bougé au classement", move_html, "Rien de notable.")
-                + section("nous", f"{flag} Nos {'Français' if pays == 'FR' else 'Canadiens'} cette nuit", plist(ours), "Aucun n’a joué cette nuit.") + "</div>")
+        others = "".join(
+            f"<div class='op'>{headshot(players.get(str(r.get('id'))), 44)}<div><div class='op-n'>{player_link(str(r.get('id') or ''), r['name'])}</div>"
+            f"<small>{mini_logo(tid, 14)} {esc(team(tid)['name'])}</small><div class='op-l'>{esc(line)}</div></div></div>"
+            for _, r, tid, line, _g in perfs[1:7])
+        perf_body = (f"<div class='mvp-row'>{mvp_html}<div class='ops'><div class='mvp-k'>Les autres grosses perfs</div><div class='op-g'>{others}</div></div></div>"
+                     if mvp_html else "<p class='ok'>Pas de feuille de match pour l’instant.</p>")
+        ours_body = ("<div class='op-g fr'>" + "".join(
+            f"<div class='op'>{headshot(players.get(str(r.get('id'))), 44)}<div><div class='op-n'>{player_link(str(r.get('id') or ''), r['name'])}</div>"
+            f"<small>{mini_logo(tid, 14)} {esc(team(tid)['name'])}</small><div class='op-l'>{esc(line)}</div></div></div>"
+            for _, r, tid, line, _g in ours) + "</div>") if ours else "<p class='ok'>Aucun n’a joué cette nuit.</p>"
+        nat = "Français" if pays == "FR" else "Canadiens"
+        secs = ("<div class='bsecs'>"
+                + card("story", "📝", "La nuit en bref", f"{len(sentences)} faits marquants à retenir" if sentences else "Ce qu'il faut retenir",
+                       story if sentences or ai_txt else "<p class='ok'>Rien de particulier.</p>")
+                + card("cls", "📊", "Ce qui a bougé au classement",
+                       "Qui monte, qui descend ? Les plus gros mouvements de la nuit" if moves else "Qui monte, qui descend ?",
+                       f"<ul class='cls-l'>{move_html}</ul>" if move_html else "<p class='ok'>Rien de notable.</p>")
+                + card("perf", "🏆", "Le MVP et les grosses perfs", "Qui a été le meilleur joueur de la nuit ?", perf_body, "full gold")
+                + card("nous", flag, f"Nos {nat} cette nuit",
+                       f"{len(ours)} {nat} sur les parquets cette nuit : comment s'en sont-ils sortis ?" if ours else f"Aucun {nat[:-1]} n'a joué cette nuit",
+                       ours_body, "full")
+                + "</div>")
     reveal = "" if show_all or not done else (
         "<label for='b-all' class='pill big'><span class='off'>👁 Tout révéler</span><span class='on'>🙈 Tout cacher</span></label>")
     # Les vidéos de la nuit : le résumé de la nuit (NBA) et l'émission NBA Extra (beIN SPORTS, 12h45 à Paris)
@@ -5212,6 +5233,76 @@ a.tl {white-space:nowrap;}
   .pr {grid-template-columns:60px 1fr;} .pr-t {min-width:0; font-size:1.05rem;}
   .mvp {flex-direction:column; text-align:center;} .mvp-s {grid-template-columns:repeat(5, 1fr);}
   .stars {grid-template-columns:1fr;}
+}
+/* v030 : rubriques cachées du brief, en cartes engageantes, sans trous */
+.bsecs {display:grid !important; grid-template-columns:1fr 1fr !important; gap:12px; margin-top:14px; align-items:stretch !important;}
+.bsecs .bs.full {grid-column:1 / -1 !important;}
+@media (max-width: 900px) {.bsecs {grid-template-columns:1fr !important;}}
+.bs {padding:0 !important; overflow:hidden; display:flex; flex-direction:column; border-radius:18px !important;}
+.bs-t {display:flex; align-items:center; gap:16px; padding:18px 20px; min-height:96px; cursor:pointer; flex:1;
+  background:radial-gradient(120% 140% at 0% 0%, rgba(255,199,90,.10), transparent 55%); transition:background .15s ease;}
+.bs-t:hover {background:radial-gradient(120% 140% at 0% 0%, rgba(255,199,90,.18), transparent 60%);}
+.bs-t:hover .pill {background:rgba(255,199,90,.2); border-color:#ffc75a;}
+.bs-ic {flex:none; width:52px; height:52px; border-radius:16px; display:flex; align-items:center; justify-content:center; font-size:1.7rem;
+  background:linear-gradient(145deg, rgba(255,199,90,.22), rgba(255,199,90,.06)); box-shadow:inset 0 0 0 1px rgba(255,199,90,.25);}
+.bs-ic.s {width:34px; height:34px; border-radius:10px; font-size:1.1rem;}
+.bs-tt {display:flex; flex-direction:column; min-width:0; flex:1;} .bs-tt b {font-size:1.1rem; color:#fff;}
+.bs-tt small {color:#9aa4b8; font-size:.9rem; margin-top:2px;}
+.bs-t .pill {flex:none;}
+.bs.gold .bs-t {background:radial-gradient(120% 160% at 0% 50%, rgba(255,199,90,.22), transparent 60%), repeating-linear-gradient(115deg, rgba(255,255,255,.035) 0 2px, transparent 2px 11px);}
+.bs.gold .bs-ic {background:linear-gradient(145deg, #ffd56e, #c98a1a); box-shadow:0 0 22px rgba(255,199,90,.35);}
+.bs-c {display:none; padding:14px 18px 16px;}
+.bs-h {display:flex; align-items:center; gap:10px; margin-bottom:6px;} .bs-h b {flex:1; font-size:1.02rem;}
+.tg-x:checked ~ .bs-c, .tg-all:checked ~ .bsecs .bs-c, .bf.all .bs-c {display:block;}
+.tg-x:checked ~ .bs-t, .tg-all:checked ~ .bsecs .bs-t, .bf.all .bs-t {display:none;}
+.tg-all:checked ~ .bsecs .bs-h .pill, .bf.all .bs-h .pill {display:none;}
+.bs-hid {display:none !important;}
+.bs .ok {color:#8a94a8; margin:6px 0 0;}
+/* le MVP en grand, les autres perfs à côté */
+.mvp-row {display:grid; grid-template-columns:minmax(0, 1.05fr) minmax(0, 1fr); gap:18px; align-items:start;}
+@media (max-width: 900px) {.mvp-row {grid-template-columns:1fr;}}
+.mvp {display:flex !important; flex-direction:row !important; text-align:left !important; gap:18px; align-items:center; padding:16px 18px; border-radius:16px; margin:0 !important;
+  background:linear-gradient(120deg, color-mix(in srgb, var(--c) 40%, #10151f) 0%, #10151f 80%); border:1px solid rgba(255,199,90,.35);}
+.mvp-p {position:relative; flex:none;} .mvp-p img.hs {width:120px !important; height:120px !important; border:3px solid #ffc75a !important;}
+.mvp-badge {position:absolute; bottom:-4px; left:50%; transform:translateX(-50%); background:#ffc75a; color:#1a1205; font-weight:900; font-size:.75rem;
+  letter-spacing:.1em; padding:2px 10px; border-radius:999px; box-shadow:0 4px 10px rgba(0,0,0,.4);}
+.mvp-b {min-width:0; flex:1;}
+.mvp-n a.tl {font-family:'Barlow Condensed', sans-serif; font-size:1.9rem !important; text-transform:uppercase; line-height:1.05; color:#fff !important;
+  white-space:normal !important; overflow:visible !important; display:block; overflow-wrap:normal; word-break:keep-all;}
+.mvp-t {color:#c3cad6; font-size:.9rem; margin:4px 0 10px; white-space:nowrap;}
+.mvp-s {display:grid !important; grid-template-columns:repeat(5, minmax(0, 1fr)) !important; gap:6px !important; margin:0 !important;}
+.mvp-s span {background:rgba(8,10,16,.55); border-radius:10px; padding:6px 2px; text-align:center;}
+.mvp-s b {display:block; font-family:'Barlow Condensed', sans-serif; font-size:1.35rem; white-space:nowrap;} .mvp-s i {font-style:normal; color:#8a94a8; font-size:.7rem; white-space:nowrap;}
+@media (max-width: 640px) {.mvp {flex-direction:column !important; text-align:center !important;} .mvp-s {grid-template-columns:repeat(3, minmax(0, 1fr)) !important;}
+  .mvp-t {white-space:normal;}}
+.op-g {display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; margin-top:8px;}
+.op-g.fr {grid-template-columns:repeat(auto-fill, minmax(250px, 1fr));}
+@media (max-width: 640px) {.op-g {grid-template-columns:1fr;}}
+.op {display:flex; gap:10px; align-items:center; background:rgba(255,255,255,.03); border:1px solid #1d2432; border-radius:12px; padding:8px 10px; min-width:0;}
+.op > div {min-width:0;} .op-n a.tl {display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:.98rem;}
+.op small {color:#8a94a8; white-space:nowrap;} .op-l {color:#e3e8f0; font-size:.82rem; margin-top:2px;}
+.mvp-k {margin:0 0 2px !important;}
+/* grosses absences : 3 colonnes, plus de texte qui déborde sur le voisin */
+.stars {grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)) !important; gap:12px 18px !important;}
+.stars > div {min-width:0; align-items:flex-start !important;} .stars > div > span {min-width:0; overflow:hidden;}
+.stars > div > span > small, .stars small.why {display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;}
+@media (max-width: 640px) {.stars {grid-template-columns:1fr !important;}}
+/* v030 : MVP en pleine largeur, autres perfs en 3 colonnes ; classement compact */
+.mvp-row {grid-template-columns:1fr !important;}
+.mvp-s {grid-template-columns:repeat(9, minmax(0, 1fr)) !important;}
+@media (max-width: 900px) {.mvp-s {grid-template-columns:repeat(5, minmax(0, 1fr)) !important;}}
+@media (max-width: 640px) {.mvp-s {grid-template-columns:repeat(3, minmax(0, 1fr)) !important;}}
+.ops .op-g {grid-template-columns:repeat(3, minmax(0, 1fr));}
+@media (max-width: 900px) {.ops .op-g {grid-template-columns:repeat(2, minmax(0, 1fr));}}
+@media (max-width: 640px) {.ops .op-g {grid-template-columns:1fr;}}
+.cls-l li {padding:7px 0 !important; flex-wrap:nowrap !important;}
+.cls-l .nm {flex-direction:row !important; align-items:baseline; gap:8px;} .cls-l .nm small {font-size:.78rem;}
+.story-l li {padding:9px 0;}
+@media (max-width: 640px) {
+  .bs-t {padding:14px 14px; gap:12px; min-height:0;} .bs-t .pill {display:none;}
+  .bs-t::after {content:'›'; color:#ffc75a; font-size:1.8rem; font-weight:300; line-height:1; flex:none;}
+  .bs-ic {width:44px; height:44px; font-size:1.4rem; border-radius:13px;} .bs-tt b {font-size:1.02rem;} .bs-tt small {font-size:.84rem;}
+  .bs-c {padding:12px 12px 14px;} .op {padding:7px 9px;}
 }
 </style>
 """

@@ -98,7 +98,13 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   Tester ce cas en local : `BB_SANS_COOKIES=1` (le serveur ignore les cookies, comme sur Streamlit Cloud).
 - Bouton « Révéler le récap de la nuit » de la page Matchs : pastille sobre (v025, plus de grande barre dorée animée).
 - **La nuit en bref (v026-v027, `night_story`, `story_html`)** : v027 = liste de faits avec icône (🎬 ⚖️ ⭐ 😮 🔄 💥 📈 📊, jusqu'à 5,
-  dont le classement dans le brief via `moves` ; v028 : sans la ligne MVP dans le brief, `mvp=False`) ; à côté, « 💥 Le MVP et les grosses perfs » : le MVP de la nuit (meilleur `game_score` : photo, équipe,
+  dont le classement dans le brief via `moves` ; v028 : sans la ligne MVP dans le brief, `mvp=False`)
+  **v030 : rubriques cachées du brief refaites (`card` dans `brief_page`)** : chaque rubrique cachée = carte « teaser » engageante
+  (grande icône, titre, phrase qui donne envie sans spoiler, toute la carte se clique ; flèche › sur téléphone), puis le contenu avec
+  « 🙈 Cacher ». Disposition SANS TROUS : grille 2 colonnes `align-items:stretch` : [La nuit en bref | Ce qui a bougé (6 équipes,
+  une ligne chacune `.cls-l`)], puis en PLEINE LARGEUR (`.full`) « Le MVP et les grosses perfs » (MVP en grand : photo 120 px,
+  pastille MVP, nom en entier sur une ou deux lignes jamais coupé au milieu, 9 cases de stats en une rangée ; autres perfs en
+  3 colonnes `.op-g`), puis « Nos Français » (cartes `.op`). Grosses absences : 3 colonnes, textes coupés par « … » (plus de chevauchement). ; à côté, « 💥 Le MVP et les grosses perfs » : le MVP de la nuit (meilleur `game_score` : photo, équipe,
   adversaire, 9 cases de stats), puis les grosses perfs (2e à 7e). Avant v027 : 2 à 4 phrases (match de la nuit selon l'indice, sinon le plus serré ;
   la perf ; la surprise (favori de 5 pts ou plus battu) ou la remontée de 15 pts ou plus ou la raclée ; une série de 5+), accordées
   (« le Magic bat », « les Celtics battent » : `SINGULIER`, `les`, `vb`). Réécrites en paragraphe par Claude si `[anthropic]`

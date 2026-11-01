@@ -25,7 +25,7 @@ import streamlit.components.v1 as components
 
 import fantasy as F
 
-APP_VERSION = "2026-10-v018"
+APP_VERSION = "2026-11-v019"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -2103,9 +2103,8 @@ label.mt {cursor:pointer;}
 
 
 def user_zone():
-    q = st.query_params.get("tz")
-    if q in ZONES:
-        return q
+    """Fuseau deviné du navigateur (plus de réglage : ?tz= des anciens liens ignoré)."""
+    st.query_params.pop("tz", None)
     tz = ""
     try:
         tz = st.context.timezone or ""
@@ -3462,10 +3461,6 @@ def main():
             if other != day:
                 go(other)
         with c3.popover("⚙️", help="Réglages"):
-            new_zone = st.radio("Heures affichées", list(ZONES), index=list(ZONES).index(zone), horizontal=True)
-            if new_zone != zone:
-                st.query_params["tz"] = new_zone
-                st.rerun()
             all_teams = sorted(teams().values(), key=lambda t: t["full"])
             favs = st.multiselect("⭐ Mes équipes", [t["abbr"] for t in all_teams], default=[f for f in st.session_state.favs if f in {t["abbr"] for t in all_teams}],
                                   format_func=lambda ab: next((t["full"] for t in all_teams if t["abbr"] == ab), ab),

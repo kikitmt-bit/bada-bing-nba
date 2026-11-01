@@ -28,7 +28,7 @@ import streamlit.components.v1 as components
 import fantasy as F
 import stats as S
 
-APP_VERSION = "2026-11-v020"
+APP_VERSION = "2026-11-v022"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -1506,7 +1506,8 @@ CSS = """
 }
 .stApp {background: radial-gradient(1200px 500px at 50% -200px, #1a2333 0%, var(--bg) 60%) fixed;}
 .block-container {padding-top: 3.6rem; padding-bottom: 4rem; max-width: 860px;}
-header[data-testid="stHeader"] {background: transparent;}
+div[data-testid="stElementContainer"]:has(> iframe[height="0"]) {position:absolute; width:0; height:0; overflow:hidden; margin:0;}
+header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"] {display: none !important;}  /* barre Streamlit (partager, étoile, crayon, ⋮) cachée */
 h1, h2, h3 {letter-spacing:-.01em}
 .bb-brand {font-size:1.35rem; font-weight:800; letter-spacing:-.02em; line-height:1.1;}
 .bb-brand span {color:var(--accent);}
@@ -3470,9 +3471,8 @@ def finish_run(day):
     trk = ss.get("trk")
     if not trk:
         return
-    if trk["new"]:
-        set_cookie("nba_id", trk["u"])
-        trk["new"] = False
+    if trk.get("pending"):  # arrivée comptée seulement quand la page s'est affichée en entier
+        S.add(trk.pop("pending"))
     click_tracker(day, trk["done"])
 
 
@@ -3535,14 +3535,22 @@ def admin_page(zone):
     c1, c2 = st.columns([2, 1], vertical_alignment="bottom")
     period = c1.segmented_control("Période", [1, 7, 30, 90], default=7, key="adm_p",
                                   format_func=lambda n: "Aujourd'hui" if n == 1 else f"{n} jours") or 7
-    mine = c2.toggle("Compter mes appareils", value=False, help="Cet appareil est reconnu comme le tien depuis que tu as ouvert cette page.")
+    mine = c2.toggle("Compter mes appareils", value=False,
+                     help="Un appareil qui ouvre cette page est reconnu comme le tien. Tu peux en marquer d'autres plus bas.")
     now = time.time()
     since = now - period * 86400
     months = sorted({S.month_of(since + i * 86400) for i in range(period + 1)} | {S.month_of(now)})
     raw = S.dedupe([e for m in months for e in (store.load(f"{m}.json", []) or []) if e.get("t", 0) >= since])
     names = store.load("names.json", {}) or {}
+    me_trk = st.session_state.get("trk") or {}
+    if me_trk.get("u") and me_trk["u"] not in names.get("_moi", []):  # l'appareil qui ouvre cette page est à toi
+        names = store.update("names.json", {}, lambda d: d.setdefault("_moi", []).append(me_trk["u"]),
+                             "Statistiques : un appareil de l'admin") or names
+    moi = set(names.get("_moi", []))
     errs = [e for e in raw if e["k"] == "err"]
-    evs = [e for e in raw if e["k"] != "err" and (mine or not e.get("me"))]
+    # Un même nom donné à plusieurs numéros (téléphone + PC, navigation privée…) = une seule personne
+    evs = [dict(e, u=names.get(e["u"]) or e["u"]) if e.get("u") else e
+           for e in raw if e["k"] != "err" and (mine or not (e.get("me") or e.get("u") in moi))]
     info = {}
     for e in evs:
         if e["k"] == "open":
@@ -3551,7 +3559,8 @@ def admin_page(zone):
             i["new"] = i["new"] or bool(e.get("n"))
 
     def who(u):
-        return names.get(u) or f"{(info.get(u) or {}).get('dev', 'Appareil')} n°{u[:4]}"
+        return u if u not in ids else f"{(info.get(u) or {}).get('dev', 'Appareil')} n°{u[:4]}"
+    ids = {e["u"] for e in raw if e.get("u")}
 
     def hm(t):
         return datetime.fromtimestamp(t, tz).strftime("%d/%m %H:%M")
@@ -3625,16 +3634,24 @@ def admin_page(zone):
                          "Vidéos": sum(1 for e in clicks if e["u"] == u and e["k"] in "vxqRX"),
                          "Première": hm(vs[0]["start"]), "Dernière": hm(vs[-1]["end"])})
         st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
-        with st.expander("✏️ Donner un nom à un visiteur"):
-            u = st.selectbox("Visiteur", list(per_u), format_func=lambda u: f"{who(u)} · {info.get(u, {}).get('z', '')}", key="adm_u")
-            nm = st.text_input("Nom", value=names.get(u, ""), key=f"adm_nm_{u}")
-            if st.button("Enregistrer", key="adm_save"):
+        with st.expander("✏️ Nommer, regrouper ou retirer des visiteurs"):
+            st.caption("Un même nom pour plusieurs lignes = une seule personne (son téléphone et son PC, par exemple). "
+                       "« Ce sont mes appareils » les retire des chiffres.")
+            first = {p: min(v["start"] for v in vs) for p, vs in per_u.items()}
+            sel = st.multiselect("Visiteurs", list(per_u), key="adm_u", placeholder="Choisir une ou plusieurs lignes",
+                                 format_func=lambda p: f"{who(p)} · {info.get(p, {}).get('z', '')} · {hm(first[p])}")
+            nm = st.text_input("Nom", key="adm_nm", placeholder="Ex. : Pote Montréal")
+            is_me = st.checkbox("Ce sont mes appareils (ne pas les compter)", key="adm_me")
+            if st.button("Enregistrer", key="adm_save", disabled=not sel):
+                real = {u for u in ids if u in sel or names.get(u) in sel}   # numéros derrière les lignes choisies
+
                 def change(d):
-                    if nm.strip():
-                        d[u] = nm.strip()[:30]
-                    else:
-                        d.pop(u, None)
-                store.update("names.json", {}, change, "Statistiques : nom d'un visiteur")
+                    for u in real:
+                        if nm.strip():
+                            d[u] = nm.strip()[:30]
+                    if is_me:
+                        d["_moi"] = sorted(set(d.get("_moi", [])) | real)
+                store.update("names.json", {}, change, "Statistiques : visiteurs nommés")
                 st.rerun()
 
     # Journal
@@ -3692,6 +3709,8 @@ def main():
         st.query_params.pop("scores", None)
     zone = user_zone()
     trk = start_tracking(cookies)
+    if trk["new"]:  # numéro de l'appareil écrit tout de suite (si la page est interrompue, le prochain chargement le garde)
+        set_cookie("nba_id", trk["u"])
     today = datetime.now(NY).date()
     season = season_of(today)
     show_all = st.session_state.opts["scores"]
@@ -3726,9 +3745,12 @@ def main():
         st.query_params["vue"] = view
     else:
         st.query_params.pop("vue", None)
-    if trk.get("last") != (view, day):  # arrivée, puis chaque changement de nuit ou de vue
-        track("nav" if trk.get("last") else "open", d=day.isoformat(), x=view,
-              **({} if trk.get("last") else {"z": trk["z"], "dev": trk["dev"], "n": 1 if trk["new"] else None}))
+    if trk.get("last") != (view, day):  # arrivée (notée en fin de page), puis chaque changement de nuit ou de vue
+        if trk.get("last"):
+            track("nav", d=day.isoformat(), x=view)
+        else:
+            trk["pending"] = {"t": int(time.time()), "u": trk["u"], "k": "open", "d": day.isoformat(), "x": view, "z": trk["z"],
+                              "dev": trk["dev"], **({"n": 1} if trk["new"] else {}), **({"me": 1} if trk["me"] else {})}
         trk["last"] = (view, day)
 
     def go(d, v="nuit"):

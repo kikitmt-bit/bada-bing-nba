@@ -207,6 +207,15 @@ def fake_get(url, params=None):
                               "injuries": [{"status": "Out", "details": {"type": "Knee", "returnDate": "2026-11-20"}}] if j == 9 else
                                           ([{"status": "Day-To-Day", "details": {"type": "Ankle"}}] if j == 2 and rnd.random() < .4 else [])}
                              for j in range(13)]}
+    if path == "/injuries":
+        out = []
+        for t in TEAMS:
+            inj = [{"athlete": {"id": str(int(t[0]) * 1000 + 9), "displayName": _player(t[0], 9)}, "status": "Out",
+                    "date": "2026-10-28T18:00Z", "shortComment": f"{_player(t[0], 9)} (knee) will miss at least two more weeks.",
+                    "longComment": f"{_player(t[0], 9)} has been diagnosed with a left knee sprain and will be re-evaluated in two weeks.",
+                    "details": {"type": "Knee", "detail": "Sprain", "side": "Left", "returnDate": "2026-11-20"}}]
+            out.append({"id": t[0], "displayName": t[3], "injuries": inj})
+        return {"injuries": out}
     if path == "/news":
         return _news(params.get("team"))
     return None

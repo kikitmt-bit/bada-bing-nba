@@ -52,7 +52,7 @@ app["video_watcher"] = lambda: {"seen": {}, "last": 0}
 app["game_videos"] = lambda g, a, b: (None, None)
 app["night_videos"] = lambda d, a, b: (None, None)
 app["video_durations"] = lambda ids: {}
-app["set_cookie"] = lambda n, v: out.append(f"COOKIE {n}={v}")
+app["set_cookie"] = lambda n, v, *a, **k: out.append(f"COOKIE {n}={v}")
 app["nba_schedule_tv"] = lambda: {}
 app["league_players"] = lambda: {}
 app["league_injuries"] = lambda: []

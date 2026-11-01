@@ -28,7 +28,7 @@ import streamlit.components.v1 as components
 import fantasy as F
 import stats as S
 
-APP_VERSION = "2026-11-v030"
+APP_VERSION = "2026-11-v031"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -4236,7 +4236,7 @@ div[data-testid="stElementContainer"]:has(> iframe[data-testid="stIFrame"]), div
 .st-key-hdr [data-testid="stPopover"] button {min-height:34px !important; min-width:34px !important; padding:2px 6px !important; border:none !important;
   background:transparent !important; color:#6f7a8f !important; box-shadow:none !important;}
 .st-key-hdr [data-testid="stPopover"] button:hover {color:#ffc75a !important;}
-.st-key-hdr [data-testid="stPopover"] {margin-top:6px;}
+.st-key-hdr [data-testid="stPopover"] {margin-top:6px; transform:translateY(5px);}
 .st-key-hdr [data-testid="stPopover"] button [data-testid="stIconMaterial"] {font-size:1.35rem;}
 .st-key-hdr [data-testid="stPopover"] button > div > div[aria-hidden="true"] {display:none;}
 .st-key-gobox {position:absolute !important; left:-9999px; top:0; width:1px; height:1px; overflow:hidden;}

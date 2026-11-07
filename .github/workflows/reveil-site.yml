@@ -1,0 +1,53 @@
+# Réveil automatique du site Bada Bing NBA (même manip que le site NFL)
+# Toutes les heures, GitHub ouvre le site comme un vrai visiteur (et clique sur « réveiller » s'il s'est endormi).
+# Résultat : le site ne s'endort jamais, il s'ouvre tout de suite (plus d'attente de 30-40 s).
+# Le robot ouvre l'adresse avec ?robot=1 : il n'est pas compté dans les statistiques de visite (page admin).
+
+name: Réveil du site
+
+on:
+  schedule:
+    - cron: "37 * * * *"     # toutes les heures (à la 37e minute)
+  workflow_dispatch:           # bouton « Run workflow » pour le lancer à la main (test)
+
+jobs:
+  reveil:
+    runs-on: ubuntu-24.04   # version figée : « ubuntu-latest » passe à Ubuntu 26 (le navigateur pourrait ne plus s'y installer)
+    timeout-minutes: 10
+    env:
+      SITE_URL: "https://badabingnba.streamlit.app/?robot=1"
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer le navigateur
+        run: |
+          pip install --quiet playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Ouvrir le site (et le réveiller si besoin)
+        run: |
+          python - <<'PY'
+          import os, re, time
+          from playwright.sync_api import sync_playwright
+
+          url = os.environ["SITE_URL"].strip()
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              page = browser.new_page()
+              page.goto(url, timeout=90000)
+              time.sleep(8)
+              # Site endormi : Streamlit affiche « Yes, get this app back up! » -> on clique
+              wake = page.get_by_role("button", name=re.compile(r"get this app back up", re.I))
+              if wake.count():
+                  print("Le site dormait : je le réveille.")
+                  wake.first.click()
+                  time.sleep(90)   # le temps qu'il redémarre complètement
+              else:
+                  print("Le site était déjà réveillé.")
+              time.sleep(40)       # on reste un peu : le site charge le calendrier et lance ses veilles (vidéos, joueurs)
+              print("Titre de la page :", page.title())
+              browser.close()
+          print("✅ Visite terminée.")
+          PY

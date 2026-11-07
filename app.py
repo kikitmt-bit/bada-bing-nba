@@ -28,7 +28,7 @@ import streamlit.components.v1 as components
 import fantasy as F
 import stats as S
 
-APP_VERSION = "2026-11-v031"
+APP_VERSION = "2026-11-v032"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # infos d'avant-match gardées (blessés, cotes, preview IA)
 log = logging.getLogger("nba")
@@ -5334,6 +5334,8 @@ def start_tracking(cookies):
     except Exception:
         ua, tz = "", ""
     trk = {"u": S.new_id() if new else uid, "new": new, "me": cookies.get("nba_me") == "1", "z": tz, "dev": S.device(ua), "done": []}
+    # robot de réveil (GitHub, toutes les heures : .github/workflows/reveil-site.yml) : pas compté dans les statistiques
+    trk["bot"] = st.query_params.get("robot") == "1" or "HeadlessChrome" in ua
     st.session_state.trk = trk
     stats_store()
     for tok, e in S.parse_client(cookies.get("nba_ev")):
@@ -5347,7 +5349,7 @@ def start_tracking(cookies):
 
 def track(kind, **fields):
     trk = st.session_state.get("trk")
-    if not trk:
+    if not trk or trk.get("bot"):
         return
     e = {"t": int(time.time()), "u": trk["u"], "k": kind, **{k: v for k, v in fields.items() if v not in (None, "")}}
     if trk.get("me"):
@@ -5379,7 +5381,7 @@ def finish_run(day):
         name, uid = ss.claim, trk["u"]
         stats_store().update("names.json", {}, lambda d: d.__setitem__(uid, name), f"Statistiques : appareil de {name}")
         ss.claim_u = uid
-    if trk.get("pending"):  # arrivée comptée seulement quand la page s'est affichée en entier
+    if trk.get("pending") and not trk.get("bot"):  # arrivée comptée seulement quand la page s'est affichée en entier
         S.add(trk.pop("pending"))
     click_tracker(day, trk["done"])
 

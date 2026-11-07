@@ -193,6 +193,11 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
   v022 : `nba_id` écrit dès le début de la page et « arrivée » comptée seulement en fin de page (avant : chaque chargement
   interrompu créait un faux visiteur). Noms donnés aux visiteurs : `stats/names.json` ; même nom = une seule personne.
 
+- **Réveil du site (v032)** : Streamlit Cloud endort le site sans visite (30-40 s pour le réveiller). Robot GitHub
+  `.github/workflows/reveil-site.yml` (même manip que le site NFL) : toutes les heures, Playwright ouvre
+  `https://badabingnba.streamlit.app/?robot=1` et clique « Yes, get this app back up » si besoin. `?robot=1` (ou un navigateur
+  « HeadlessChrome ») = `trk["bot"]` : pas compté dans les statistiques. Ne tourne que depuis la branche par défaut (main).
+
 ## Données
 
 - ESPN (sans clé) : `scoreboard?dates=AAAAMMJJ`, `summary?event=`, `teams/<id>/schedule?season=&seasontype=` (la plage de dates

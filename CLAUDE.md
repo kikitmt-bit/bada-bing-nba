@@ -5,9 +5,19 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 
 ## ⚡ SITE v2 « NOCTURNE » EN CONSTRUCTION (`docs/`, 2026-11-13)
 
-Grande refonte décidée avec Kiki : **le site quitte Streamlit** et s'appelle désormais **Nocturne** (nom public choisi
-par Claude sur carte blanche, badge NBA conservé). La v2 est un site statique dans `docs/`
-(`index.html`, `style.css`, `app.js`, `demo.js`), servi par **GitHub Pages** (Settings → Pages → branche + dossier `/docs`) :
+Grande refonte décidée avec Kiki : **le site quitte Streamlit** et s'appelle désormais **Nocturne** (nom validé par Kiki).
+La v2 est un site statique dans `docs/` (`index.html`, `style.css`, `app.js`, `demo.js`), servi par **GitHub Pages**
+(Pages suit la branche de travail `claude/...` + `/docs` : chaque push y est en ligne ~1 min après ; `main` porte les robots).
+**Identité (13/11, après le retour « on dirait Streamlit en moins bien » sur la 1re coquille)** : logo « éclipse »
+(ballon-lune en croissant, SVG inline + favicon) + marque NOCTURNE espacée ; **barre latérale** sur PC (logo, Le brief /
+Programme / Classement, Réglages en bas), **barre d'onglets en bas** sur téléphone façon appli ; plus d'en-tête multi-bandes.
+Cartes « ticket » : pastilles de logo CARRÉES aux couleurs de l'équipe (façon icône d'appli), texte toujours sur fond
+sombre uni (jamais de texte sur un logo : retour Kiki « illisible »), lueur des 2 couleurs seulement en bord de carte,
+3 par ligne sur PC. Le brief = page d'accueil (« Pendant que tu dormais ») : match de la nuit, tickets, MVP & grosses
+perfs derrière un teaser (`loadMVP` : feuilles de toutes les rencontres, photo ESPN headshot), « La nuit prochaine ».
+**Classement** (`renderStandings`, ESPN `apis/v2/.../standings`) : par conférence, coupure sans spoil = résultats de la
+dernière nuit soustraits (victoires/défaites recalculées depuis son scoreboard) tant que l'interrupteur « Inclure la
+dernière nuit » est éteint (défaut : coupé sauf « toujours montrer ») ; série masquée sous coupure ; 1-6 vert, 7-10 orange.
 - Le **navigateur appelle ESPN directement** (`site.api.espn.com`, scoreboard + summary) : scores en direct qui se mettent
   à jour seuls (60 s pendant les matchs, retour d'onglet après 3 min), plus de site endormi, plus de robot de réveil.
   Copie de secours des scores dans `localStorage` si ESPN ne répond pas. ⚠️ CORS à confirmer en ligne (ESPN est bloqué

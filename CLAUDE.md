@@ -3,6 +3,29 @@
 Site Streamlit (`app.py`, plus `fantasy.py` pour le jeu) en français : les matchs NBA **sans spoil**. Réponses à l'utilisateur en français.
 Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami à Montréal.
 
+## ⚡ SITE v2 EN CONSTRUCTION (`docs/`, 2026-11-13)
+
+Grande refonte décidée avec Kiki : **le site quitte Streamlit**. La v2 est un site statique dans `docs/`
+(`index.html`, `style.css`, `app.js`, `demo.js`), servi par **GitHub Pages** (Settings → Pages → branche + dossier `/docs`) :
+- Le **navigateur appelle ESPN directement** (`site.api.espn.com`, scoreboard + summary) : scores en direct qui se mettent
+  à jour seuls (60 s pendant les matchs, retour d'onglet après 3 min), plus de site endormi, plus de robot de réveil.
+  Copie de secours des scores dans `localStorage` si ESPN ne répond pas. ⚠️ CORS à confirmer en ligne (ESPN est bloqué
+  depuis l'environnement de test : jamais vérifié en vrai).
+- **DA « Nuit Holo »** (validée par Kiki, SANS l'inclinaison 3D au survol, jugée gadget) : thème nuit unique, révélation du
+  score = carte qui se retourne + particules or/argent selon la rareté, carte du match de la nuit à bord doré animé,
+  « film du match » (courbe de l'écart, + = domicile devant, données `plays` du summary), verre dépoli, Barlow Condensed.
+- **Sans spoil** : mêmes règles que la v1 (rien tant qu'on ne révèle pas ; bilans affichés seulement avant match ou après
+  révélation, car les `records` ESPN incluent le résultat ; jamais « prolongation » ni quart-temps en cours sur un match caché).
+- Réglages par appareil en `localStorage` (préfixe `bb2_`) : équipe favorite (`fav`), « toujours montrer » (`showall`),
+  nuits vues (`vues`), bienvenue (`hello`). **Pas de compte** (décision Kiki). Public et gratuit, pas de monétisation (droits logos/ESPN).
+- Vidéos : pour l'instant un lien de **recherche YouTube** (format des titres GameTime) ; le robot GitHub Actions qui
+  préparera vidéos + textes Claude dans la branche `data` viendra ensuite.
+- **Mode démo** : `?demo=1` = fausse saison stable (`demo.js`), l'équivalent de `BB_FAUX_ESPN=1`. Test local :
+  `python3 -m http.server 8777` dans `docs/` puis `http://localhost:8777/?demo=1` (Playwright : PC 1400px + téléphone 393px,
+  vérifier zéro erreur JS et zéro défilement horizontal).
+- Reste à faire (plan dans `kiki-cerveau/projets/replay-nba/CONTEXTE.md`) : brief, classement, équipes, joueurs,
+  cartes de tirs, robot data, PWA, domaine, redirection de l'ancien site. **Le Streamlit ci-dessous reste la prod** jusqu'à la bascule.
+
 ## Ce que fait le site
 
 - Matchs groupés par « jour du match » d'ESPN (heure de New York), titre selon le fuseau : « Nuit du mercredi 21 au jeudi 22 octobre » (Paris)

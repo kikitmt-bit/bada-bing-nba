@@ -3,9 +3,10 @@
 Site Streamlit (`app.py`, plus `fantasy.py` pour le jeu) en français : les matchs NBA **sans spoil**. Réponses à l'utilisateur en français.
 Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami à Montréal.
 
-## ⚡ SITE v2 EN CONSTRUCTION (`docs/`, 2026-11-13)
+## ⚡ SITE v2 « NOCTURNE » EN CONSTRUCTION (`docs/`, 2026-11-13)
 
-Grande refonte décidée avec Kiki : **le site quitte Streamlit**. La v2 est un site statique dans `docs/`
+Grande refonte décidée avec Kiki : **le site quitte Streamlit** et s'appelle désormais **Nocturne** (nom public choisi
+par Claude sur carte blanche, badge NBA conservé). La v2 est un site statique dans `docs/`
 (`index.html`, `style.css`, `app.js`, `demo.js`), servi par **GitHub Pages** (Settings → Pages → branche + dossier `/docs`) :
 - Le **navigateur appelle ESPN directement** (`site.api.espn.com`, scoreboard + summary) : scores en direct qui se mettent
   à jour seuls (60 s pendant les matchs, retour d'onglet après 3 min), plus de site endormi, plus de robot de réveil.
@@ -18,8 +19,15 @@ Grande refonte décidée avec Kiki : **le site quitte Streamlit**. La v2 est un 
   révélation, car les `records` ESPN incluent le résultat ; jamais « prolongation » ni quart-temps en cours sur un match caché).
 - Réglages par appareil en `localStorage` (préfixe `bb2_`) : équipe favorite (`fav`), « toujours montrer » (`showall`),
   nuits vues (`vues`), bienvenue (`hello`). **Pas de compte** (décision Kiki). Public et gratuit, pas de monétisation (droits logos/ESPN).
-- Vidéos : pour l'instant un lien de **recherche YouTube** (format des titres GameTime) ; le robot GitHub Actions qui
-  préparera vidéos + textes Claude dans la branche `data` viendra ensuite.
+- Vidéos : robot `.github/workflows/videos-v2.yml` + `scripts/v2_videos.py` (toutes les 20 min, **flux RSS publics**
+  des 3 chaînes — GameTime, NBA, beIN — sans clé, cumulés 10 jours) → `v2/videos.json` sur la branche `data`, lu par le
+  site via raw.githubusercontent.com. `findVideo` associe le match à son résumé (surnom d'équipe + date NY, GameTime
+  d'abord, choix de Kiki) et l'ouvre dans un **lecteur intégré** (youtube-nocookie) ; sinon, recherche YouTube en filet.
+  ⚠️ Le cron ne tourne que depuis la branche par défaut (main) : actif après la fusion.
+- Fiche : feuille de match complète (Min/Tirs/3 pts/Reb/Pas/Pts) ; clic sur un joueur = **carte de tirs animée**
+  (tirs ESPN `plays[].coordinate`, panier en (25, 5.25) pieds, moitiés de terrain repliées, lancers francs exclus).
+- Info clé d'avant-match (`keyFact`, une seule par match) : choc au sommet, homme en forme (meneur ≥ 27 pts),
+  grand favori, 2e soir de suite (scoreboard de la veille), pile ou face. Rien après le coup d'envoi (spoil).
 - **Mode démo** : `?demo=1` = fausse saison stable (`demo.js`), l'équivalent de `BB_FAUX_ESPN=1`. Test local :
   `python3 -m http.server 8777` dans `docs/` puis `http://localhost:8777/?demo=1` (Playwright : PC 1400px + téléphone 393px,
   vérifier zéro erreur JS et zéro défilement horizontal).

@@ -390,10 +390,10 @@ function heroHTML(g, lvl) {
         <div class="rar-tag">${RAR[lvl][1].replace(/^\S+ /, "")}</div>
         <div class="hhour">${hourLocal(g.date)}</div>
         <div class="hgrid">
-          <div class="hteam"><div class="tx">
+          <div class="hteam">${logoHTML(a)}<div class="tx">
             <div class="hcity">${a.city}</div><div class="hname">${a.name}</div><div class="hrec" data-rec="${g.id}:away">${recHTML(a, g)}</div></div></div>
           <div class="hmid">${mid}</div>
-          <div class="hteam right"><div class="tx">
+          <div class="hteam right">${logoHTML(h)}<div class="tx">
             <div class="hcity">${h.city}</div><div class="hname">${h.name}</div><div class="hrec" data-rec="${g.id}:home">${recHTML(h, g)}</div></div></div>
         </div>
         <div class="hfoot">
@@ -414,12 +414,11 @@ function cardHTML(g, i) {
   const a = g.teams.away, h = g.teams.home;
   const lvl = watchLevel(g), [cls, lab] = RAR[lvl];
   const fav = settings.fav && (a.id === settings.fav || h.id === settings.fav);
-  const trow = (t, side) => `<div class="trow">
+  const trow = (t, side) => `<div class="trow">${logoHTML(t)}
       <div class="tnm"><b>${t.name}</b><small data-rec="${g.id}:${side}">${recHTML(t, g)}</small>${t.id === settings.fav ? `<span class="star">★</span>` : ""}</div>
       ${g.state === "pre" ? "<span></span>" : scHTML(g, side, true)}</div>`;
-  return `<article class="mcard smini ${cls}" data-card="${g.id}" style="--ca:${a.color};--cb:${h.color};animation-delay:${Math.min(i * 70, 500)}ms">
+  return `<article class="mcard ${cls}" data-card="${g.id}" style="--ca:${a.color};--cb:${h.color};animation-delay:${Math.min(i * 70, 500)}ms">
     <div class="rband"></div>
-    ${artHTML(a, h)}
     <div class="mhead"><span class="mrar">${g.state === "pre" ? "Affiche " + "🔥".repeat(Math.max(0, lvl - 1)) : lab}</span>
       <span class="mstat ${g.state === "live" ? "liv" : ""}" data-st="${g.id}">${statusText(g)}${fav ? " · ★" : ""}</span></div>
     <div class="mteams">${trow(a, "away")}${trow(h, "home")}</div>
@@ -534,17 +533,29 @@ async function renderNight(soft) {
   const started = games.some(g => g.state !== "pre");
   const nr = started && !DEMO ? findNightRecap(state.night) : null;
   const jr = started && !DEMO ? findJournal(state.night) : null;
+  const eyebrow = nLive ? "La nuit est en cours" : (nFin === games.length ? "Pendant que tu dormais" : (nFin ? "La nuit se termine" : "La nuit à venir"));
   main.innerHTML = `
+    <p class="eyebrow">${eyebrow}<i></i></p>
     <div class="nightline"><h1 class="night">${nightTitle(state.night)}</h1>
-      <span class="nmeta">${meta}</span>
+      <span class="nnav">
+        <button class="narrow" data-nav="-1" title="Nuit précédente">‹</button>
+        <button class="narrow" data-nav="1" title="Nuit suivante">›</button>
+        <button class="narrow" title="Choisir une date">📅<input type="date" id="dpick" value="${state.night.slice(0, 4)}-${state.night.slice(4, 6)}-${state.night.slice(6, 8)}"></button>
+      </span></div>
+    <div class="nsub"><span class="nmeta">${meta}</span>
       <span class="nbtns">
         ${nr ? `<button class="bt gold" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span> Résumé de la nuit</button>` : ""}
         ${jr ? `<button class="bt extra" data-vplay="${jr.id}" data-vlabel="NBA Extra — le journal du matin"><i class="fr"></i>NBA Extra</button>` : ""}
-        ${started ? `<button class="btn-all" id="revall">👁 Tout révéler</button>` : ""}
+        ${started ? `<button class="btn-all" id="revall">🎬 Révéler la nuit</button>` : ""}
       </span></div>
     ${hero ? heroHTML(hero.g, hero.lvl) : ""}
     ${rest.length ? `<div class="sect"><h2>${hero ? "Les autres matchs" : "Les matchs de la nuit"}</h2><i></i></div>
-    <div class="grid">${rest.map((g, i) => cardHTML(g, i)).join("")}</div>` : ""}`;
+    <div class="grid">${rest.map((g, i) => cardHTML(g, i)).join("")}</div>` : ""}
+    ${games.filter(g => g.state === "post").length >= 2 ? `
+    <section class="hide-sect"><button class="teaser" id="mvpbtn"><span class="ti">💥</span>
+      <span><b>Le MVP et les grosses perfs de la nuit</b><small>Qui a tout cassé cette nuit ? Révèle-le quand tu es prêt.</small></span>
+      <span class="see">👁 Voir</span></button><div id="mvpbody"></div></section>` : ""}
+    <div id="nextstrip"></div>`;
 
   for (const id of state.revealed) reveal(id, true);
   const all = $("#revall");
@@ -555,8 +566,64 @@ async function renderNight(soft) {
     let d = 0;
     for (const g of order) { setTimeout(() => reveal(g.id), d); d += RM ? 0 : 800; }
   });
+  const dp = $("#dpick");
+  if (dp) dp.addEventListener("change", () => { if (dp.value) { state.night = dp.value.replaceAll("-", ""); state.revealed.clear(); renderNight(); } });
+  const mb = $("#mvpbtn");
+  if (mb) mb.addEventListener("click", () => loadMVP(mb));
+  nextStrip();
   renderChips();
   scheduleRefresh();
+}
+
+/* le MVP et les grosses perfs : calculés depuis les feuilles de match, derrière un teaser (spoil) */
+const SUMCACHE = new Map();
+async function cachedSummary(id) {
+  if (!SUMCACHE.has(id)) SUMCACHE.set(id, await summary(id));
+  return SUMCACHE.get(id);
+}
+const gscore = p => p.pts + 1.2 * p.reb + 1.5 * p.ast;
+async function loadMVP(btn) {
+  btn.disabled = true; btn.querySelector(".see").textContent = "…";
+  const posts = state.games.filter(g => g.state === "post");
+  const all = [];
+  try {
+    const sums = await Promise.all(posts.map(g => cachedSummary(g.id).catch(() => null)));
+    sums.forEach((s, i) => { if (s) for (const p of s.players) all.push({ ...p, g: posts[i] }); });
+  } catch (e) { /* au pire, rien */ }
+  if (!all.length) { btn.querySelector(".see").textContent = "indisponible"; return; }
+  all.sort((a, b) => gscore(b) - gscore(a));
+  const mvp = all[0], t = team(mvp.tid);
+  const opp = mvp.g.teams.away.id === mvp.tid ? mvp.g.teams.home : mvp.g.teams.away;
+  const others = all.slice(1, 7);
+  const photo = /^\d+$/.test(mvp.aid) ? `<img class="ph" src="https://a.espncdn.com/i/headshots/nba/players/full/${mvp.aid}.png" alt="" onerror="this.style.visibility='hidden'" style="--mc:${t.color}">` : `<span class="ph" style="--mc:${t.color}"></span>`;
+  btn.hidden = true;
+  $("#mvpbody").innerHTML = `<div class="mvpwrap">
+    <div class="mvphead">${photo}
+      <div class="mvpwho"><span class="mvptag">MVP DE LA NUIT</span>
+        <h3>${mvp.full || mvp.name}</h3><small>${t.city} ${t.name} · contre ${opp.name}</small></div>
+      <div class="mvpline">
+        <div class="stile"><b>${mvp.pts}</b><small>points</small></div>
+        <div class="stile"><b>${mvp.reb}</b><small>rebonds</small></div>
+        <div class="stile"><b>${mvp.ast}</b><small>passes</small></div>
+        <div class="stile"><b>${mvp.fg || "–"}</b><small>aux tirs</small></div>
+      </div></div>
+    <div class="opg">${others.map(p => { const pt = team(p.tid); return `<div class="op">${logoHTML(pt)}<b>${p.name}</b><small>${p.pts} pts · ${p.reb} rbd · ${p.ast} pas</small></div>`; }).join("")}</div>
+  </div>`;
+}
+
+/* la nuit prochaine, en un clin d'œil */
+async function nextStrip() {
+  const el = $("#nextstrip"); if (!el || state.night !== defaultNight()) return;
+  const next = addDays(state.night, 1);
+  let games;
+  try { games = await scoreboard(next); } catch (e) { return; }
+  const pre = games.filter(g => g.state === "pre").sort((a, b) => a.date - b.date);
+  if (!pre.length || state.night !== defaultNight()) return;
+  const top = [...pre].sort((x, y) => watchLevel(y) - watchLevel(x))[0];
+  el.innerHTML = `<div class="nextstrip"><span class="ti">🌙</span>
+    <b>La nuit prochaine</b>
+    <span>${pre.length} match${pre.length > 1 ? "s" : ""} · l'affiche : ${top.teams.away.name} @ ${top.teams.home.name} à ${hourLocal(top.date)}</span>
+    <button class="bt" data-night-go="${next}">Voir le programme ›</button></div>`;
 }
 function markSeen(key) { if (!seen.has(key)) { seen.add(key); store.set("vues", [...seen].slice(-90)); } }
 
@@ -790,6 +857,73 @@ async function renderProgramme() {
   }).join("") || `<p class="loadmsg">Aucun match programmé sur les 7 prochaines nuits.</p>`;
 }
 
+/* ---------- classement (sans spoil : la dernière nuit est retirée tant qu'on ne l'inclut pas) ---------- */
+async function renderStandings() {
+  const main = $("#main");
+  setURL();
+  main.innerHTML = `<p class="eyebrow">La hiérarchie<i></i></p>
+    <div class="nightline"><h1 class="night">Le classement</h1></div>
+    <div class="skel"><div class="ph" style="height:300px"></div></div>`;
+  let data;
+  try {
+    data = DEMO ? await window.DEMO.standings()
+      : await fetchJSON("https://site.api.espn.com/apis/v2/sports/basketball/nba/standings");
+  } catch (e) { main.querySelector(".skel").outerHTML = `<p class="loadmsg">Impossible de charger le classement.</p>`; return; }
+  if (state.cutLast === undefined) state.cutLast = !settings.showAll;
+  // la coupure : on retire les résultats de la dernière nuit jouée
+  let adj = new Map(), cutPossible = false;
+  try {
+    const lg = await scoreboard(defaultNight());
+    for (const g of lg) if (g.state === "post") {
+      cutPossible = true;
+      const wside = g.teams.away.score > g.teams.home.score ? "away" : "home";
+      const wId = g.teams[wside].id, lId = g.teams[wside === "away" ? "home" : "away"].id;
+      const aw = adj.get(wId) || { w: 0, l: 0 }; aw.w++; adj.set(wId, aw);
+      const al = adj.get(lId) || { w: 0, l: 0 }; al.l++; adj.set(lId, al);
+    }
+  } catch (e) { /* pas grave : pas de coupure possible */ }
+  const cut = state.cutLast && cutPossible;
+  const confs = [];
+  for (const ch of data.children || []) {
+    const rows = [];
+    for (const en of (ch.standings && ch.standings.entries) || []) {
+      const find = n => (en.stats || []).find(x => x.name === n || x.type === n);
+      const sv = n => { const s = find(n); return s && s.value !== undefined ? +s.value : null; };
+      let w = sv("wins") ?? 0, l = sv("losses") ?? 0;
+      const st = find("streak");
+      if (cut && adj.has(+en.team.id)) { w -= adj.get(+en.team.id).w; l -= adj.get(+en.team.id).l; }
+      rows.push({ id: +en.team.id, w: Math.max(0, w), l: Math.max(0, l), streak: st ? (st.displayValue || "") : "" });
+    }
+    rows.sort((a, b) => (b.w / Math.max(1, b.w + b.l)) - (a.w / Math.max(1, a.w + a.l)) || b.w - a.w);
+    confs.push({ name: /east/i.test(ch.name) ? "Conférence Est" : /west/i.test(ch.name) ? "Conférence Ouest" : ch.name, rows });
+  }
+  const pct = r => (r.w + r.l) ? (r.w / (r.w + r.l)) : 0;
+  const confHTML = c => {
+    const lead = c.rows[0];
+    return `<div class="conf"><h2>${c.name}</h2><div class="qtwrap"><table class="qt st">
+      <thead><tr><th>Équipe</th><th>V</th><th>D</th><th>%</th><th>Écart</th>${cut ? "" : "<th>Série</th>"}</tr></thead>
+      <tbody>${c.rows.map((r, i) => {
+        const t = team(r.id);
+        const gb = lead ? ((lead.w - r.w) + (r.l - lead.l)) / 2 : 0;
+        const srk = r.streak ? r.streak.replace(/^W/, "V").replace(/^L/, "D") : "–";
+        return `<tr class="${i < 6 ? "po" : i < 10 ? "pi" : ""} ${r.id === settings.fav ? "favrow" : ""}">
+          <td><span class="rk">${i + 1}</span>${logoHTML(t)}<span class="stn">${t.name}</span></td>
+          <td>${r.w}</td><td>${r.l}</td><td>${(pct(r) * 100).toFixed(1).replace(".", ",")}</td>
+          <td>${gb === 0 ? "–" : gb.toFixed(1).replace(".0", "").replace(".", ",")}</td>${cut ? "" : `<td>${srk}</td>`}</tr>`;
+      }).join("")}</tbody></table></div></div>`;
+  };
+  main.innerHTML = `<p class="eyebrow">La hiérarchie<i></i></p>
+    <div class="nightline"><h1 class="night">Le classement</h1></div>
+    <div class="cutbar">
+      ${cutPossible ? `<span>${cut ? "Arrêté avant la dernière nuit, pour ne rien te gâcher." : "À jour, dernière nuit comprise."}</span>
+      <button class="sw ${cut ? "" : "on"}" id="swcut" role="switch" aria-checked="${!cut}"></button>
+      <span>Inclure la dernière nuit</span>` : `<span>Classement à jour.</span>`}
+      <span style="margin-left:auto">🟢 1-6 play-offs · 🟠 7-10 play-in</span></div>
+    <div class="standwrap">${confs.map(confHTML).join("")}</div>`;
+  const sw = $("#swcut");
+  if (sw) sw.addEventListener("click", () => { state.cutLast = !state.cutLast; renderStandings(); });
+}
+
 /* ---------- réglages ---------- */
 const setovl = $("#setovl"), setsheet = $("#setsheet");
 function openSettings() {
@@ -834,19 +968,14 @@ function renderChips() {
   const last = state.night > tonight ? state.night : tonight;
   const keys = [...Array(7)].map((_, i) => addDays(last, i - 6));
   const live = state.games.some(g => g.state === "live");
-  el.innerHTML = `<button class="narrow" data-nav="-1" title="Nuit précédente">‹</button>` +
-    keys.map(k => {
-      const c = chipText(k);
-      const cur = k === state.night;
-      let dot = "";
-      if (k === tonight && (cur ? live : true) && k === state.night && live) dot = `<span class="dot red"></span>`;
-      else if (k < tonight && !seen.has(k)) dot = `<span class="dot gold"></span>`;
-      return `<button class="chip ${cur ? "on" : ""}" data-night="${k}"><small>${c.s}</small><b>${c.b}</b>${dot}</button>`;
-    }).join("") +
-    `<button class="narrow" data-nav="1" title="Nuit suivante">›</button>
-     <button class="narrow" title="Choisir une date">📅<input type="date" id="dpick" value="${state.night.slice(0, 4)}-${state.night.slice(4, 6)}-${state.night.slice(6, 8)}"></button>`;
-  const dp = $("#dpick");
-  dp.addEventListener("change", () => { if (dp.value) { state.night = dp.value.replaceAll("-", ""); state.revealed.clear(); renderNight(); } });
+  el.innerHTML = keys.map(k => {
+    const c = chipText(k);
+    const cur = k === state.night;
+    let dot = "";
+    if (k === tonight && k === state.night && live) dot = `<span class="dot red"></span>`;
+    else if (k < tonight && !seen.has(k)) dot = `<span class="dot gold"></span>`;
+    return `<button class="chip ${cur ? "on" : ""}" data-night="${k}"><small>${c.s}</small><b>${c.b}</b>${dot}</button>`;
+  }).join("");
   // sur téléphone, centrer la bande sur la nuit affichée
   const on = el.querySelector(".chip.on");
   if (on) el.scrollLeft = on.offsetLeft - (el.clientWidth - on.offsetWidth) / 2;
@@ -862,8 +991,9 @@ function setURL() {
 }
 function go(vue) {
   state.vue = vue;
-  $$(".tab").forEach(t => t.classList.toggle("on", t.dataset.vue === vue));
-  if (vue === "nuit") renderNight(); else { $("#nights").hidden = true; renderProgramme(); }
+  $$(".tab[data-vue]").forEach(t => t.classList.toggle("on", t.dataset.vue === vue));
+  if (vue === "nuit") renderNight();
+  else { $("#nights").hidden = true; if (vue === "classement") renderStandings(); else renderProgramme(); }
 }
 
 /* ---------- événements globaux ---------- */
@@ -884,13 +1014,15 @@ document.addEventListener("click", e => {
   if (sh) { openShots(sh.dataset.shot); return; }
   if (e.target === vidovl || (e.target.closest(".x") && e.target.closest("#vidovl"))) { closeResume(); return; }
   if (e.target === shotovl || (e.target.closest(".x") && e.target.closest("#shotovl"))) { closeShots(); return; }
-  const tab = e.target.closest(".tab");
+  if (e.target.closest("#gear") || e.target.closest("#gear2")) { openSettings(); return; }
+  const tab = e.target.closest(".tab[data-vue]");
   if (tab) { go(tab.dataset.vue); return; }
+  const ng = e.target.closest("[data-night-go]");
+  if (ng) { state.night = ng.dataset.nightGo; state.revealed.clear(); renderNight(); return; }
   const chip = e.target.closest(".chip[data-night]");
   if (chip && chip.dataset.night !== state.night) { state.night = chip.dataset.night; state.revealed.clear(); renderNight(); return; }
   const nav = e.target.closest("[data-nav]");
   if (nav && !e.target.closest("input")) { state.night = addDays(state.night, +nav.dataset.nav); state.revealed.clear(); renderNight(); return; }
-  if (e.target.closest("#gear")) { openSettings(); return; }
   if (e.target === ovl || (e.target.closest(".x") && e.target.closest("#ovl"))) closeFiche();
   if (e.target === setovl || (e.target.closest(".x") && e.target.closest("#setovl"))) closeSettings();
 });
@@ -925,7 +1057,7 @@ function welcome() {
 
 /* ---------- démarrage ---------- */
 (function init() {
-  if (DEMO) $("#demopill").hidden = false;
+  if (DEMO) { $("#demopill").hidden = false; $("#demopill2").hidden = false; }
   const nuit = QS.get("nuit");
   state.night = nuit && /^\d{4}-\d{2}-\d{2}$/.test(nuit) ? nuit.replaceAll("-", "") : defaultNight();
   welcome();

@@ -66,7 +66,27 @@
     return games;
   }
 
+  const EAST = [1, 2, 17, 30, 4, 5, 8, 11, 14, 15, 18, 19, 20, 28, 27];
+  const WEST = [3, 6, 7, 9, 10, 12, 13, 16, 21, 22, 23, 24, 25, 26, 29];
   window.DEMO = {
+    standings() {
+      const r = rng("classement");
+      const conf = (name, ids) => ({
+        name,
+        standings: {
+          entries: ids.map(id => {
+            const w = 3 + Math.floor(r() * 11), l = 13 - w + Math.floor(r() * 3);
+            return {
+              team: { id }, stats: [
+                { name: "wins", value: w }, { name: "losses", value: l },
+                { name: "streak", displayValue: (r() < .5 ? "W" : "L") + (1 + Math.floor(r() * 5)) },
+              ],
+            };
+          }),
+        },
+      });
+      return Promise.resolve({ children: [conf("Eastern Conference", EAST), conf("Western Conference", WEST)] });
+    },
     scoreboard(key) {
       const games = makeGames(key).map(g => ({
         ...g,

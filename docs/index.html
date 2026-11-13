@@ -6,45 +6,89 @@
 <title>Nocturne — la NBA de la nuit, sans spoil</title>
 <meta name="description" content="Les matchs NBA de la nuit sans te faire spoiler : révèle chaque score quand tu le décides, trouve les matchs qui valent le coup, regarde les résumés.">
 <meta name="theme-color" content="#07070d">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307070d'/%3E%3Ctext x='32' y='46' font-family='Arial Black,Arial' font-size='38' font-weight='900' font-style='italic' text-anchor='middle' fill='%23f3c552'%3EN%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307070d'/%3E%3Ccircle cx='29' cy='35' r='21' fill='%23f3c552'/%3E%3Cpath d='M8 35h42M29 14v42M11 21c11 8 25 8 36 0M11 49c11-8 25-8 36 0' stroke='%2307070d' stroke-width='2.4' fill='none'/%3E%3Ccircle cx='45' cy='19' r='19' fill='%2307070d'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,700&family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="sky" aria-hidden="true"><i></i><i></i><i></i></div>
-<div class="wrap">
 
-  <header class="top">
-    <a class="brand" href="./" id="brand"><span class="bb">Nocturne</span><span class="nba">NBA</span></a>
-    <span class="tag">La NBA de la nuit, sans spoil.</span>
-    <span class="pill-maq" id="demopill" hidden>Démo · données inventées</span>
-    <button class="gear" id="gear" title="Réglages" aria-label="Réglages">⚙</button>
-  </header>
+<div class="shell">
 
-  <div id="welcome" hidden></div>
+  <aside class="side">
+    <a class="lockup" href="./" id="brand" aria-label="Nocturne, accueil">
+      <svg class="lgo" viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <radialGradient id="gb" cx="35%" cy="30%" r="85%">
+            <stop offset="0" stop-color="#ffe9b0"/><stop offset=".55" stop-color="#f3c552"/><stop offset="1" stop-color="#8a5f0e"/>
+          </radialGradient>
+          <clipPath id="cb"><circle cx="29" cy="35" r="23"/></clipPath>
+        </defs>
+        <circle cx="29" cy="35" r="23" fill="url(#gb)"/>
+        <g clip-path="url(#cb)" stroke="#0a0a12" stroke-width="2.2" fill="none">
+          <path d="M6 35h46"/><path d="M29 12v46"/>
+          <path d="M9 21c11 9 29 9 40 0"/><path d="M9 49c11-9 29-9 40 0"/>
+        </g>
+        <circle cx="46" cy="18" r="20" fill="#07070d"/>
+      </svg>
+      <span class="wmk">NOCTURNE</span>
+      <span class="wmk2">La NBA de la nuit, sans spoil</span>
+    </a>
 
-  <nav class="tabs" aria-label="Navigation" id="tabs">
-    <button class="tab on" data-vue="nuit">Matchs</button>
-    <button class="tab" data-vue="programme">Programme</button>
+    <nav class="snav" aria-label="Navigation">
+      <button class="tab on" data-vue="nuit"><svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>Le brief</button>
+      <button class="tab" data-vue="programme"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4" class="ln"/></svg>Programme</button>
+      <button class="tab" data-vue="classement"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="4" height="9" rx="1"/><rect x="10" y="5" width="4" height="15" rx="1"/><rect x="16" y="14" width="4" height="6" rx="1"/></svg>Classement</button>
+    </nav>
+
+    <div class="sfoot">
+      <button class="tab gearbtn" id="gear"><svg viewBox="0 0 24 24"><path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 0 0 12 8.5Zm8.6 3.5a6.9 6.9 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7.6 7.6 0 0 0-2-1.2L15.7 3h-4l-.4 2.6a7.6 7.6 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5a6.9 6.9 0 0 0 0 2.4l-2 1.5 2 3.5 2.4-1a7.6 7.6 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2Z"/></svg>Réglages</button>
+      <span class="pill-maq" id="demopill" hidden>Démo · données inventées</span>
+      <p class="scredit">Gratuit, sans compte.<br>Site non affilié à la NBA ni à ESPN.<br>Données ESPN · vidéos YouTube.</p>
+    </div>
+  </aside>
+
+  <div class="content">
+    <header class="mhdr" aria-hidden="false">
+      <a class="lockup mini" href="./">
+        <svg class="lgo" viewBox="0 0 64 64" aria-hidden="true">
+          <defs>
+            <radialGradient id="gb2" cx="35%" cy="30%" r="85%">
+              <stop offset="0" stop-color="#ffe9b0"/><stop offset=".55" stop-color="#f3c552"/><stop offset="1" stop-color="#8a5f0e"/>
+            </radialGradient>
+            <clipPath id="cb2"><circle cx="29" cy="35" r="23"/></clipPath>
+          </defs>
+          <circle cx="29" cy="35" r="23" fill="url(#gb2)"/>
+          <g clip-path="url(#cb2)" stroke="#0a0a12" stroke-width="2.2" fill="none">
+            <path d="M6 35h46"/><path d="M29 12v46"/><path d="M9 21c11 9 29 9 40 0"/><path d="M9 49c11-9 29-9 40 0"/>
+          </g>
+          <circle cx="46" cy="18" r="20" fill="#07070d"/>
+        </svg>
+        <span class="wmk">NOCTURNE</span>
+      </a>
+      <span class="pill-maq" id="demopill2" hidden>Démo</span>
+    </header>
+
+    <div id="welcome" hidden></div>
+    <div id="alertbar" hidden></div>
+    <div class="nights" id="nights" hidden></div>
+    <div id="main" aria-live="polite"></div>
+  </div>
+
+  <nav class="bbar" aria-label="Navigation">
+    <button class="tab on" data-vue="nuit"><svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg><span>Le brief</span></button>
+    <button class="tab" data-vue="programme"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4" class="ln"/></svg><span>Programme</span></button>
+    <button class="tab" data-vue="classement"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="4" height="9" rx="1"/><rect x="10" y="5" width="4" height="15" rx="1"/><rect x="16" y="14" width="4" height="6" rx="1"/></svg><span>Classement</span></button>
+    <button class="bgear" id="gear2"><svg viewBox="0 0 24 24"><path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 0 0 12 8.5Zm8.6 3.5a6.9 6.9 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7.6 7.6 0 0 0-2-1.2L15.7 3h-4l-.4 2.6a7.6 7.6 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5a6.9 6.9 0 0 0 0 2.4l-2 1.5 2 3.5 2.4-1a7.6 7.6 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2Z"/></svg><span>Réglages</span></button>
   </nav>
 
-  <div class="nights" id="nights" hidden></div>
-
-  <div id="alertbar" hidden></div>
-
-  <main id="main" aria-live="polite"></main>
-
-  <div class="ovl" id="ovl" role="dialog" aria-modal="true"><div class="sheet" id="sheet"></div></div>
-  <div class="ovl" id="setovl" role="dialog" aria-modal="true" aria-label="Réglages"><div class="sheet slim" id="setsheet"></div></div>
-  <div class="ovl" id="shotovl" role="dialog" aria-modal="true" aria-label="Carte de tirs"><div class="sheet slim" id="shotsheet"></div></div>
-  <div class="ovl vid" id="vidovl" role="dialog" aria-modal="true" aria-label="Résumé vidéo"><div class="vplayer" id="vplayer"></div></div>
-
-  <footer class="ft">
-    <p>Nocturne — un site de passionné, gratuit et sans compte.</p>
-    <p>Site non affilié à la NBA ni à ESPN. Logos et marques : propriété de leurs ayants droit. Données : ESPN.</p>
-  </footer>
 </div>
+
+<div class="ovl" id="ovl" role="dialog" aria-modal="true"><div class="sheet" id="sheet"></div></div>
+<div class="ovl" id="setovl" role="dialog" aria-modal="true" aria-label="Réglages"><div class="sheet slim" id="setsheet"></div></div>
+<div class="ovl" id="shotovl" role="dialog" aria-modal="true" aria-label="Carte de tirs"><div class="sheet slim" id="shotsheet"></div></div>
+<div class="ovl vid" id="vidovl" role="dialog" aria-modal="true" aria-label="Résumé vidéo"><div class="vplayer" id="vplayer"></div></div>
 
 <div class="toast" id="toast"></div>
 

@@ -24,8 +24,18 @@ par Claude sur carte blanche, badge NBA conservé). La v2 est un site statique d
   site via raw.githubusercontent.com. `findVideo` associe le match à son résumé (surnom d'équipe + date NY, GameTime
   d'abord, choix de Kiki) et l'ouvre dans un **lecteur intégré** (youtube-nocookie) ; sinon, recherche YouTube en filet.
   ⚠️ Le cron ne tourne que depuis la branche par défaut (main) : actif après la fusion.
+- **Révéler = REVIVRE LE MATCH EN ACCÉLÉRÉ** (le moment signature, réponse au retour « pas assez d'ambition » du 13/11) :
+  les deux scores s'affrontent quart-temps par quart-temps (`linescores` du scoreboard, ~0,5 s par quart), le leader
+  s'illumine (`.lead`/`.trail`), étiquette Q1→Q4/Prolongation, verdict final + particules selon la rareté.
+  « Tout révéler » = cérémonie du moins bon au meilleur, le match de la nuit en dernier (800 ms d'écart).
+- Cartes refaites (3 par ligne sur PC, `minmax(330px)`) : **grands logos ESPN en diagonale comme art de fond** (`artHTML`,
+  le point fort historique de Kiki), noms en grand par-dessus (scrim), plus de médaillons dans les lignes.
+- **NBA Extra de retour** : bouton par match (titre beIN « Résumé : X @ Y », `findExtra`), journal du matin
+  (« REPLAY - NBA Extra (13/11) » = nuit du 12 au 13, `findJournal`) et « Résumé de la nuit » NBA (`findNightRecap`,
+  « nightly recap » + date) en tête de page ; tout se lit dans le lecteur intégré (`playVideo`).
 - Fiche : feuille de match complète (Min/Tirs/3 pts/Reb/Pas/Pts) ; clic sur un joueur = **carte de tirs animée**
-  (tirs ESPN `plays[].coordinate`, panier en (25, 5.25) pieds, moitiés de terrain repliées, lancers francs exclus).
+  (tirs ESPN `plays[].coordinate`, panier en (25, 5.25) pieds, moitiés de terrain repliées, lancers francs exclus),
+  replay ~5 s avec compteur en direct (quart-temps, n° de tir, points cumulés) + bouton « ↻ Rejouer ».
 - Info clé d'avant-match (`keyFact`, une seule par match) : choc au sommet, homme en forme (meneur ≥ 27 pts),
   grand favori, 2e soir de suite (scoreboard de la veille), pile ou face. Rien après le coup d'envoi (spoil).
 - **Mode démo** : `?demo=1` = fausse saison stable (`demo.js`), l'équivalent de `BB_FAUX_ESPN=1`. Test local :

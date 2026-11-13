@@ -41,13 +41,19 @@
       const sb = Math.max(85, sa + (diff === 0 ? 2 : diff));
       const ot = st === "post" && Math.abs(sa - sb) <= 3 && r() < .35;
       const W = t => `${6 + Math.floor(r() * 7)}-${2 + Math.floor(r() * 7)}`;
+      const split = (tot) => { // points par quart-temps (prolongation ~10 pts)
+        const t4 = ot ? tot - 10 : tot, base = Math.floor(t4 / 4), q = []; let s = 0;
+        for (let j = 0; j < 3; j++) { const v = base + Math.floor(r() * 11) - 5; q.push(v); s += v; }
+        q.push(t4 - s); if (ot) q.push(10); return q;
+      };
+      const lsa = st === "post" ? split(sa) : [], lsb = st === "post" ? split(sb) : [];
       const g = {
         id, date, state: st, period: st === "live" ? 3 : st === "post" ? (ot ? 5 : 4) : 0,
         clock: st === "live" ? "04:1" + Math.floor(r() * 9) : "",
         ot,
         teams: {
-          away: { id: away, score: st === "pre" ? 0 : (st === "live" ? Math.floor(sa * .6) : sa), record: W() },
-          home: { id: home, score: st === "pre" ? 0 : (st === "live" ? Math.floor(sb * .6) : sb), record: W() },
+          away: { id: away, score: st === "pre" ? 0 : (st === "live" ? Math.floor(sa * .6) : sa), record: W(), ls: lsa },
+          home: { id: home, score: st === "pre" ? 0 : (st === "live" ? Math.floor(sb * .6) : sb), record: W(), ls: lsb },
         },
         leaders: st === "post"
           ? [{ name: STARS[away], pts: 22 + Math.floor(r() * 25) }, { name: STARS[home], pts: 20 + Math.floor(r() * 22) }]
@@ -76,11 +82,11 @@
       if (!g) return Promise.reject(new Error("démo : match inconnu"));
       const r = rng("sum" + id);
       const tot = { away: g.teams.away.score, home: g.teams.home.score };
-      const split = (t, ot) => {
-        const nq = ot ? 5 : 4, base = Math.floor(t / nq), q = []; let s = 0;
-        for (let k = 0; k < nq - 1; k++) { const v = base + Math.floor(r() * 9) - 4; q.push(v); s += v; }
-        q.push(t - s); return q;
-      };
+      const split = (t, ot, side) => g.teams[side].ls && g.teams[side].ls.length
+        ? g.teams[side].ls // les mêmes quart-temps que la course du scoreboard
+        : (() => { const nq = ot ? 5 : 4, base = Math.floor(t / nq), q = []; let s = 0;
+            for (let k = 0; k < nq - 1; k++) { const v = base + Math.floor(r() * 9) - 4; q.push(v); s += v; }
+            q.push(t - s); return q; })();
       const fin = tot.home - tot.away, N = g.state === "live" ? 32 : (g.ot ? 53 : 48);
       const pts = [0];
       for (let k = 1; k < N; k++) pts.push(Math.round(fin * k / N + (r() - .5) * 14 * Math.sin(k / N * Math.PI)));
@@ -95,7 +101,7 @@
           if (three) { const ang = r() * Math.PI; x = 25 + 24.2 * Math.cos(ang); y = 5.25 + 24.2 * Math.sin(ang); if (y < 1) y = 1; x = Math.max(1, Math.min(49, x)); }
           else if (r() < .5) { x = 21 + r() * 8; y = 3 + r() * 6; }
           else { x = 8 + r() * 34; y = 6 + r() * 14; }
-          shots.push({ x, y, m: r() < .48, v: three ? 3 : 2 });
+          shots.push({ x, y, m: r() < .48, v: three ? 3 : 2, q: 1 + Math.min(3, Math.floor(k / (n / 4))) });
         }
         return shots;
       };
@@ -115,8 +121,8 @@
       players.sort((a, b) => (b.pts + 1.2 * b.reb + 1.5 * b.ast) - (a.pts + 1.2 * a.reb + 1.5 * a.ast));
       return Promise.resolve({
         quarters: {
-          away: { id: g.teams.away.id, q: split(tot.away, g.ot), tot: tot.away },
-          home: { id: g.teams.home.id, q: split(tot.home, g.ot), tot: tot.home },
+          away: { id: g.teams.away.id, q: split(tot.away, g.ot, "away"), tot: tot.away },
+          home: { id: g.teams.home.id, q: split(tot.home, g.ot, "home"), tot: tot.home },
         },
         series: pts, players, ot: g.ot,
       });

@@ -119,7 +119,10 @@ function normEvent(ev) {
   for (const c of comp.competitors || []) {
     const side = c.homeAway === "home" ? "home" : "away";
     const rec = (c.records || []).find(r => r.type === "total" || r.name === "overall");
-    g.teams[side] = { ...team(+c.team.id), score: +c.score || 0, record: rec ? rec.summary : "" };
+    g.teams[side] = {
+      ...team(+c.team.id), score: +c.score || 0, record: rec ? rec.summary : "",
+      ls: (c.linescores || []).map(l => +l.value || 0), // points par quart-temps (pour le match en accéléré)
+    };
     for (const L of c.leaders || []) for (const l of L.leaders || [])
       if (L.name === "pointsLeader" || L.abbreviation === "PTS")
         g.leaders.push({ name: l.athlete && l.athlete.shortName || "", pts: +l.value || 0 });
@@ -210,7 +213,7 @@ function normSummary(j) {
       if (p.type && /free throw/i.test(p.type.text || "")) continue; // pas de lancers francs sur la carte
       const aid = p.participants && p.participants[0] && p.participants[0].athlete ? String(p.participants[0].athlete.id) : "";
       const pl = out.players.find(q => (aid && q.aid === aid) || (q.full && (p.text || "").startsWith(q.full)));
-      if (pl) pl.shots.push({ x, y, m: !!p.scoringPlay, v: p.scoreValue || 2 });
+      if (pl) pl.shots.push({ x, y, m: !!p.scoringPlay, v: p.scoreValue || 2, q: p.period ? p.period.number : 0 });
     }
   } catch (e) { /* pas de tirs */ }
   return out;
@@ -285,37 +288,72 @@ async function loadVideos() {
 function enDate(g) {
   return new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "long", day: "numeric", year: "numeric" }).format(g.date).toLowerCase();
 }
-const nick = t => t.name.toLowerCase().split(" ").pop(); // « trail blazers » → « blazers » (titres NBA en majuscules courtes)
+const norm = s => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+function nicks(t) { // surnoms possibles dans un titre (« SIXERS at BLAZERS »)
+  const n = t.name.toLowerCase();
+  if (n === "76ers") return ["76ers", "sixers"];
+  if (n === "trail blazers") return ["trail blazers", "blazers"];
+  return [n];
+}
+const hasTeam = (t, team_) => nicks(team_).some(n => t.includes(n));
 function findVideo(g) { // le bon résumé du bon match : GameTime d'abord (choix de Kiki), sinon NBA
   if (!VIDS || g.state !== "post") return null;
-  const an = nick(g.teams.away), hn = nick(g.teams.home), d = enDate(g);
+  const d = enDate(g);
   const cand = VIDS.filter(v => {
-    if (v.c === "bein") return false; // NBA Extra : titres qui peuvent spoiler, gardé pour plus tard
-    const t = v.t.toLowerCase();
-    if (!t.includes(an) || !t.includes(hn) || !t.includes("highlight")) return false;
+    if (v.c === "bein") return false;
+    const t = norm(v.t);
+    if (!hasTeam(t, g.teams.away) || !hasTeam(t, g.teams.home) || !t.includes("highlight")) return false;
     if (t.includes(d)) return true;
     return Math.abs(new Date(v.p) - g.date) < 40 * 3600e3; // publiée autour du match
   });
   return cand.find(v => v.c === "gt") || cand[0] || null;
+}
+function findExtra(g) { // le résumé de NBA Extra (beIN) : « Résumé : WARRIORS @ LAKERS, … »
+  if (!VIDS || g.state !== "post") return null;
+  return VIDS.find(v => {
+    if (v.c !== "bein") return false;
+    const t = norm(v.t);
+    return t.startsWith("resume") && hasTeam(t, g.teams.away) && hasTeam(t, g.teams.home)
+      && Math.abs(new Date(v.p) - g.date) < 40 * 3600e3;
+  }) || null;
+}
+function findJournal(key) { // le journal NBA Extra du matin : « REPLAY - NBA Extra (13/11) »
+  if (!VIDS) return null;
+  const d = keyDate(addDays(key, 1)); // la nuit du 12 au 13 → journal du 13
+  for (const v of VIDS) {
+    if (v.c !== "bein") continue;
+    const t = norm(v.t);
+    const m = /nba extra\s*\((\d{1,2})\/(\d{1,2})\)/.exec(t);
+    if (m && !t.includes("short") && +m[1] === d.getUTCDate() && +m[2] === d.getUTCMonth() + 1) return v;
+  }
+  return null;
+}
+function findNightRecap(key) { // le résumé de la nuit sur la chaîne NBA
+  if (!VIDS) return null;
+  const md = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long", day: "numeric" }).format(keyDate(key)).toLowerCase();
+  return VIDS.find(v => v.c === "nba" && norm(v.t).includes("nightly recap") && norm(v.t).includes(md)) || null;
 }
 function ytURL(g) { // filet de sécurité : la recherche YouTube
   const q = `${g.teams.away.city} ${g.teams.away.name} vs ${g.teams.home.city} ${g.teams.home.name} full game highlights ${enDate(g)}`;
   return "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
 }
 const vidovl = $("#vidovl"), vplayer = $("#vplayer");
-async function openResume(id) {
+function playVideo(vid, label) { // lecteur intégré, sans quitter le site
+  vplayer.innerHTML = `
+    <button class="x" aria-label="Fermer">✕</button>
+    <div class="vframe"><iframe src="https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0&hl=fr"
+      title="${label}" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe></div>
+    <div class="vfoot"><span>${label}</span>
+      <a href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a></div>`;
+  vidovl.classList.add("open"); document.body.style.overflow = "hidden";
+}
+async function openResume(id, extra) {
   const g = state.games.find(x => x.id === id); if (!g) return;
   if (DEMO) { toast("Démo : ici, le vrai résumé vidéo se lancerait dans le site"); return; }
   await loadVideos();
-  const v = findVideo(g);
+  const v = extra ? findExtra(g) : findVideo(g);
   if (!v) { window.open(ytURL(g), "_blank", "noopener"); return; }
-  vplayer.innerHTML = `
-    <button class="x" aria-label="Fermer">✕</button>
-    <div class="vframe"><iframe src="https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&rel=0&hl=fr"
-      title="Résumé du match" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe></div>
-    <div class="vfoot"><span>${g.teams.away.name} – ${g.teams.home.name} · résumé ${v.c === "gt" ? "GameTime" : "NBA"}</span>
-      <a href="https://www.youtube.com/watch?v=${v.id}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a></div>`;
-  vidovl.classList.add("open"); document.body.style.overflow = "hidden";
+  playVideo(v.id, `${g.teams.away.name} – ${g.teams.home.name} · ${extra ? "NBA Extra" : v.c === "gt" ? "résumé GameTime" : "résumé NBA"}`);
 }
 function closeResume() { vplayer.innerHTML = ""; vidovl.classList.remove("open"); document.body.style.overflow = ""; }
 
@@ -333,25 +371,29 @@ function recHTML(t, g) { // bilan : seulement avant le match ou une fois révél
   const show = g.state === "pre" || state.revealed.has(g.id) || settings.showAll;
   return show && t.record ? `(${t.record})` : "";
 }
+function artHTML(a, h) { // les grands logos en diagonale, l'ADN visuel du site
+  const img = t => t.logo && !DEMO ? `<img src="https://a.espncdn.com/i/teamlogos/nba/500/${t.logo}.png" alt="" loading="lazy" onerror="this.remove()">` : `<i>${t.tri}</i>`;
+  return `<div class="art" aria-hidden="true"><span class="a">${img(a)}</span><span class="b">${img(h)}</span></div><div class="scrim"></div>`;
+}
 function heroHTML(g, lvl) {
   const a = g.teams.away, h = g.teams.home;
   const label = g.state === "pre" ? "L'affiche de la nuit" : "Le match de la nuit";
   const mid = g.state === "pre"
     ? `<div class="sc pre"><span class="q">${hourLocal(g.date)}</span></div>`
     : `${scHTML(g, "away")}<div class="hstat ${g.state === "live" ? "liv" : ""}" data-st="${g.id}">${statusText(g)}</div>${scHTML(g, "home")}
-       <div class="hint-eye" data-hint="${g.id}">👁 toucher pour révéler</div>`;
+       <div class="hint-eye" data-hint="${g.id}">👁 toucher pour revivre le match</div>`;
   return `<div class="hero-zone">
     <div class="hlabel"><span>${"🔥".repeat(Math.max(1, lvl - 2))} ${label}</span><i></i></div>
-    <article class="holo" style="--ca:${a.color};--cb:${h.color}">
+    <article class="holo" data-card="${g.id}" style="--ca:${a.color};--cb:${h.color}">
       <div class="holo-in">
-        <span class="wm a" aria-hidden="true">${a.tri}</span><span class="wm b" aria-hidden="true">${h.tri}</span>
+        ${artHTML(a, h)}
         <div class="rar-tag">${RAR[lvl][1].replace(/^\S+ /, "")}</div>
         <div class="hhour">${hourLocal(g.date)}</div>
         <div class="hgrid">
-          <div class="hteam">${logoHTML(a)}<div class="tx">
+          <div class="hteam"><div class="tx">
             <div class="hcity">${a.city}</div><div class="hname">${a.name}</div><div class="hrec" data-rec="${g.id}:away">${recHTML(a, g)}</div></div></div>
           <div class="hmid">${mid}</div>
-          <div class="hteam right">${logoHTML(h)}<div class="tx">
+          <div class="hteam right"><div class="tx">
             <div class="hcity">${h.city}</div><div class="hname">${h.name}</div><div class="hrec" data-rec="${g.id}:home">${recHTML(h, g)}</div></div></div>
         </div>
         <div class="hfoot">
@@ -364,18 +406,20 @@ function heroHTML(g, lvl) {
 }
 function btnsHTML(g) {
   if (g.state === "pre") return "";
-  const yt = g.state === "post" ? `<button class="bt gold" data-resume="${g.id}"><span class="pl">▶</span> Résumé</button>` : "";
-  return `${yt}<button class="bt" data-fiche="${g.id}">Stats ›</button>`;
+  const r = g.state === "post" ? `<button class="bt gold" data-resume="${g.id}"><span class="pl">▶</span> Résumé</button>` : "";
+  const x = g.state === "post" && findExtra(g) ? `<button class="bt extra" data-extra="${g.id}"><i class="fr"></i>NBA Extra</button>` : "";
+  return `${r}${x}<button class="bt" data-fiche="${g.id}">Stats ›</button>`;
 }
 function cardHTML(g, i) {
   const a = g.teams.away, h = g.teams.home;
   const lvl = watchLevel(g), [cls, lab] = RAR[lvl];
   const fav = settings.fav && (a.id === settings.fav || h.id === settings.fav);
-  const trow = (t, side) => `<div class="trow">${logoHTML(t)}
+  const trow = (t, side) => `<div class="trow">
       <div class="tnm"><b>${t.name}</b><small data-rec="${g.id}:${side}">${recHTML(t, g)}</small>${t.id === settings.fav ? `<span class="star">★</span>` : ""}</div>
       ${g.state === "pre" ? "<span></span>" : scHTML(g, side, true)}</div>`;
-  return `<article class="mcard smini ${cls}" data-card="${g.id}" style="--ca:${a.color};--cb:${h.color};animation-delay:${Math.min(i * 60, 400)}ms">
+  return `<article class="mcard smini ${cls}" data-card="${g.id}" style="--ca:${a.color};--cb:${h.color};animation-delay:${Math.min(i * 70, 500)}ms">
     <div class="rband"></div>
+    ${artHTML(a, h)}
     <div class="mhead"><span class="mrar">${g.state === "pre" ? "Affiche " + "🔥".repeat(Math.max(0, lvl - 1)) : lab}</span>
       <span class="mstat ${g.state === "live" ? "liv" : ""}" data-st="${g.id}">${statusText(g)}${fav ? " · ★" : ""}</span></div>
     <div class="mteams">${trow(a, "away")}${trow(h, "home")}</div>
@@ -401,24 +445,59 @@ function particles(card, gold) {
     pz.appendChild(s); setTimeout(() => s.remove(), 1100);
   }
 }
+function finishReveal(g, withParticles) {
+  for (const c of $$(`.sc[data-g="${g.id}"]`)) {
+    const t = g.teams[c.dataset.side];
+    const lose = g.state === "post" && t.score < g.teams[c.dataset.side === "away" ? "home" : "away"].score;
+    c.classList.add("rev"); c.classList.remove("lead", "trail"); c.classList.toggle("lose", lose);
+    c.querySelector(".n").textContent = t.score;
+  }
+  for (const st of $$(`[data-st="${g.id}"]`)) { st.textContent = statusText(g, true); st.classList.remove("race"); }
+  for (const r of $$(`[data-rec^="${g.id}:"]`)) { const side = r.dataset.rec.split(":")[1]; r.textContent = recHTML(g.teams[side], g); }
+  const hint = $(`[data-hint="${g.id}"]`); if (hint) hint.style.visibility = "hidden";
+  if (withParticles) {
+    const lvl = watchLevel(g);
+    if (lvl >= 4) particles($(`[data-card="${g.id}"]`), lvl === 5);
+  }
+}
 function reveal(id, instant) {
   const g = state.games.find(x => x.id === id);
   if (!g || g.state === "pre") return;
   const first = !state.revealed.has(id);
   state.revealed.add(id);
-  for (const c of $$(`.sc[data-g="${id}"]`)) {
-    const t = g.teams[c.dataset.side];
-    const lose = g.state === "post" && t.score < g.teams[c.dataset.side === "away" ? "home" : "away"].score;
-    c.classList.add("rev"); c.classList.toggle("lose", lose);
-    if (instant || !first) c.querySelector(".n").textContent = t.score; else countUp(c.querySelector(".n"), t.score);
+  const la = g.teams.away.ls || [], lh = g.teams.home.ls || [];
+  const canRace = first && !instant && !RM && g.state === "post" && la.length >= 4 && lh.length >= 4;
+  if (!canRace) { // révélation simple (direct, re-rendu, préférence « toujours montrer »…)
+    if (first && !instant && !RM) {
+      for (const c of $$(`.sc[data-g="${id}"]`)) { c.classList.add("rev"); countUp(c.querySelector(".n"), g.teams[c.dataset.side].score); }
+      setTimeout(() => finishReveal(g, true), 700);
+    } else finishReveal(g, false);
+    return;
   }
-  for (const st of $$(`[data-st="${id}"]`)) st.textContent = statusText(g, true);
-  for (const r of $$(`[data-rec^="${id}:"]`)) { const side = r.dataset.rec.split(":")[1]; r.textContent = recHTML(g.teams[side], g); }
-  const hint = $(`[data-hint="${id}"]`); if (hint) hint.style.visibility = "hidden";
-  if (first && !instant) {
-    const lvl = watchLevel(g);
-    if (lvl >= 4) particles($(`[data-card="${id}"]`) || $(".holo"), lvl === 5);
-  }
+  // ⭐ LE MATCH EN ACCÉLÉRÉ : les deux scores s'affrontent quart-temps par quart-temps
+  const cells = $$(`.sc[data-g="${id}"]`);
+  cells.forEach(c => c.classList.add("rev"));
+  const sts = $$(`[data-st="${id}"]`); sts.forEach(s => s.classList.add("race"));
+  const cum = (arr, k) => arr.slice(0, k + 1).reduce((s, v) => s + v, 0);
+  const n = Math.max(la.length, lh.length);
+  const stepMs = n > 4 ? 520 : 600;
+  let k = 0;
+  const tick = () => {
+    const sa = cum(la, k), sh = cum(lh, k);
+    const lab = k < 4 ? "Q" + (k + 1) : (n > 5 ? "Prol. " + (k - 3) : "Prolongation");
+    for (const c of cells) {
+      const mine = c.dataset.side === "away" ? sa : sh, other = c.dataset.side === "away" ? sh : sa;
+      const el = c.querySelector(".n");
+      el.textContent = mine;
+      el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop");
+      c.classList.toggle("lead", mine > other); c.classList.toggle("trail", mine < other);
+    }
+    sts.forEach(s => s.textContent = lab);
+    k++;
+    if (k < n) setTimeout(tick, stepMs);
+    else setTimeout(() => finishReveal(g, true), stepMs + 100);
+  };
+  setTimeout(tick, 420); // le temps que les cases se retournent
 }
 
 /* ---------- vue « Matchs » (la nuit) ---------- */
@@ -428,7 +507,7 @@ async function renderNight(soft) {
   renderChips();
   if (!soft) main.innerHTML = `<div class="skel">${`<div class="ph" style="height:220px"></div><div class="ph" style="height:140px"></div><div class="ph" style="height:140px"></div>`}</div>`;
   let games;
-  try { games = await scoreboard(state.night); }
+  try { [games] = await Promise.all([scoreboard(state.night), loadVideos()]); }
   catch (e) { main.innerHTML = `<p class="loadmsg">Impossible de joindre ESPN pour cette nuit. Réessaie dans un instant.</p>`; return; }
   state.games = games;
   state.lastLoad = Date.now();
@@ -452,10 +531,17 @@ async function renderNight(soft) {
     nFin ? `${nFin} terminé${nFin > 1 ? "s" : ""}` : "",
     nLive ? `<span class="liv">${nLive} en cours</span>` : ""].filter(Boolean).join(" · ");
 
+  const started = games.some(g => g.state !== "pre");
+  const nr = started && !DEMO ? findNightRecap(state.night) : null;
+  const jr = started && !DEMO ? findJournal(state.night) : null;
   main.innerHTML = `
     <div class="nightline"><h1 class="night">${nightTitle(state.night)}</h1>
       <span class="nmeta">${meta}</span>
-      ${games.some(g => g.state !== "pre") ? `<button class="btn-all" id="revall">👁 Tout révéler</button>` : ""}</div>
+      <span class="nbtns">
+        ${nr ? `<button class="bt gold" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span> Résumé de la nuit</button>` : ""}
+        ${jr ? `<button class="bt extra" data-vplay="${jr.id}" data-vlabel="NBA Extra — le journal du matin"><i class="fr"></i>NBA Extra</button>` : ""}
+        ${started ? `<button class="btn-all" id="revall">👁 Tout révéler</button>` : ""}
+      </span></div>
     ${hero ? heroHTML(hero.g, hero.lvl) : ""}
     ${rest.length ? `<div class="sect"><h2>${hero ? "Les autres matchs" : "Les matchs de la nuit"}</h2><i></i></div>
     <div class="grid">${rest.map((g, i) => cardHTML(g, i)).join("")}</div>` : ""}`;
@@ -463,7 +549,11 @@ async function renderNight(soft) {
   for (const id of state.revealed) reveal(id, true);
   const all = $("#revall");
   if (all) all.addEventListener("click", () => {
-    let d = 0; for (const g of games) { if (g.state !== "pre") { setTimeout(() => reveal(g.id), d); d += RM ? 0 : 140; } }
+    // la cérémonie : du moins bon au meilleur, le match de la nuit en dernier
+    let order = games.filter(g => g.state !== "pre").sort((x, y) => watchLevel(x) - watchLevel(y));
+    if (hero) order = order.filter(g => g.id !== hero.g.id).concat(games.filter(g => g.id === hero.g.id));
+    let d = 0;
+    for (const g of order) { setTimeout(() => reveal(g.id), d); d += RM ? 0 : 800; }
   });
   renderChips();
   scheduleRefresh();
@@ -627,34 +717,51 @@ function courtSVG(shots, color) {
     <line x1="${3 * S}" y1="0" x2="${3 * S}" y2="${14 * S}" stroke="rgba(255,255,255,.18)"/>
     <line x1="${47 * S}" y1="0" x2="${47 * S}" y2="${14 * S}" stroke="rgba(255,255,255,.18)"/>
     <path d="M ${3 * S} ${14 * S} A ${23.75 * S} ${23.75 * S} 0 0 0 ${47 * S} ${14 * S}" fill="none" stroke="rgba(255,255,255,.18)"/>`;
+  const step = Math.max(130, Math.min(260, Math.floor(5200 / Math.max(1, shots.length)))); // ~5 s de replay
   const marks = shots.map((sh, i) => {
-    const cx = sh.x * S, cy = Math.min(sh.y, 39) * S, d = RM ? 0 : Math.min(i * 90, 3600);
+    const cx = sh.x * S, cy = Math.min(sh.y, 39) * S, d = RM ? 0 : i * step;
     return sh.m
       ? `<circle class="shot" cx="${cx}" cy="${cy}" r="7" fill="${color}" stroke="#07070d" stroke-width="2" style="animation-delay:${d}ms"/>`
       : `<g class="shot" style="animation-delay:${d}ms"><line x1="${cx - 6}" y1="${cy - 6}" x2="${cx + 6}" y2="${cy + 6}" stroke="#8a8fa8" stroke-width="2.5"/><line x1="${cx - 6}" y1="${cy + 6}" x2="${cx + 6}" y2="${cy - 6}" stroke="#8a8fa8" stroke-width="2.5"/></g>`;
   }).join("");
-  return `<svg class="court" viewBox="0 0 ${W} ${H}">${lines}${marks}</svg>`;
+  return { svg: `<svg class="court" viewBox="0 0 ${W} ${H}">${lines}${marks}</svg>`, step };
 }
+let shotTimer = null;
 function openShots(key) {
   const s = state.fiche; if (!s) return;
   const p = s.players.find(q => q.aid === key || q.name === key); if (!p) return;
   const t = team(p.tid);
   const made = p.shots.filter(x => x.m).length, three = p.shots.filter(x => x.v === 3);
+  const { svg, step } = courtSVG(p.shots, t.color);
   shotsheet.innerHTML = `<div class="setbody">
     <button class="x" aria-label="Fermer">✕</button>
-    <div class="shead" style="--mc:${t.color}">${logoHTML(t)}<div><h2>${p.full || p.name}</h2><small>${t.city} ${t.name}</small></div></div>
+    <div class="shead" style="--mc:${t.color}">${logoHTML(t)}<div><h2>${p.full || p.name}</h2><small>${t.city} ${t.name}</small></div>
+      <button class="bt replay" data-replay="${key}">↻ Rejouer</button></div>
     <div class="stiles">
       <div class="stile"><b>${p.pts}</b><small>points</small></div>
       <div class="stile"><b>${made}/${p.shots.length}</b><small>aux tirs</small></div>
       <div class="stile"><b>${three.filter(x => x.m).length}/${three.length}</b><small>à 3 points</small></div>
       <div class="stile"><b>${p.reb} · ${p.ast}</b><small>reb · passes</small></div>
     </div>
-    ${courtSVG(p.shots, t.color)}
-    <div class="clegend"><span><i style="background:${t.color};border-radius:50%"></i>Tir réussi</span><span style="color:#8a8fa8">✕ Tir raté</span><span>Les tirs apparaissent dans l'ordre du match</span></div>
+    ${svg}
+    <div class="scount" id="scount">&nbsp;</div>
+    <div class="clegend"><span><i style="background:${t.color};border-radius:50%"></i>Tir réussi</span><span style="color:#8a8fa8">✕ Tir raté</span></div>
   </div>`;
   shotovl.classList.add("open");
+  // le compteur suit le replay : quart-temps, tirs, points sur tirs cumulés
+  clearInterval(shotTimer);
+  const cEl = $("#scount");
+  if (RM) { cEl.textContent = `${p.shots.length} tirs · ${made} réussis`; return; }
+  let i = 0, pts = 0;
+  shotTimer = setInterval(() => {
+    if (i >= p.shots.length) { clearInterval(shotTimer); cEl.textContent = `Fin du match · ${made}/${p.shots.length} aux tirs, ${pts} points sur tirs`; return; }
+    const sh = p.shots[i];
+    if (sh.m) pts += sh.v;
+    cEl.textContent = `${sh.q ? (sh.q <= 4 ? "Q" + sh.q : "Prolongation") + " · " : ""}tir ${i + 1}/${p.shots.length} · ${pts} points sur tirs`;
+    i++;
+  }, step);
 }
-function closeShots() { shotovl.classList.remove("open"); }
+function closeShots() { clearInterval(shotTimer); shotovl.classList.remove("open"); }
 
 /* ---------- vue « Programme » ---------- */
 async function renderProgramme() {
@@ -767,6 +874,12 @@ document.addEventListener("click", e => {
   if (f) { openFiche(f.dataset.fiche); return; }
   const rz = e.target.closest("[data-resume]");
   if (rz) { openResume(rz.dataset.resume); return; }
+  const xz = e.target.closest("[data-extra]");
+  if (xz) { openResume(xz.dataset.extra, true); return; }
+  const vp = e.target.closest("[data-vplay]");
+  if (vp) { playVideo(vp.dataset.vplay, vp.dataset.vlabel || "Vidéo"); return; }
+  const rp = e.target.closest("[data-replay]");
+  if (rp) { openShots(rp.dataset.replay); return; }
   const sh = e.target.closest("[data-shot]");
   if (sh) { openShots(sh.dataset.shot); return; }
   if (e.target === vidovl || (e.target.closest(".x") && e.target.closest("#vidovl"))) { closeResume(); return; }

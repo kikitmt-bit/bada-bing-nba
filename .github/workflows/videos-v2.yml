@@ -1,0 +1,35 @@
+# Robot vidéos du site v2 : toutes les 20 minutes, lit les chaînes YouTube
+# (flux publics, sans clé) et met à jour v2/videos.json sur la branche data.
+# Ne tourne que depuis la branche par défaut (main), comme le robot de réveil.
+name: Vidéos v2
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: videos-v2
+  cancel-in-progress: false
+jobs:
+  videos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: databr
+      - name: Mettre à jour la liste des vidéos
+        run: |
+          mkdir -p databr/v2
+          python scripts/v2_videos.py databr/v2/videos.json
+      - name: Pousser sur la branche data
+        run: |
+          cd databr
+          git config user.name "robot-videos"
+          git config user.email "actions@github.com"
+          git add v2/videos.json
+          git diff --cached --quiet && echo "rien de neuf" && exit 0
+          git commit -m "vidéos v2 : mise à jour automatique"
+          git push

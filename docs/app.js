@@ -180,23 +180,39 @@ function normSummary(j) {
       out.series = arr.slice(0, Math.max(lastEl + 1, 13)).map(v => (v === null ? last : (last = v)));
     }
   } catch (e) { /* tant pis pour la courbe */ }
-  // les patrons du match
+  // feuille de match complète (tous les joueurs, toutes les colonnes utiles)
   try {
     for (const side of j.boxscore.players || []) {
       const tid = +side.team.id;
       const stt = side.statistics[0];
       const ix = n => stt.names.indexOf(n);
-      const [iP, iR, iA] = [ix("PTS"), ix("REB"), ix("AST")];
+      const [iM, iF, i3, iR, iA, iP] = [ix("MIN"), ix("FG"), ix("3PT"), ix("REB"), ix("AST"), ix("PTS")];
       for (const a of stt.athletes || []) {
         if (!a.athlete || !a.stats || !a.stats.length) continue;
         out.players.push({
-          name: a.athlete.shortName || a.athlete.displayName, tid,
+          aid: String(a.athlete.id || ""), name: a.athlete.shortName || a.athlete.displayName,
+          full: a.athlete.displayName || "", tid,
+          min: a.stats[iM] || "0", fg: a.stats[iF] || "", tp: a.stats[i3] || "",
           pts: +a.stats[iP] || 0, reb: +a.stats[iR] || 0, ast: +a.stats[iA] || 0,
+          shots: [],
         });
       }
     }
     out.players.sort((a, b) => (b.pts + 1.2 * b.reb + 1.5 * b.ast) - (a.pts + 1.2 * a.reb + 1.5 * a.ast));
   } catch (e) { /* pas de box score */ }
+  // les tirs de chaque joueur (pour la carte de tirs)
+  try {
+    for (const p of j.plays || []) {
+      if (!p.shootingPlay || !p.coordinate) continue;
+      let { x, y } = p.coordinate;
+      if (y > 47) { y = 94 - y; x = 50 - x; } // les deux moitiés de terrain → une seule
+      if (x < 0 || x > 50 || y < 0 || y > 47) continue;
+      if (p.type && /free throw/i.test(p.type.text || "")) continue; // pas de lancers francs sur la carte
+      const aid = p.participants && p.participants[0] && p.participants[0].athlete ? String(p.participants[0].athlete.id) : "";
+      const pl = out.players.find(q => (aid && q.aid === aid) || (q.full && (p.text || "").startsWith(q.full)));
+      if (pl) pl.shots.push({ x, y, m: !!p.scoringPlay, v: p.scoreValue || 2 });
+    }
+  } catch (e) { /* pas de tirs */ }
   return out;
 }
 
@@ -227,12 +243,81 @@ const RAR = [
   ["rar", "🔥 Sympa"], ["epi", "🔥🔥 À voir"], ["leg", "🔥🔥🔥 Immanquable"],
 ];
 
-/* ---------- vidéos : lien de recherche YouTube (robot « data » plus tard) ---------- */
-function ytURL(g) {
-  const en = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "long", day: "numeric", year: "numeric" }).format(g.date);
-  const q = `${g.teams.away.city} ${g.teams.away.name} vs ${g.teams.home.city} ${g.teams.home.name} full game highlights ${en}`;
+/* ---------- l'info clé d'avant-match (une seule, la plus importante, jamais de spoil) ---------- */
+let PREVNIGHT = null, PREVKEY = null; // équipes qui jouaient déjà la nuit précédente
+async function loadPrevNight(key) {
+  if (PREVKEY === key) return;
+  try { const games = await scoreboard(addDays(key, -1)); PREVNIGHT = new Set(games.flatMap(g => [g.teams.away.id, g.teams.home.id])); }
+  catch (e) { PREVNIGHT = new Set(); }
+  PREVKEY = key;
+}
+function played(rec) { const m = /^(\d+)-(\d+)/.exec(rec || ""); return m ? +m[1] + +m[2] : 0; }
+function keyFact(g) {
+  if (g.state !== "pre") return null; // après le coup d'envoi, plus d'avant-match
+  const a = g.teams.away, h = g.teams.home, pa = winpct(a.record), ph = winpct(h.record);
+  const n = Math.min(played(a.record), played(h.record));
+  if (n >= 8 && pa >= .65 && ph >= .65) return ["Choc au sommet", `${a.name} et ${h.name}, deux des meilleurs bilans de la ligue`];
+  const star = [...g.leaders].sort((x, y) => y.pts - x.pts)[0];
+  if (star && star.pts >= 27) return ["L'homme en forme", `${star.name} tourne à ${String(star.pts.toFixed(1)).replace(".", ",")} points par match`];
+  if (n >= 6 && Math.abs(pa - ph) >= .35) return ["Grand favori", `Victoire attendue côté ${pa > ph ? a.name : h.name}`];
+  if (PREVNIGHT && (PREVNIGHT.has(a.id) || PREVNIGHT.has(h.id))) {
+    const t = PREVNIGHT.has(a.id) ? a : h;
+    return ["Fatigue", `${t.name} : 2e match en 2 soirs${t === a ? ", en déplacement" : ""}`];
+  }
+  if (n >= 6 && Math.abs(pa - ph) <= .06) return ["Pile ou face", "Deux équipes impossibles à départager sur le papier"];
+  return null;
+}
+function kfHTML(g) {
+  const f = keyFact(g);
+  return f ? `<div class="mkf"><b>${f[0]}</b><span>${f[1]}</span></div>` : "";
+}
+
+/* ---------- vidéos : liste tenue par le robot GitHub (branche data), lecteur intégré ---------- */
+const RAWDATA = "https://raw.githubusercontent.com/kikitmt-bit/bada-bing-nba/data/v2/";
+let VIDS = null;
+async function loadVideos() {
+  if (VIDS !== null) return VIDS;
+  if (DEMO) return (VIDS = []);
+  try { const j = await fetchJSON(RAWDATA + "videos.json?t=" + Math.floor(Date.now() / 600e3)); VIDS = j.videos || []; }
+  catch (e) { VIDS = []; }
+  return VIDS;
+}
+function enDate(g) {
+  return new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "long", day: "numeric", year: "numeric" }).format(g.date).toLowerCase();
+}
+const nick = t => t.name.toLowerCase().split(" ").pop(); // « trail blazers » → « blazers » (titres NBA en majuscules courtes)
+function findVideo(g) { // le bon résumé du bon match : GameTime d'abord (choix de Kiki), sinon NBA
+  if (!VIDS || g.state !== "post") return null;
+  const an = nick(g.teams.away), hn = nick(g.teams.home), d = enDate(g);
+  const cand = VIDS.filter(v => {
+    if (v.c === "bein") return false; // NBA Extra : titres qui peuvent spoiler, gardé pour plus tard
+    const t = v.t.toLowerCase();
+    if (!t.includes(an) || !t.includes(hn) || !t.includes("highlight")) return false;
+    if (t.includes(d)) return true;
+    return Math.abs(new Date(v.p) - g.date) < 40 * 3600e3; // publiée autour du match
+  });
+  return cand.find(v => v.c === "gt") || cand[0] || null;
+}
+function ytURL(g) { // filet de sécurité : la recherche YouTube
+  const q = `${g.teams.away.city} ${g.teams.away.name} vs ${g.teams.home.city} ${g.teams.home.name} full game highlights ${enDate(g)}`;
   return "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
 }
+const vidovl = $("#vidovl"), vplayer = $("#vplayer");
+async function openResume(id) {
+  const g = state.games.find(x => x.id === id); if (!g) return;
+  if (DEMO) { toast("Démo : ici, le vrai résumé vidéo se lancerait dans le site"); return; }
+  await loadVideos();
+  const v = findVideo(g);
+  if (!v) { window.open(ytURL(g), "_blank", "noopener"); return; }
+  vplayer.innerHTML = `
+    <button class="x" aria-label="Fermer">✕</button>
+    <div class="vframe"><iframe src="https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&rel=0&hl=fr"
+      title="Résumé du match" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe></div>
+    <div class="vfoot"><span>${g.teams.away.name} – ${g.teams.home.name} · résumé ${v.c === "gt" ? "GameTime" : "NBA"}</span>
+      <a href="https://www.youtube.com/watch?v=${v.id}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a></div>`;
+  vidovl.classList.add("open"); document.body.style.overflow = "hidden";
+}
+function closeResume() { vplayer.innerHTML = ""; vidovl.classList.remove("open"); document.body.style.overflow = ""; }
 
 /* ---------- briques d'affichage ---------- */
 function scHTML(g, side, mini) {
@@ -270,6 +355,7 @@ function heroHTML(g, lvl) {
             <div class="hcity">${h.city}</div><div class="hname">${h.name}</div><div class="hrec" data-rec="${g.id}:home">${recHTML(h, g)}</div></div></div>
         </div>
         <div class="hfoot">
+          ${kfHTML(g)}
           <div class="hbtns">${btnsHTML(g)}</div>
         </div>
       </div>
@@ -278,7 +364,7 @@ function heroHTML(g, lvl) {
 }
 function btnsHTML(g) {
   if (g.state === "pre") return "";
-  const yt = g.state === "post" ? `<a class="bt gold" target="_blank" rel="noopener" href="${ytURL(g)}"><span class="pl">▶</span> Résumé</a>` : "";
+  const yt = g.state === "post" ? `<button class="bt gold" data-resume="${g.id}"><span class="pl">▶</span> Résumé</button>` : "";
   return `${yt}<button class="bt" data-fiche="${g.id}">Stats ›</button>`;
 }
 function cardHTML(g, i) {
@@ -293,7 +379,7 @@ function cardHTML(g, i) {
     <div class="mhead"><span class="mrar">${g.state === "pre" ? "Affiche " + "🔥".repeat(Math.max(0, lvl - 1)) : lab}</span>
       <span class="mstat ${g.state === "live" ? "liv" : ""}" data-st="${g.id}">${statusText(g)}${fav ? " · ★" : ""}</span></div>
     <div class="mteams">${trow(a, "away")}${trow(h, "home")}</div>
-    <div class="mfoot"><div class="mkf"><span></span></div><div class="mbtns">${btnsHTML(g)}</div></div>
+    ${(g.state !== "pre" || keyFact(g)) ? `<div class="mfoot">${kfHTML(g)}<div class="mbtns">${btnsHTML(g)}</div></div>` : ""}
     <div class="pz"></div>
   </article>`;
 }
@@ -348,6 +434,7 @@ async function renderNight(soft) {
   state.lastLoad = Date.now();
   if (settings.showAll) games.forEach(g => state.revealed.add(g.id));
   if (games.some(g => g.state !== "pre")) markSeen(state.night);
+  if (games.some(g => g.state === "pre")) await loadPrevNight(state.night); // pour l'info « 2e soir »
 
   if (!games.length) { main.innerHTML = `<div class="nightline"><h1 class="night">${nightTitle(state.night)}</h1></div><p class="loadmsg">Pas de match cette nuit-là. 🏖️</p>`; scheduleRefresh(); return; }
 
@@ -422,8 +509,12 @@ async function openFiche(id) {
     ${s.series ? `<div class="fsect"><h3>Le film du match<i></i></h3>${chartHTML(g, s.series)}</div>` : ""}
     ${s.quarters ? `<div class="fsect"><h3>Par quart-temps<i></i></h3>${quartersHTML(g, s)}</div>` : ""}
     ${s.players.length ? `<div class="fsect"><h3>Les patrons du match<i></i></h3>${prosHTML(s.players.slice(0, 6))}</div>` : ""}
-    <div class="fbtns">${g.state === "post" ? `<a class="bt gold" target="_blank" rel="noopener" href="${ytURL(g)}"><span class="pl">▶</span> Chercher le résumé</a>` : ""}</div>
-    <div class="next-note">Bientôt dans la fiche : feuille de match complète, cartes de tirs, face-à-face, avant-match.</div>`;
+    ${s.players.length ? `<div class="fsect"><h3>La feuille de match<i></i></h3>
+      <p class="bx-hint">Touche un joueur pour voir tous ses tirs sur le terrain 🎯</p>
+      ${boxHTML(g, s, "away")}${boxHTML(g, s, "home")}</div>` : ""}
+    <div class="fbtns">${g.state === "post" ? `<button class="bt gold" data-resume="${g.id}"><span class="pl">▶</span> Résumé vidéo</button>` : ""}</div>
+    <div class="next-note">Bientôt dans la fiche : face-à-face des deux équipes, avant-match détaillé, absents.</div>`;
+  state.fiche = s; // pour la carte de tirs
   requestAnimationFrame(() => {
     body.querySelectorAll(".fl").forEach(b => b.style.width = b.dataset.w + "%");
     const line = body.querySelector(".filmline");
@@ -507,6 +598,63 @@ function prosHTML(players) {
       </div></div>`;
   }).join("") + `</div>`;
 }
+
+/* ---------- la feuille de match ---------- */
+function boxHTML(g, s, side) {
+  const t = g.teams[side];
+  const list = s.players.filter(p => p.tid === t.id);
+  if (!list.length) return "";
+  const row = p => `<tr class="${p.shots.length ? "shootable" : ""}" ${p.shots.length ? `data-shot="${p.aid || p.name}"` : ""}>
+    <td><span class="bxn">${p.name}</span>${p.shots.length ? `<span class="tgt">🎯</span>` : ""}</td>
+    <td>${p.min}</td><td>${p.fg}</td><td>${p.tp}</td><td>${p.reb}</td><td>${p.ast}</td><td class="tot">${p.pts}</td></tr>`;
+  return `<div class="bxteam"><div class="bxh" style="--mc:${t.color}">${logoHTML(t)}<b>${t.name}</b></div>
+    <div class="qtwrap"><table class="qt bx"><thead><tr><th>Joueur</th><th>Min</th><th>Tirs</th><th>3 pts</th><th>Reb</th><th>Pas</th><th>Pts</th></tr></thead>
+    <tbody>${list.map(row).join("")}</tbody></table></div></div>`;
+}
+
+/* ---------- la carte de tirs (tous les tirs du joueur, dans l'ordre du match) ---------- */
+const shotovl = $("#shotovl"), shotsheet = $("#shotsheet");
+function courtSVG(shots, color) {
+  // repère ESPN : panier en (25, 5.25), x sur la largeur (0-50 pieds), y depuis la ligne de fond
+  const S = 10, W = 500, H = 400; // on montre jusqu'à 40 pieds (au-delà : exploits de fin de quart)
+  const hoop = { x: 25 * S, y: 5.25 * S };
+  const lines = `
+    <rect x="0" y="0" width="${W}" height="${H}" rx="10" fill="rgba(255,255,255,.025)"/>
+    <rect x="${17 * S}" y="0" width="${16 * S}" height="${19 * S}" fill="none" stroke="rgba(255,255,255,.18)"/>
+    <circle cx="${hoop.x}" cy="${19 * S}" r="${6 * S}" fill="none" stroke="rgba(255,255,255,.18)"/>
+    <circle cx="${hoop.x}" cy="${hoop.y}" r="${.75 * S}" fill="none" stroke="#f3c552" stroke-width="2"/>
+    <line x1="${hoop.x - 3 * S}" y1="${4 * S}" x2="${hoop.x + 3 * S}" y2="${4 * S}" stroke="rgba(255,255,255,.4)" stroke-width="2"/>
+    <line x1="${3 * S}" y1="0" x2="${3 * S}" y2="${14 * S}" stroke="rgba(255,255,255,.18)"/>
+    <line x1="${47 * S}" y1="0" x2="${47 * S}" y2="${14 * S}" stroke="rgba(255,255,255,.18)"/>
+    <path d="M ${3 * S} ${14 * S} A ${23.75 * S} ${23.75 * S} 0 0 0 ${47 * S} ${14 * S}" fill="none" stroke="rgba(255,255,255,.18)"/>`;
+  const marks = shots.map((sh, i) => {
+    const cx = sh.x * S, cy = Math.min(sh.y, 39) * S, d = RM ? 0 : Math.min(i * 90, 3600);
+    return sh.m
+      ? `<circle class="shot" cx="${cx}" cy="${cy}" r="7" fill="${color}" stroke="#07070d" stroke-width="2" style="animation-delay:${d}ms"/>`
+      : `<g class="shot" style="animation-delay:${d}ms"><line x1="${cx - 6}" y1="${cy - 6}" x2="${cx + 6}" y2="${cy + 6}" stroke="#8a8fa8" stroke-width="2.5"/><line x1="${cx - 6}" y1="${cy + 6}" x2="${cx + 6}" y2="${cy - 6}" stroke="#8a8fa8" stroke-width="2.5"/></g>`;
+  }).join("");
+  return `<svg class="court" viewBox="0 0 ${W} ${H}">${lines}${marks}</svg>`;
+}
+function openShots(key) {
+  const s = state.fiche; if (!s) return;
+  const p = s.players.find(q => q.aid === key || q.name === key); if (!p) return;
+  const t = team(p.tid);
+  const made = p.shots.filter(x => x.m).length, three = p.shots.filter(x => x.v === 3);
+  shotsheet.innerHTML = `<div class="setbody">
+    <button class="x" aria-label="Fermer">✕</button>
+    <div class="shead" style="--mc:${t.color}">${logoHTML(t)}<div><h2>${p.full || p.name}</h2><small>${t.city} ${t.name}</small></div></div>
+    <div class="stiles">
+      <div class="stile"><b>${p.pts}</b><small>points</small></div>
+      <div class="stile"><b>${made}/${p.shots.length}</b><small>aux tirs</small></div>
+      <div class="stile"><b>${three.filter(x => x.m).length}/${three.length}</b><small>à 3 points</small></div>
+      <div class="stile"><b>${p.reb} · ${p.ast}</b><small>reb · passes</small></div>
+    </div>
+    ${courtSVG(p.shots, t.color)}
+    <div class="clegend"><span><i style="background:${t.color};border-radius:50%"></i>Tir réussi</span><span style="color:#8a8fa8">✕ Tir raté</span><span>Les tirs apparaissent dans l'ordre du match</span></div>
+  </div>`;
+  shotovl.classList.add("open");
+}
+function closeShots() { shotovl.classList.remove("open"); }
 
 /* ---------- vue « Programme » ---------- */
 async function renderProgramme() {
@@ -617,6 +765,12 @@ document.addEventListener("click", e => {
   if (sc) { reveal(sc.dataset.g); return; }
   const f = e.target.closest("[data-fiche]");
   if (f) { openFiche(f.dataset.fiche); return; }
+  const rz = e.target.closest("[data-resume]");
+  if (rz) { openResume(rz.dataset.resume); return; }
+  const sh = e.target.closest("[data-shot]");
+  if (sh) { openShots(sh.dataset.shot); return; }
+  if (e.target === vidovl || (e.target.closest(".x") && e.target.closest("#vidovl"))) { closeResume(); return; }
+  if (e.target === shotovl || (e.target.closest(".x") && e.target.closest("#shotovl"))) { closeShots(); return; }
   const tab = e.target.closest(".tab");
   if (tab) { go(tab.dataset.vue); return; }
   const chip = e.target.closest(".chip[data-night]");
@@ -628,7 +782,12 @@ document.addEventListener("click", e => {
   if (e.target === setovl || (e.target.closest(".x") && e.target.closest("#setovl"))) closeSettings();
 });
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { if (ovl.classList.contains("open")) closeFiche(); if (setovl.classList.contains("open")) closeSettings(); }
+  if (e.key === "Escape") {
+    if (vidovl.classList.contains("open")) { closeResume(); return; }
+    if (shotovl.classList.contains("open")) { closeShots(); return; }
+    if (ovl.classList.contains("open")) closeFiche();
+    if (setovl.classList.contains("open")) closeSettings();
+  }
   if (e.key === "Enter" || e.key === " ") {
     const sc = e.target.closest && e.target.closest(".sc:not(.rev):not(.pre)");
     if (sc) { e.preventDefault(); reveal(sc.dataset.g); }
@@ -657,6 +816,7 @@ function welcome() {
   const nuit = QS.get("nuit");
   state.night = nuit && /^\d{4}-\d{2}-\d{2}$/.test(nuit) ? nuit.replaceAll("-", "") : defaultNight();
   welcome();
+  loadVideos(); // en avance, pour que le premier clic « Résumé » soit instantané
   const vue = QS.get("vue");
   go(vue === "programme" ? "programme" : "nuit");
 })();

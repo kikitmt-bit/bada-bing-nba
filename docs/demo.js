@@ -49,7 +49,9 @@
           away: { id: away, score: st === "pre" ? 0 : (st === "live" ? Math.floor(sa * .6) : sa), record: W() },
           home: { id: home, score: st === "pre" ? 0 : (st === "live" ? Math.floor(sb * .6) : sb), record: W() },
         },
-        leaders: st === "post" ? [{ name: STARS[away], pts: 22 + Math.floor(r() * 25) }, { name: STARS[home], pts: 20 + Math.floor(r() * 22) }] : [],
+        leaders: st === "post"
+          ? [{ name: STARS[away], pts: 22 + Math.floor(r() * 25) }, { name: STARS[home], pts: 20 + Math.floor(r() * 22) }]
+          : [{ name: STARS[away], pts: 18 + r() * 14 }, { name: STARS[home], pts: 18 + r() * 14 }],
       };
       // app.js complète tri/couleurs via team() : on les fusionne ici comme normEvent le ferait
       cache.set(id, g);
@@ -84,11 +86,31 @@
       for (let k = 1; k < N; k++) pts.push(Math.round(fin * k / N + (r() - .5) * 14 * Math.sin(k / N * Math.PI)));
       pts.push(g.state === "live" ? g.teams.home.score - g.teams.away.score : fin);
       const players = [];
+      const mkShots = (pts) => { // des tirs plausibles : moitié près du cercle, un tiers à 3 points
+        const shots = [];
+        const n = Math.max(4, Math.round(pts / 2.1));
+        for (let k = 0; k < n; k++) {
+          const three = r() < .34;
+          let x, y;
+          if (three) { const ang = r() * Math.PI; x = 25 + 24.2 * Math.cos(ang); y = 5.25 + 24.2 * Math.sin(ang); if (y < 1) y = 1; x = Math.max(1, Math.min(49, x)); }
+          else if (r() < .5) { x = 21 + r() * 8; y = 3 + r() * 6; }
+          else { x = 8 + r() * 34; y = 6 + r() * 14; }
+          shots.push({ x, y, m: r() < .48, v: three ? 3 : 2 });
+        }
+        return shots;
+      };
       for (const side of ["away", "home"]) {
         const tid = g.teams[side].id;
-        players.push({ name: STARS[tid], tid, pts: 20 + Math.floor(r() * 25), reb: 3 + Math.floor(r() * 10), ast: 2 + Math.floor(r() * 10) });
-        players.push({ name: "R. Dubois", tid, pts: 8 + Math.floor(r() * 14), reb: 2 + Math.floor(r() * 7), ast: 1 + Math.floor(r() * 6) });
-        players.push({ name: "M. Lefranc", tid, pts: 5 + Math.floor(r() * 12), reb: 1 + Math.floor(r() * 6), ast: 1 + Math.floor(r() * 5) });
+        const mk = (name, target, reb, ast, i) => {
+          const shots = mkShots(target);
+          const made = shots.filter(s => s.m).length;
+          const pts = shots.reduce((s, x) => s + (x.m ? x.v : 0), 0) + Math.floor(r() * 5); // + lancers francs
+          return { aid: tid + "-" + i, name, full: name, tid, min: String(18 + Math.floor(r() * 20)), fg: `${made}-${shots.length}`, tp: `${shots.filter(s => s.v === 3 && s.m).length}-${shots.filter(s => s.v === 3).length}`, pts, reb, ast, shots };
+        };
+        players.push(mk(STARS[tid], 20 + Math.floor(r() * 25), 3 + Math.floor(r() * 10), 2 + Math.floor(r() * 10), 0));
+        players.push(mk("R. Dubois", 8 + Math.floor(r() * 14), 2 + Math.floor(r() * 7), 1 + Math.floor(r() * 6), 1));
+        players.push(mk("M. Lefranc", 5 + Math.floor(r() * 12), 1 + Math.floor(r() * 6), 1 + Math.floor(r() * 5), 2));
+        players.push(mk("T. Okafor", 4 + Math.floor(r() * 9), 1 + Math.floor(r() * 5), Math.floor(r() * 4), 3));
       }
       players.sort((a, b) => (b.pts + 1.2 * b.reb + 1.5 * b.ast) - (a.pts + 1.2 * a.reb + 1.5 * a.ast));
       return Promise.resolve({

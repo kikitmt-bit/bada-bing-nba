@@ -8,16 +8,28 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 Grande refonte décidée avec Kiki : **le site quitte Streamlit** et s'appelle désormais **Nocturne** (nom validé par Kiki).
 La v2 est un site statique dans `docs/` (`index.html`, `style.css`, `app.js`, `demo.js`), servi par **GitHub Pages**
 (Pages suit la branche de travail `claude/...` + `/docs` : chaque push y est en ligne ~1 min après ; `main` porte les robots).
-**Identité (13/11, après le retour « on dirait Streamlit en moins bien » sur la 1re coquille)** : logo « éclipse »
-(ballon-lune en croissant, SVG inline + favicon) + marque NOCTURNE espacée ; **barre latérale** sur PC (logo, Le brief /
-Programme / Classement, Réglages en bas), **barre d'onglets en bas** sur téléphone façon appli ; plus d'en-tête multi-bandes.
-Cartes « ticket » : pastilles de logo CARRÉES aux couleurs de l'équipe (façon icône d'appli), texte toujours sur fond
-sombre uni (jamais de texte sur un logo : retour Kiki « illisible »), lueur des 2 couleurs seulement en bord de carte,
-3 par ligne sur PC. Le brief = page d'accueil (« Pendant que tu dormais ») : match de la nuit, tickets, MVP & grosses
-perfs derrière un teaser (`loadMVP` : feuilles de toutes les rencontres, photo ESPN headshot), « La nuit prochaine ».
+**DA « broadcast de minuit » (17/11, après le retour Kiki « encore trop Streamlit, pas d'effet waouh, boutons arrondis d'appli IA,
+liseré de côté ») — à respecter dans toute nouvelle page** : l'habillage d'une retransmission NBA vue de nuit.
+- Logo : croissant de lune-ballon (`<symbol id="moonball">` dans index.html, réutilisé par `<use>`), qui remplace le O du mot-symbole
+  N☾CTURNE ; même dessin en favicon. Ciel étoilé en fond (`.stars`).
+- Navigation : barre du haut (mot-symbole, LE BRIEF · PROGRAMME · CLASSEMENT soulignés ambre, roue) ; barre d'onglets en bas sur téléphone.
+- Plaques biseautées (`clip-path` aux coins coupés), JAMAIS de coins arrondis ni de liseré latéral ; boutons `.btn` en parallélogramme
+  (`.amber` = action principale, `.extra` = NBA Extra au liseré tricolore) ; étiquettes `.tag`.
+- Scores dans des **afficheurs LED ambre** (`.led`, police Doto) : caché = « ?? » ambre éteint, un clic l'allume (`.led.hid` → révélé).
+  Plus AUCUN retournement 3D (cause du « ? » fantôme sous Firefox).
+- Tuiles = plaques de score TV (`cardHTML` → `.bug`) : une rangée par équipe (pastille biseautée à la couleur de l'équipe avec logo,
+  nom en capitales, LED), en-tête horloge + **jauge de chaleur** 5 barres (`heatHTML`) + mot de rareté (`RARL`). Rareté = lumière
+  de plaque (`.r0`…`.r5` : or animé, argent, cuivre…) et lueur au sol ; direct = rouge. 3 par ligne sur PC.
+- Le brief (`skyHTML`) : salutation selon l'heure + contexte, grande date « 16 → 17 », compteurs LED animés (matchs, à voir, en direct),
+  « 🎬 Révéler la nuit » = cérémonie qui défile et révèle du moins bon au meilleur (1,3 s d'écart, le match de la nuit en dernier),
+  bande des nuits ; « Le match de la nuit » = **jumbotron** (`heroHTML`) coupé en diagonale aux 2 couleurs, grands logos, projecteurs
+  animés, LED géantes ; MVP « sous les projecteurs » (`loadMVP`, carte photo + stats LED qui comptent) ; la nuit prochaine.
+- Révéler = course des 2 LED quart-temps par quart-temps (`reveal`, « Fin Q1 »…), puis le vainqueur reste allumé, le perdant s'éteint,
+  la rangée du vainqueur flashe à sa couleur, étincelles pour 🔥🔥 et plus.
+- Programme en face-à-face (heure en LED), classement en plaques (rang biseauté vert 1-6 / orange 7-10), fiche et carte de tirs en LED
+  (onde sur chaque panier). Jeton `state.tok` : une page en chargement ne s'affiche que si c'est encore la dernière demandée.
 **Classement** (`renderStandings`, ESPN `apis/v2/.../standings`) : par conférence, coupure sans spoil = résultats de la
-dernière nuit soustraits (victoires/défaites recalculées depuis son scoreboard) tant que l'interrupteur « Inclure la
-dernière nuit » est éteint (défaut : coupé sauf « toujours montrer ») ; série masquée sous coupure ; 1-6 vert, 7-10 orange.
+dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit » est éteint (défaut : coupé sauf « toujours montrer »).
 - Le **navigateur appelle ESPN directement** (`site.api.espn.com`, scoreboard + summary) : scores en direct qui se mettent
   à jour seuls (60 s pendant les matchs, retour d'onglet après 3 min), plus de site endormi, plus de robot de réveil.
   Copie de secours des scores dans `localStorage` si ESPN ne répond pas. ⚠️ CORS à confirmer en ligne (ESPN est bloqué
@@ -38,8 +50,6 @@ dernière nuit » est éteint (défaut : coupé sauf « toujours montrer ») ; s
   les deux scores s'affrontent quart-temps par quart-temps (`linescores` du scoreboard, ~0,5 s par quart), le leader
   s'illumine (`.lead`/`.trail`), étiquette Q1→Q4/Prolongation, verdict final + particules selon la rareté.
   « Tout révéler » = cérémonie du moins bon au meilleur, le match de la nuit en dernier (800 ms d'écart).
-- Cartes refaites (3 par ligne sur PC, `minmax(330px)`) : **grands logos ESPN en diagonale comme art de fond** (`artHTML`,
-  le point fort historique de Kiki), noms en grand par-dessus (scrim), plus de médaillons dans les lignes.
 - **NBA Extra de retour** : bouton par match (titre beIN « Résumé : X @ Y », `findExtra`), journal du matin
   (« REPLAY - NBA Extra (13/11) » = nuit du 12 au 13, `findJournal`) et « Résumé de la nuit » NBA (`findNightRecap`,
   « nightly recap » + date) en tête de page ; tout se lit dans le lecteur intégré (`playVideo`).

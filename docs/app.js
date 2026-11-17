@@ -91,6 +91,7 @@ const state = {
   revealed: new Set(),  // ids révélés (jamais gardé d'une visite à l'autre : c'est voulu)
   timer: null,
   lastLoad: 0,
+  tok: 0,               // jeton de la dernière page demandée
 };
 const settings = {
   fav: store.get("fav", null),           // id d'équipe favorite
@@ -272,7 +273,7 @@ function keyFact(g) {
 }
 function kfHTML(g) {
   const f = keyFact(g);
-  return f ? `<div class="mkf"><b>${f[0]}</b><span>${f[1]}</span></div>` : "";
+  return f ? `<div class="kf"><b>${f[0]}</b><span>${f[1]}</span></div>` : "";
 }
 
 /* ---------- vidéos : liste tenue par le robot GitHub (branche data), lecteur intégré ---------- */
@@ -358,216 +359,257 @@ async function openResume(id, extra) {
 function closeResume() { vplayer.innerHTML = ""; vidovl.classList.remove("open"); document.body.style.overflow = ""; }
 
 /* ---------- briques d'affichage ---------- */
-function scHTML(g, side, mini) {
+const RARL = ["À fuir", "Bof", "Sans plus", "Sympa", "À voir", "Immanquable"];
+function ledHTML(g, side) {
   const t = g.teams[side];
-  return `<span class="sc" data-g="${g.id}" data-side="${side}" style="--mc:${t.color}" role="button" tabindex="0" aria-label="Révéler le score"><span class="q">?</span><span class="n"></span></span>`;
+  return `<span class="led hid" data-g="${g.id}" data-side="${side}" role="button" tabindex="0" aria-label="Révéler le score des ${t.name}"><span class="v">??</span></span>`;
 }
 function statusText(g, revealed) {
   if (g.state === "pre") return hourLocal(g.date);
-  if (g.state === "live") return revealed ? `● En direct · Q${Math.min(g.period, 4)}${g.period > 4 ? "+P" : ""} ${g.clock}` : "● En direct";
-  return revealed && g.ot ? "Final · Prolongation" : "Final";
+  if (g.state === "live") return revealed ? `Q${Math.min(g.period, 4)}${g.period > 4 ? " + prol." : ""} · ${g.clock}` : "En direct";
+  return revealed && g.ot ? "Final · prol." : "Final";
+}
+function clockHTML(g) {
+  const cls = g.state === "live" ? "live" : g.state === "pre" ? "pre" : "";
+  return `<span class="clock ${cls}" data-st="${g.id}">${statusText(g)}</span>`;
+}
+function heatHTML(lvl) {
+  return `<span class="heat" aria-hidden="true">${[0, 1, 2, 3, 4].map(k => `<i class="${k < lvl ? "on" : ""}" style="--k:${k}"></i>`).join("")}</span>`;
 }
 function recHTML(t, g) { // bilan : seulement avant le match ou une fois révélé (sinon il trahit le résultat)
   const show = g.state === "pre" || state.revealed.has(g.id) || settings.showAll;
   return show && t.record ? `(${t.record})` : "";
 }
-function artHTML(a, h) { // les grands logos en diagonale, l'ADN visuel du site
-  const img = t => t.logo && !DEMO ? `<img src="https://a.espncdn.com/i/teamlogos/nba/500/${t.logo}.png" alt="" loading="lazy" onerror="this.remove()">` : `<i>${t.tri}</i>`;
-  return `<div class="art" aria-hidden="true"><span class="a">${img(a)}</span><span class="b">${img(h)}</span></div><div class="scrim"></div>`;
-}
 function heroHTML(g, lvl) {
-  const a = g.teams.away, h = g.teams.home;
-  const label = g.state === "pre" ? "L'affiche de la nuit" : "Le match de la nuit";
-  const mid = g.state === "pre"
-    ? `<div class="sc pre"><span class="q">${hourLocal(g.date)}</span></div>`
-    : `${scHTML(g, "away")}<div class="hstat ${g.state === "live" ? "liv" : ""}" data-st="${g.id}">${statusText(g)}</div>${scHTML(g, "home")}
-       <div class="hint-eye" data-hint="${g.id}">👁 toucher pour revivre le match</div>`;
-  return `<div class="hero-zone">
-    <div class="hlabel"><span>${"🔥".repeat(Math.max(1, lvl - 2))} ${label}</span><i></i></div>
-    <article class="holo" data-card="${g.id}" style="--ca:${a.color};--cb:${h.color}">
-      <div class="holo-in">
-        ${artHTML(a, h)}
-        <div class="rar-tag">${RAR[lvl][1].replace(/^\S+ /, "")}</div>
-        <div class="hhour">${hourLocal(g.date)}</div>
-        <div class="hgrid">
-          <div class="hteam">${logoHTML(a)}<div class="tx">
-            <div class="hcity">${a.city}</div><div class="hname">${a.name}</div><div class="hrec" data-rec="${g.id}:away">${recHTML(a, g)}</div></div></div>
-          <div class="hmid">${mid}</div>
-          <div class="hteam right">${logoHTML(h)}<div class="tx">
-            <div class="hcity">${h.city}</div><div class="hname">${h.name}</div><div class="hrec" data-rec="${g.id}:home">${recHTML(h, g)}</div></div></div>
-        </div>
-        <div class="hfoot">
-          ${kfHTML(g)}
-          <div class="hbtns">${btnsHTML(g)}</div>
-        </div>
-      </div>
-      <div class="pz"></div>
-    </article></div>`;
+  const a = g.teams.away, h = g.teams.home, pre = g.state === "pre";
+  const side = (t, s) => `<div class="jteam">${logoHTML(t)}
+      <div class="plate"><small>${t.city}</small><b>${t.name}</b></div>
+      <div class="rec" data-rec="${g.id}:${s}">${recHTML(t, g)}</div></div>`;
+  const mid = pre
+    ? `<div class="jscore"><span class="st">Coup d'envoi</span>
+         <div class="leds"><span class="led time"><span class="v">${hourLocal(g.date).replace("h", ":")}</span></span></div>
+         <span class="hint">heure de chez toi</span></div>`
+    : `<div class="jscore"><span class="st ${g.state === "live" ? "live" : ""}" data-st="${g.id}">${statusText(g)}</span>
+         <div class="leds">${ledHTML(g, "away")}${ledHTML(g, "home")}</div>
+         <span class="hint" data-hint="${g.id}">Touche le score pour revivre le match</span></div>`;
+  const foot = kfHTML(g) + (pre ? "" : `<div class="acts">${btnsHTML(g)}</div>`);
+  return `<section class="jumbo" data-card="${g.id}" style="--ca:${a.color};--cb:${h.color}">
+    <div class="glow"></div>
+    <div class="jumbo-in">
+      <div class="beam l"></div><div class="beam r"></div>
+      <div class="jtop"><span class="tag">${pre ? "L'affiche de la nuit" : "Le match de la nuit"}</span>
+        <span class="when">${pre ? "Affiche" : RARL[lvl]} · ${hourLocal(g.date)}</span></div>
+      <div class="jmid">${side(a, "away")}${mid}${side(h, "home")}</div>
+      ${foot ? `<div class="jfoot">${foot}</div>` : ""}
+    </div>
+    <div class="pz"></div>
+  </section>`;
 }
 function btnsHTML(g) {
   if (g.state === "pre") return "";
-  const r = g.state === "post" ? `<button class="bt gold" data-resume="${g.id}"><span class="pl">▶</span> Résumé</button>` : "";
-  const x = g.state === "post" && findExtra(g) ? `<button class="bt extra" data-extra="${g.id}"><i class="fr"></i>NBA Extra</button>` : "";
-  return `${r}${x}<button class="bt" data-fiche="${g.id}">Stats ›</button>`;
+  const r = g.state === "post" ? `<button class="btn amber" data-resume="${g.id}"><span class="pl">▶</span>Résumé</button>` : "";
+  const x = g.state === "post" && findExtra(g) ? `<button class="btn extra" data-extra="${g.id}">NBA Extra</button>` : "";
+  return `${r}${x}<button class="btn" data-fiche="${g.id}">Stats</button>`;
 }
 function cardHTML(g, i) {
-  const a = g.teams.away, h = g.teams.home;
-  const lvl = watchLevel(g), [cls, lab] = RAR[lvl];
+  const a = g.teams.away, h = g.teams.home, pre = g.state === "pre";
+  const lvl = watchLevel(g);
   const fav = settings.fav && (a.id === settings.fav || h.id === settings.fav);
-  const trow = (t, side) => `<div class="trow">${logoHTML(t)}
-      <div class="tnm"><b>${t.name}</b><small data-rec="${g.id}:${side}">${recHTML(t, g)}</small>${t.id === settings.fav ? `<span class="star">★</span>` : ""}</div>
-      ${g.state === "pre" ? "<span></span>" : scHTML(g, side, true)}</div>`;
-  return `<article class="mcard ${cls}" data-card="${g.id}" style="--ca:${a.color};--cb:${h.color};animation-delay:${Math.min(i * 70, 500)}ms">
-    <div class="rband"></div>
-    <div class="mhead"><span class="mrar">${g.state === "pre" ? "Affiche " + "🔥".repeat(Math.max(0, lvl - 1)) : lab}</span>
-      <span class="mstat ${g.state === "live" ? "liv" : ""}" data-st="${g.id}">${statusText(g)}${fav ? " · ★" : ""}</span></div>
-    <div class="mteams">${trow(a, "away")}${trow(h, "home")}</div>
-    ${(g.state !== "pre" || keyFact(g)) ? `<div class="mfoot">${kfHTML(g)}<div class="mbtns">${btnsHTML(g)}</div></div>` : ""}
+  const row = (t, s) => `<div class="brow" data-row="${g.id}:${s}" style="--tc:${t.color}">
+      <span class="slab">${logoHTML(t)}</span>
+      <span class="nm"><b>${t.name}</b><small data-rec="${g.id}:${s}">${recHTML(t, g)}</small></span>
+      ${pre ? "" : ledHTML(g, s)}</div>`;
+  const kf = kfHTML(g), acts = btnsHTML(g);
+  return `<article class="bug r${lvl} ${g.state === "live" ? "is-live" : ""}" data-card="${g.id}" style="--d:${Math.min(i * 80, 640)}ms">
+    <div class="floor"></div>
+    <div class="bug-in">
+      <div class="bh">${clockHTML(g)}${fav ? `<span class="fav">★</span>` : ""}${heatHTML(lvl)}<span class="hl">${pre ? "Affiche" : RARL[lvl]}</span></div>
+      ${row(a, "away")}${row(h, "home")}
+      ${kf || acts ? `<div class="bf">${kf}${acts ? `<div class="acts">${acts}</div>` : ""}</div>` : ""}
+    </div>
     <div class="pz"></div>
   </article>`;
 }
 
-/* ---------- révélation ---------- */
-function countUp(el, v) {
+/* ---------- révélation : l'afficheur s'allume et le match défile en accéléré ---------- */
+function countUp(el, v, d) {
   if (RM) { el.textContent = v; return; }
-  const t0 = performance.now(), d = 650;
-  (function f(t) { const p = Math.min(1, (t - t0) / d), e = 1 - Math.pow(1 - p, 3); el.textContent = Math.round(v * e); if (p < 1) requestAnimationFrame(f); })(t0);
+  const t0 = performance.now(), dur = d || 650;
+  (function f(t) { const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3); el.textContent = Math.round(v * e); if (p < 1) requestAnimationFrame(f); })(t0);
 }
 function particles(card, gold) {
   if (RM || !card) return;
   const pz = card.querySelector(".pz"); if (!pz) return;
-  const cols = gold ? ["#f7e08a", "#f3c552", "#fff7d6", "#b8860b"] : ["#eef2fa", "#aeb8d0", "#fff"];
-  for (let k = 0; k < 26; k++) {
+  const cols = gold ? ["#f7e08a", "#f3c552", "#fff7d6", "#ffb02e"] : ["#eef2fa", "#aeb8d0", "#fff"];
+  for (let k = 0; k < 30; k++) {
     const s = document.createElement("i");
-    const a = Math.random() * Math.PI * 2, r = 60 + Math.random() * 160;
-    s.style.cssText = `--tx:${Math.cos(a) * r}px;--ty:${Math.sin(a) * r - 40}px;--pc:${cols[k % cols.length]};animation-delay:${Math.random() * 120}ms;width:${4 + Math.random() * 6}px;height:${4 + Math.random() * 6}px`;
-    pz.appendChild(s); setTimeout(() => s.remove(), 1100);
+    const a = Math.random() * Math.PI * 2, r = 70 + Math.random() * 170, sz = 6 + Math.random() * 9;
+    s.style.cssText = `--tx:${Math.cos(a) * r}px;--ty:${Math.sin(a) * r - 30}px;--pc:${cols[k % cols.length]};animation-delay:${Math.random() * 140}ms;width:${sz}px;height:${sz}px`;
+    pz.appendChild(s); setTimeout(() => s.remove(), 1200);
   }
 }
-function finishReveal(g, withParticles) {
-  for (const c of $$(`.sc[data-g="${g.id}"]`)) {
-    const t = g.teams[c.dataset.side];
-    const lose = g.state === "post" && t.score < g.teams[c.dataset.side === "away" ? "home" : "away"].score;
-    c.classList.add("rev"); c.classList.remove("lead", "trail"); c.classList.toggle("lose", lose);
-    c.querySelector(".n").textContent = t.score;
+function setLed(el, v, roll) {
+  const s = el.querySelector(".v"); s.textContent = v;
+  if (roll && !RM) { s.classList.remove("roll"); void s.offsetWidth; s.classList.add("roll"); }
+}
+function finishReveal(g, fx) {
+  const wside = g.state === "post" ? (g.teams.away.score > g.teams.home.score ? "away" : "home") : null;
+  for (const c of $$(`.led[data-g="${g.id}"]`)) {
+    const s = c.dataset.side;
+    c.classList.remove("hid", "lead", "trail");
+    c.removeAttribute("role"); c.removeAttribute("tabindex");
+    c.classList.toggle("win", wside === s); c.classList.toggle("lose", !!wside && wside !== s);
+    setLed(c, g.teams[s].score, false);
   }
-  for (const st of $$(`[data-st="${g.id}"]`)) { st.textContent = statusText(g, true); st.classList.remove("race"); }
-  for (const r of $$(`[data-rec^="${g.id}:"]`)) { const side = r.dataset.rec.split(":")[1]; r.textContent = recHTML(g.teams[side], g); }
+  for (const st of $$(`[data-st="${g.id}"]`)) st.textContent = statusText(g, true);
+  for (const r of $$(`[data-rec^="${g.id}:"]`)) { const s = r.dataset.rec.split(":")[1]; r.textContent = recHTML(g.teams[s], g); }
   const hint = $(`[data-hint="${g.id}"]`); if (hint) hint.style.visibility = "hidden";
-  if (withParticles) {
+  if (fx && !RM) {
+    if (wside) for (const r of $$(`[data-row="${g.id}:${wside}"]`)) { r.classList.remove("won"); void r.offsetWidth; r.classList.add("won"); }
     const lvl = watchLevel(g);
     if (lvl >= 4) particles($(`[data-card="${g.id}"]`), lvl === 5);
   }
+  updateRevealAll();
 }
 function reveal(id, instant) {
   const g = state.games.find(x => x.id === id);
   if (!g || g.state === "pre") return;
   const first = !state.revealed.has(id);
   state.revealed.add(id);
+  const cells = $$(`.led[data-g="${id}"]`);
   const la = g.teams.away.ls || [], lh = g.teams.home.ls || [];
   const canRace = first && !instant && !RM && g.state === "post" && la.length >= 4 && lh.length >= 4;
-  if (!canRace) { // révélation simple (direct, re-rendu, préférence « toujours montrer »…)
+  if (!canRace) {
     if (first && !instant && !RM) {
-      for (const c of $$(`.sc[data-g="${id}"]`)) { c.classList.add("rev"); countUp(c.querySelector(".n"), g.teams[c.dataset.side].score); }
+      cells.forEach(c => { c.classList.remove("hid"); c.classList.add("flash"); countUp(c.querySelector(".v"), g.teams[c.dataset.side].score); });
       setTimeout(() => finishReveal(g, true), 700);
     } else finishReveal(g, false);
     return;
   }
-  // ⭐ LE MATCH EN ACCÉLÉRÉ : les deux scores s'affrontent quart-temps par quart-temps
-  const cells = $$(`.sc[data-g="${id}"]`);
-  cells.forEach(c => c.classList.add("rev"));
-  const sts = $$(`[data-st="${id}"]`); sts.forEach(s => s.classList.add("race"));
+  // ⭐ LE MATCH EN ACCÉLÉRÉ : les deux afficheurs s'affrontent quart-temps par quart-temps
+  cells.forEach(c => { c.classList.remove("hid"); c.classList.add("flash"); setLed(c, 0, false); });
+  const sts = $$(`[data-st="${id}"]`);
   const cum = (arr, k) => arr.slice(0, k + 1).reduce((s, v) => s + v, 0);
   const n = Math.max(la.length, lh.length);
-  const stepMs = n > 4 ? 520 : 600;
+  const stepMs = n > 4 ? 480 : 540;
   let k = 0;
   const tick = () => {
     const sa = cum(la, k), sh = cum(lh, k);
-    const lab = k < 4 ? "Q" + (k + 1) : (n > 5 ? "Prol. " + (k - 3) : "Prolongation");
+    const lab = k < 4 ? `Fin Q${k + 1}` : (n > 5 ? `Prol. ${k - 3}` : "Prolongation");
     for (const c of cells) {
       const mine = c.dataset.side === "away" ? sa : sh, other = c.dataset.side === "away" ? sh : sa;
-      const el = c.querySelector(".n");
-      el.textContent = mine;
-      el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop");
+      setLed(c, mine, true);
       c.classList.toggle("lead", mine > other); c.classList.toggle("trail", mine < other);
     }
     sts.forEach(s => s.textContent = lab);
     k++;
     if (k < n) setTimeout(tick, stepMs);
-    else setTimeout(() => finishReveal(g, true), stepMs + 100);
+    else setTimeout(() => finishReveal(g, true), stepMs + 80);
   };
-  setTimeout(tick, 420); // le temps que les cases se retournent
+  setTimeout(tick, 260);
+}
+function updateRevealAll() {
+  const b = $("#revall"); if (!b) return;
+  const left = state.games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).length;
+  if (!left) { b.disabled = true; b.innerHTML = "✓ Nuit révélée"; }
 }
 
-/* ---------- vue « Matchs » (la nuit) ---------- */
+/* ---------- le brief : la nuit, comme une retransmission ---------- */
+function greeting() {
+  const hr = new Date().getHours();
+  return hr < 5 ? "Bonne nuit" : hr < 12 ? "Bonjour" : hr < 18 ? "Bon après-midi" : "Bonsoir";
+}
+function skyHTML(games, hero) {
+  const d1 = keyDate(state.night), d2 = keyDate(addDays(state.night, 1));
+  const cap = s => s[0].toUpperCase() + s.slice(1);
+  const big = EURO ? `${d1.getUTCDate()}<em>→</em>${d2.getUTCDate()}` : `${d1.getUTCDate()} ${FR({ month: "short" }).format(d1).replace(".", "")}`;
+  const small = EURO
+    ? `Nuit du ${FR({ weekday: "long" }).format(d1)} au ${FR({ weekday: "long" }).format(d2)} · ${FR({ month: "long" }).format(d2)}`
+    : cap(FR({ weekday: "long", month: "long" }).format(d1));
+  const nLive = games.filter(g => g.state === "live").length;
+  const nFin = games.filter(g => g.state === "post").length;
+  const started = nLive + nFin > 0;
+  const top = games.filter(g => watchLevel(g) >= 4).length;
+  const isLast = state.night === defaultNight();
+  const ctx = !games.length ? "Nuit sans match"
+    : nLive ? "La nuit est en cours"
+    : !started ? "La nuit à venir"
+    : isLast && nFin === games.length ? "Pendant que tu dormais"
+    : isLast ? "La nuit se termine" : "Retour sur la nuit";
+  const nr = started && !DEMO ? findNightRecap(state.night) : null;
+  const jr = started && !DEMO ? findJournal(state.night) : null;
+  const left = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).length;
+  const ctr = (n, lab, cls) => `<div class="ctr ${cls || ""}"><span class="led"><span class="v" data-count="${n}">0</span></span><small>${lab}</small></div>`;
+  return `<section class="sky">
+    <p class="greet"><i></i>${greeting()} — ${ctx}</p>
+    <div class="ntitle">
+      <h1><small>${small}</small><span>${big}</span></h1>
+      ${games.length ? `<div class="counters">
+        ${ctr(games.length, games.length > 1 ? "matchs" : "match")}
+        ${ctr(top, started ? "à voir" : "affiches")}
+        ${nLive ? ctr(nLive, "en direct", "live") : ""}
+      </div>` : ""}
+    </div>
+    ${started || nr || jr ? `<div class="actions">
+      ${started ? `<button class="btn amber big" id="revall" ${left ? "" : "disabled"}>${left ? "🎬 Révéler la nuit" : "✓ Nuit révélée"}</button>` : ""}
+      ${nr ? `<button class="btn" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
+      ${jr ? `<button class="btn extra" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin">NBA Extra · le journal</button>` : ""}
+    </div>` : ""}
+    <div class="nights" id="nights"></div>
+  </section>`;
+}
 async function renderNight(soft) {
+  const tok = ++state.tok;
   const main = $("#main");
   setURL();
-  renderChips();
-  if (!soft) main.innerHTML = `<div class="skel">${`<div class="ph" style="height:220px"></div><div class="ph" style="height:140px"></div><div class="ph" style="height:140px"></div>`}</div>`;
+  if (!soft) main.innerHTML = `<div class="skel"><div class="ph" style="height:160px"></div><div class="ph" style="height:330px"></div><div class="ph" style="height:180px"></div></div>`;
   let games;
   try { [games] = await Promise.all([scoreboard(state.night), loadVideos()]); }
-  catch (e) { main.innerHTML = `<p class="loadmsg">Impossible de joindre ESPN pour cette nuit. Réessaie dans un instant.</p>`; return; }
+  catch (e) { if (tok === state.tok) main.innerHTML = `<p class="loadmsg">Impossible de joindre ESPN pour cette nuit. Réessaie dans un instant.</p>`; return; }
+  if (tok !== state.tok) return;
   state.games = games;
   state.lastLoad = Date.now();
   if (settings.showAll) games.forEach(g => state.revealed.add(g.id));
   if (games.some(g => g.state !== "pre")) markSeen(state.night);
   if (games.some(g => g.state === "pre")) await loadPrevNight(state.night); // pour l'info « 2e soir »
-
-  if (!games.length) { main.innerHTML = `<div class="nightline"><h1 class="night">${nightTitle(state.night)}</h1></div><p class="loadmsg">Pas de match cette nuit-là. 🏖️</p>`; scheduleRefresh(); return; }
+  if (tok !== state.tok) return;
 
   const scored = games.map(g => ({ g, lvl: watchLevel(g) })).sort((x, y) => y.lvl - x.lvl || jitter(x.g.id) - jitter(y.g.id));
-  const hero = scored[0].lvl >= 4 ? scored[0] : null;
+  const hero = scored.length && scored[0].lvl >= 4 ? scored[0] : null;
+  const isFav = g => settings.fav && (g.teams.away.id === settings.fav || g.teams.home.id === settings.fav) ? 1 : 0;
   const rest = games.filter(g => !hero || g.id !== hero.g.id)
-    .sort((x, y) => {
-      const fx = settings.fav && (x.teams.away.id === settings.fav || x.teams.home.id === settings.fav) ? 1 : 0;
-      const fy = settings.fav && (y.teams.away.id === settings.fav || y.teams.home.id === settings.fav) ? 1 : 0;
-      return fy - fx || watchLevel(y) - watchLevel(x) || x.date - y.date;
-    });
-  const nLive = games.filter(g => g.state === "live").length;
-  const nFin = games.filter(g => g.state === "post").length;
-  const meta = [`${games.length} match${games.length > 1 ? "s" : ""}`,
-    nFin ? `${nFin} terminé${nFin > 1 ? "s" : ""}` : "",
-    nLive ? `<span class="liv">${nLive} en cours</span>` : ""].filter(Boolean).join(" · ");
+    .sort((x, y) => isFav(y) - isFav(x) || watchLevel(y) - watchLevel(x) || x.date - y.date);
+  const nPost = games.filter(g => g.state === "post").length;
 
-  const started = games.some(g => g.state !== "pre");
-  const nr = started && !DEMO ? findNightRecap(state.night) : null;
-  const jr = started && !DEMO ? findJournal(state.night) : null;
-  const eyebrow = nLive ? "La nuit est en cours" : (nFin === games.length ? "Pendant que tu dormais" : (nFin ? "La nuit se termine" : "La nuit à venir"));
-  main.innerHTML = `
-    <p class="eyebrow">${eyebrow}<i></i></p>
-    <div class="nightline"><h1 class="night">${nightTitle(state.night)}</h1>
-      <span class="nnav">
-        <button class="narrow" data-nav="-1" title="Nuit précédente">‹</button>
-        <button class="narrow" data-nav="1" title="Nuit suivante">›</button>
-        <button class="narrow" title="Choisir une date">📅<input type="date" id="dpick" value="${state.night.slice(0, 4)}-${state.night.slice(4, 6)}-${state.night.slice(6, 8)}"></button>
-      </span></div>
-    <div class="nsub"><span class="nmeta">${meta}</span>
-      <span class="nbtns">
-        ${nr ? `<button class="bt gold" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span> Résumé de la nuit</button>` : ""}
-        ${jr ? `<button class="bt extra" data-vplay="${jr.id}" data-vlabel="NBA Extra — le journal du matin"><i class="fr"></i>NBA Extra</button>` : ""}
-        ${started ? `<button class="btn-all" id="revall">🎬 Révéler la nuit</button>` : ""}
-      </span></div>
+  main.innerHTML = `${skyHTML(games, hero)}
+    ${!games.length ? `<p class="loadmsg">Pas de match cette nuit-là. Les joueurs dorment aussi. 🌙</p>` : ""}
     ${hero ? heroHTML(hero.g, hero.lvl) : ""}
     ${rest.length ? `<div class="sect"><h2>${hero ? "Les autres matchs" : "Les matchs de la nuit"}</h2><i></i></div>
-    <div class="grid">${rest.map((g, i) => cardHTML(g, i)).join("")}</div>` : ""}
-    ${games.filter(g => g.state === "post").length >= 2 ? `
-    <section class="hide-sect"><button class="teaser" id="mvpbtn"><span class="ti">💥</span>
-      <span><b>Le MVP et les grosses perfs de la nuit</b><small>Qui a tout cassé cette nuit ? Révèle-le quand tu es prêt.</small></span>
-      <span class="see">👁 Voir</span></button><div id="mvpbody"></div></section>` : ""}
+    <div class="bugs">${rest.map((g, i) => cardHTML(g, i)).join("")}</div>` : ""}
+    ${nPost >= 2 ? `<section class="stage" id="stage">
+      <button class="teaser" id="mvpbtn"><span><span class="q">Qui a <em>tout cassé</em> cette nuit ?</span>
+        <small>Le MVP de la nuit et les grosses perfs, calculés sur toutes les feuilles de match.</small></span>
+        <span class="btn amber big">Allumer les projecteurs</span></button>
+      <div id="mvpbody"></div></section>` : ""}
     <div id="nextstrip"></div>`;
 
   for (const id of state.revealed) reveal(id, true);
+  for (const v of $$("[data-count]")) countUp(v, +v.dataset.count, 900);
   const all = $("#revall");
   if (all) all.addEventListener("click", () => {
     // la cérémonie : du moins bon au meilleur, le match de la nuit en dernier
-    let order = games.filter(g => g.state !== "pre").sort((x, y) => watchLevel(x) - watchLevel(y));
-    if (hero) order = order.filter(g => g.id !== hero.g.id).concat(games.filter(g => g.id === hero.g.id));
+    let order = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).sort((x, y) => watchLevel(x) - watchLevel(y));
+    if (hero) order = order.filter(g => g.id !== hero.g.id).concat(order.filter(g => g.id === hero.g.id));
     let d = 0;
-    for (const g of order) { setTimeout(() => reveal(g.id), d); d += RM ? 0 : 800; }
+    for (const g of order) {
+      setTimeout(() => {
+        const el = $(`[data-card="${g.id}"]`);
+        if (el && !RM) el.scrollIntoView({ behavior: "smooth", block: "center" });
+        reveal(g.id);
+      }, d);
+      d += RM ? 0 : 1300;
+    }
   });
-  const dp = $("#dpick");
-  if (dp) dp.addEventListener("change", () => { if (dp.value) { state.night = dp.value.replaceAll("-", ""); state.revealed.clear(); renderNight(); } });
   const mb = $("#mvpbtn");
   if (mb) mb.addEventListener("click", () => loadMVP(mb));
   nextStrip();
@@ -575,7 +617,7 @@ async function renderNight(soft) {
   scheduleRefresh();
 }
 
-/* le MVP et les grosses perfs : calculés depuis les feuilles de match, derrière un teaser (spoil) */
+/* le MVP et les grosses perfs : calculés depuis les feuilles de match, sous les projecteurs (spoil) */
 const SUMCACHE = new Map();
 async function cachedSummary(id) {
   if (!SUMCACHE.has(id)) SUMCACHE.set(id, await summary(id));
@@ -583,32 +625,32 @@ async function cachedSummary(id) {
 }
 const gscore = p => p.pts + 1.2 * p.reb + 1.5 * p.ast;
 async function loadMVP(btn) {
-  btn.disabled = true; btn.querySelector(".see").textContent = "…";
+  btn.disabled = true;
+  const lab = btn.querySelector(".btn"); if (lab) lab.textContent = "Les projecteurs s'allument…";
   const posts = state.games.filter(g => g.state === "post");
   const all = [];
-  try {
-    const sums = await Promise.all(posts.map(g => cachedSummary(g.id).catch(() => null)));
-    sums.forEach((s, i) => { if (s) for (const p of s.players) all.push({ ...p, g: posts[i] }); });
-  } catch (e) { /* au pire, rien */ }
-  if (!all.length) { btn.querySelector(".see").textContent = "indisponible"; return; }
+  const sums = await Promise.all(posts.map(g => cachedSummary(g.id).catch(() => null)));
+  sums.forEach((s, i) => { if (s) for (const p of s.players) all.push({ ...p, g: posts[i] }); });
+  if (!all.length) { if (lab) lab.textContent = "Indisponible pour l'instant"; return; }
   all.sort((a, b) => gscore(b) - gscore(a));
   const mvp = all[0], t = team(mvp.tid);
   const opp = mvp.g.teams.away.id === mvp.tid ? mvp.g.teams.home : mvp.g.teams.away;
-  const others = all.slice(1, 7);
-  const photo = /^\d+$/.test(mvp.aid) ? `<img class="ph" src="https://a.espncdn.com/i/headshots/nba/players/full/${mvp.aid}.png" alt="" onerror="this.style.visibility='hidden'" style="--mc:${t.color}">` : `<span class="ph" style="--mc:${t.color}"></span>`;
+  const photo = /^\d+$/.test(mvp.aid) && !DEMO ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${mvp.aid}.png" alt="" onerror="this.remove()">` : "";
+  const stat = (v, l) => `<div class="stat"><span class="led"><span class="v" data-count="${v}">0</span></span><small>${l}</small></div>`;
   btn.hidden = true;
-  $("#mvpbody").innerHTML = `<div class="mvpwrap">
-    <div class="mvphead">${photo}
-      <div class="mvpwho"><span class="mvptag">MVP DE LA NUIT</span>
-        <h3>${mvp.full || mvp.name}</h3><small>${t.city} ${t.name} · contre ${opp.name}</small></div>
-      <div class="mvpline">
-        <div class="stile"><b>${mvp.pts}</b><small>points</small></div>
-        <div class="stile"><b>${mvp.reb}</b><small>rebonds</small></div>
-        <div class="stile"><b>${mvp.ast}</b><small>passes</small></div>
-        <div class="stile"><b>${mvp.fg || "–"}</b><small>aux tirs</small></div>
+  const body = $("#mvpbody");
+  body.innerHTML = `<div class="mvp">
+      <div class="card" style="--tc:${t.color}">${photo}${logoHTML(t)}</div>
+      <div style="min-width:0"><span class="tag">MVP de la nuit</span>
+        <h3>${mvp.full || mvp.name}</h3>
+        <div class="sub">${t.city} ${t.name} · contre les ${opp.name}</div>
+        <div class="row">${stat(mvp.pts, "points")}${stat(mvp.reb, "rebonds")}${stat(mvp.ast, "passes")}</div>
       </div></div>
-    <div class="opg">${others.map(p => { const pt = team(p.tid); return `<div class="op">${logoHTML(pt)}<b>${p.name}</b><small>${p.pts} pts · ${p.reb} rbd · ${p.ast} pas</small></div>`; }).join("")}</div>
-  </div>`;
+    <div class="perfs">${all.slice(1, 7).map((p, i) => {
+      const pt = team(p.tid);
+      return `<div class="perf" style="--tc:${pt.color};animation-delay:${200 + i * 70}ms"><span class="slab">${logoHTML(pt)}</span><b>${p.full || p.name}</b><small>${p.pts} PTS · ${p.reb} REB · ${p.ast} PAS</small></div>`;
+    }).join("")}</div>`;
+  for (const v of body.querySelectorAll("[data-count]")) countUp(v, +v.dataset.count, 1100);
 }
 
 /* la nuit prochaine, en un clin d'œil */
@@ -617,14 +659,14 @@ async function nextStrip() {
   const next = addDays(state.night, 1);
   let games;
   try { games = await scoreboard(next); } catch (e) { return; }
-  const pre = games.filter(g => g.state === "pre").sort((a, b) => a.date - b.date);
-  if (!pre.length || state.night !== defaultNight()) return;
+  const pre = games.filter(g => g.state === "pre");
+  if (!pre.length || state.night !== defaultNight() || !$("#nextstrip")) return;
   const top = [...pre].sort((x, y) => watchLevel(y) - watchLevel(x))[0];
-  el.innerHTML = `<div class="nextstrip"><span class="ti">🌙</span>
-    <b>La nuit prochaine</b>
-    <span>${pre.length} match${pre.length > 1 ? "s" : ""} · l'affiche : ${top.teams.away.name} @ ${top.teams.home.name} à ${hourLocal(top.date)}</span>
-    <button class="bt" data-night-go="${next}">Voir le programme ›</button></div>`;
+  $("#nextstrip").innerHTML = `<div class="next"><span class="tt">La nuit prochaine</span>
+    <span>${pre.length} match${pre.length > 1 ? "s" : ""} · l'affiche : ${top.teams.away.name} – ${top.teams.home.name} à ${hourLocal(top.date)}</span>
+    <button class="btn" data-night-go="${next}">Voir la nuit ›</button></div>`;
 }
+
 function markSeen(key) { if (!seen.has(key)) { seen.add(key); store.set("vues", [...seen].slice(-90)); } }
 
 /* mise à jour automatique pendant les matchs (le vrai direct, sans recharger) */
@@ -651,7 +693,9 @@ async function openFiche(id) {
       <button class="x" aria-label="Fermer">✕</button>
       <div class="fgrid">
         <div class="fteam">${logoHTML(a)}<b>${a.name}</b><small>${a.city} ${a.record ? `(${a.record})` : ""}</small></div>
-        <div class="fmid"><div class="fsc"><span class="${win === "home" ? "l" : ""}">${a.score}</span> – <span class="${win === "away" ? "l" : ""}">${h.score}</span></div>
+        <div class="fmid"><div class="leds">
+            <span class="led ${win === "away" ? "win" : win ? "lose" : ""}"><span class="v">${a.score}</span></span>
+            <span class="led ${win === "home" ? "win" : win ? "lose" : ""}"><span class="v">${h.score}</span></span></div>
           <div class="fstat">${statusText(g, true)}</div></div>
         <div class="fteam">${logoHTML(h)}<b>${h.name}</b><small>${h.city} ${h.record ? `(${h.record})` : ""}</small></div>
       </div>
@@ -663,13 +707,13 @@ async function openFiche(id) {
   catch (e) { sheet.querySelector(".fbody").innerHTML = `<p class="loadmsg">Impossible de charger les détails. Réessaie dans un instant.</p>`; return; }
   const body = sheet.querySelector(".fbody");
   body.innerHTML = `
-    ${s.series ? `<div class="fsect"><h3>Le film du match<i></i></h3>${chartHTML(g, s.series)}</div>` : ""}
-    ${s.quarters ? `<div class="fsect"><h3>Par quart-temps<i></i></h3>${quartersHTML(g, s)}</div>` : ""}
-    ${s.players.length ? `<div class="fsect"><h3>Les patrons du match<i></i></h3>${prosHTML(s.players.slice(0, 6))}</div>` : ""}
-    ${s.players.length ? `<div class="fsect"><h3>La feuille de match<i></i></h3>
+    ${s.series ? `<div class="fsect"><h3><span class="tag">Le film du match</span><i></i></h3>${chartHTML(g, s.series)}</div>` : ""}
+    ${s.quarters ? `<div class="fsect"><h3><span class="tag">Par quart-temps</span><i></i></h3>${quartersHTML(g, s)}</div>` : ""}
+    ${s.players.length ? `<div class="fsect"><h3><span class="tag">Les patrons du match</span><i></i></h3>${prosHTML(s.players.slice(0, 6))}</div>` : ""}
+    ${s.players.length ? `<div class="fsect"><h3><span class="tag">La feuille de match</span><i></i></h3>
       <p class="bx-hint">Touche un joueur pour voir tous ses tirs sur le terrain 🎯</p>
       ${boxHTML(g, s, "away")}${boxHTML(g, s, "home")}</div>` : ""}
-    <div class="fbtns">${g.state === "post" ? `<button class="bt gold" data-resume="${g.id}"><span class="pl">▶</span> Résumé vidéo</button>` : ""}</div>
+    <div class="fbtns">${g.state === "post" ? `<button class="btn amber big" data-resume="${g.id}"><span class="pl">▶</span>Résumé vidéo</button>` : ""}</div>
     <div class="next-note">Bientôt dans la fiche : face-à-face des deux équipes, avant-match détaillé, absents.</div>`;
   state.fiche = s; // pour la carte de tirs
   requestAnimationFrame(() => {
@@ -776,7 +820,7 @@ function courtSVG(shots, color) {
   const S = 10, W = 500, H = 400; // on montre jusqu'à 40 pieds (au-delà : exploits de fin de quart)
   const hoop = { x: 25 * S, y: 5.25 * S };
   const lines = `
-    <rect x="0" y="0" width="${W}" height="${H}" rx="10" fill="rgba(255,255,255,.025)"/>
+    <rect x="0" y="0" width="${W}" height="${H}" fill="#0d0f1c"/><rect x="${17 * S}" y="0" width="${16 * S}" height="${19 * S}" fill="${color}" opacity=".10"/>
     <rect x="${17 * S}" y="0" width="${16 * S}" height="${19 * S}" fill="none" stroke="rgba(255,255,255,.18)"/>
     <circle cx="${hoop.x}" cy="${19 * S}" r="${6 * S}" fill="none" stroke="rgba(255,255,255,.18)"/>
     <circle cx="${hoop.x}" cy="${hoop.y}" r="${.75 * S}" fill="none" stroke="#f3c552" stroke-width="2"/>
@@ -788,7 +832,7 @@ function courtSVG(shots, color) {
   const marks = shots.map((sh, i) => {
     const cx = sh.x * S, cy = Math.min(sh.y, 39) * S, d = RM ? 0 : i * step;
     return sh.m
-      ? `<circle class="shot" cx="${cx}" cy="${cy}" r="7" fill="${color}" stroke="#07070d" stroke-width="2" style="animation-delay:${d}ms"/>`
+      ? `<circle class="ring" cx="${cx}" cy="${cy}" r="7" fill="none" stroke="${color}" stroke-width="2" style="animation-delay:${d}ms"/><circle class="shot" cx="${cx}" cy="${cy}" r="7" fill="${color}" stroke="#fff" stroke-width="2" style="animation-delay:${d}ms"/>`
       : `<g class="shot" style="animation-delay:${d}ms"><line x1="${cx - 6}" y1="${cy - 6}" x2="${cx + 6}" y2="${cy + 6}" stroke="#8a8fa8" stroke-width="2.5"/><line x1="${cx - 6}" y1="${cy + 6}" x2="${cx + 6}" y2="${cy - 6}" stroke="#8a8fa8" stroke-width="2.5"/></g>`;
   }).join("");
   return { svg: `<svg class="court" viewBox="0 0 ${W} ${H}">${lines}${marks}</svg>`, step };
@@ -803,16 +847,16 @@ function openShots(key) {
   shotsheet.innerHTML = `<div class="setbody">
     <button class="x" aria-label="Fermer">✕</button>
     <div class="shead" style="--mc:${t.color}">${logoHTML(t)}<div><h2>${p.full || p.name}</h2><small>${t.city} ${t.name}</small></div>
-      <button class="bt replay" data-replay="${key}">↻ Rejouer</button></div>
+      <button class="btn replay" data-replay="${key}">↻ Rejouer</button></div>
     <div class="stiles">
-      <div class="stile"><b>${p.pts}</b><small>points</small></div>
-      <div class="stile"><b>${made}/${p.shots.length}</b><small>aux tirs</small></div>
-      <div class="stile"><b>${three.filter(x => x.m).length}/${three.length}</b><small>à 3 points</small></div>
-      <div class="stile"><b>${p.reb} · ${p.ast}</b><small>reb · passes</small></div>
+      <div class="stat"><span class="led"><span class="v">${p.pts}</span></span><small>points</small></div>
+      <div class="stat"><span class="led"><span class="v">${made}/${p.shots.length}</span></span><small>aux tirs</small></div>
+      <div class="stat"><span class="led"><span class="v">${three.filter(x => x.m).length}/${three.length}</span></span><small>à 3 pts</small></div>
+      <div class="stat"><span class="led"><span class="v">${p.reb}</span></span><small>rebonds</small></div>
     </div>
     ${svg}
     <div class="scount" id="scount">&nbsp;</div>
-    <div class="clegend"><span><i style="background:${t.color};border-radius:50%"></i>Tir réussi</span><span style="color:#8a8fa8">✕ Tir raté</span></div>
+    <div class="clegend"><span><i style="background:${t.color}"></i>Panier</span><span style="color:#8a8fa8">✕ Tir manqué</span></div>
   </div>`;
   shotovl.classList.add("open");
   // le compteur suit le replay : quart-temps, tirs, points sur tirs cumulés
@@ -832,43 +876,48 @@ function closeShots() { clearInterval(shotTimer); shotovl.classList.remove("open
 
 /* ---------- vue « Programme » ---------- */
 async function renderProgramme() {
+  const tok = ++state.tok;
   const main = $("#main");
   setURL();
-  main.innerHTML = `<div class="skel"><div class="ph" style="height:120px"></div><div class="ph" style="height:120px"></div></div>`;
+  main.innerHTML = `<section class="ptitle"><p class="greet"><i></i>Les 7 prochaines nuits</p><h1>Programme</h1></section>
+    <div class="skel"><div class="ph" style="height:120px"></div><div class="ph" style="height:120px"></div></div>`;
   const tonight = defaultNight();
   const keys = [...Array(7)].map((_, i) => addDays(tonight, i));
   let nights;
   try { nights = await Promise.all(keys.map(k => scoreboard(k).catch(() => []))); }
-  catch (e) { main.innerHTML = `<p class="loadmsg">Impossible de joindre ESPN.</p>`; return; }
-  main.innerHTML = keys.map((k, i) => {
+  catch (e) { if (tok === state.tok) main.innerHTML = `<p class="loadmsg">Impossible de joindre ESPN.</p>`; return; }
+  if (tok !== state.tok) return;
+  let n = 0;
+  main.innerHTML = `<section class="ptitle"><p class="greet"><i></i>Les 7 prochaines nuits</p><h1>Programme</h1></section>` + (keys.map((k, i) => {
     const games = nights[i].filter(g => g.state === "pre");
     if (!games.length) return "";
     const rows = games.sort((a, b) => a.date - b.date).map(g => {
       const a = g.teams.away, h = g.teams.home;
       const fav = settings.fav && (a.id === settings.fav || h.id === settings.fav);
       const hype = winpct(a.record) > .6 && winpct(h.record) > .6;
-      return `<div class="prow ${fav ? "fav" : ""}">
-        <span class="ph2">${hourLocal(g.date)}</span>
-        <span class="plg">${logoHTML(a)}${logoHTML(h)}</span>
-        <span class="pvs"><b>${a.name}</b><small>${a.record ? `(${a.record})` : ""} @</small><b>${h.name}</b><small>${h.record ? `(${h.record})` : ""}</small></span>
-        <span class="ptag">${fav ? "★ Mon équipe" : hype ? "🔥 L'affiche" : ""}</span></div>`;
+      return `<div class="prow ${fav ? "fav" : ""}" style="animation-delay:${Math.min(n++ * 35, 700)}ms">
+        <span class="led time"><span class="v">${hourLocal(g.date).replace("h", ":")}</span></span>
+        <span class="pt a"><small>${a.record ? `(${a.record})` : ""}</small><b>${a.name}</b>${logoHTML(a)}</span>
+        <span class="at">@</span>
+        <span class="pt h">${logoHTML(h)}<b>${h.name}</b><small>${h.record ? `(${h.record})` : ""}</small></span>
+        <span class="ptag">${fav ? `<span class="tag">★ Mon équipe</span>` : hype ? `<span class="tag">L'affiche</span>` : ""}</span></div>`;
     }).join("");
-    return `<section class="pnight"><h2>${nightTitle(k)}<small>${games.length} match${games.length > 1 ? "s" : ""}</small></h2>${rows}</section>`;
-  }).join("") || `<p class="loadmsg">Aucun match programmé sur les 7 prochaines nuits.</p>`;
+    return `<section class="pday"><h2>${nightTitle(k)}<small>${games.length} match${games.length > 1 ? "s" : ""}</small></h2>${rows}</section>`;
+  }).join("") || `<p class="loadmsg">Aucun match programmé sur les 7 prochaines nuits.</p>`);
 }
 
 /* ---------- classement (sans spoil : la dernière nuit est retirée tant qu'on ne l'inclut pas) ---------- */
 async function renderStandings() {
+  const tok = ++state.tok;
   const main = $("#main");
   setURL();
-  main.innerHTML = `<p class="eyebrow">La hiérarchie<i></i></p>
-    <div class="nightline"><h1 class="night">Le classement</h1></div>
+  main.innerHTML = `<section class="ptitle"><p class="greet"><i></i>La hiérarchie</p><h1>Classement</h1></section>
     <div class="skel"><div class="ph" style="height:300px"></div></div>`;
   let data;
   try {
     data = DEMO ? await window.DEMO.standings()
       : await fetchJSON("https://site.api.espn.com/apis/v2/sports/basketball/nba/standings");
-  } catch (e) { main.querySelector(".skel").outerHTML = `<p class="loadmsg">Impossible de charger le classement.</p>`; return; }
+  } catch (e) { if (tok === state.tok) main.innerHTML = `<p class="loadmsg">Impossible de charger le classement.</p>`; return; }
   if (state.cutLast === undefined) state.cutLast = !settings.showAll;
   // la coupure : on retire les résultats de la dernière nuit jouée
   let adj = new Map(), cutPossible = false;
@@ -882,6 +931,7 @@ async function renderStandings() {
       const al = adj.get(lId) || { w: 0, l: 0 }; al.l++; adj.set(lId, al);
     }
   } catch (e) { /* pas grave : pas de coupure possible */ }
+  if (tok !== state.tok) return;
   const cut = state.cutLast && cutPossible;
   const confs = [];
   for (const ch of data.children || []) {
@@ -900,25 +950,23 @@ async function renderStandings() {
   const pct = r => (r.w + r.l) ? (r.w / (r.w + r.l)) : 0;
   const confHTML = c => {
     const lead = c.rows[0];
-    return `<div class="conf"><h2>${c.name}</h2><div class="qtwrap"><table class="qt st">
-      <thead><tr><th>Équipe</th><th>V</th><th>D</th><th>%</th><th>Écart</th>${cut ? "" : "<th>Série</th>"}</tr></thead>
-      <tbody>${c.rows.map((r, i) => {
+    return `<div class="conf"><h2>${c.name}</h2>
+      <div class="srow head"><span></span><span></span><span>Équipe</span><span class="n">V</span><span class="n">D</span><span class="n">%</span><span class="n gb">Écart</span></div>
+      ${c.rows.map((r, i) => {
         const t = team(r.id);
         const gb = lead ? ((lead.w - r.w) + (r.l - lead.l)) / 2 : 0;
-        const srk = r.streak ? r.streak.replace(/^W/, "V").replace(/^L/, "D") : "–";
-        return `<tr class="${i < 6 ? "po" : i < 10 ? "pi" : ""} ${r.id === settings.fav ? "favrow" : ""}">
-          <td><span class="rk">${i + 1}</span>${logoHTML(t)}<span class="stn">${t.name}</span></td>
-          <td>${r.w}</td><td>${r.l}</td><td>${(pct(r) * 100).toFixed(1).replace(".", ",")}</td>
-          <td>${gb === 0 ? "–" : gb.toFixed(1).replace(".0", "").replace(".", ",")}</td>${cut ? "" : `<td>${srk}</td>`}</tr>`;
-      }).join("")}</tbody></table></div></div>`;
+        return `<div class="srow ${i < 6 ? "po" : i < 10 ? "pi" : ""} ${i === 5 || i === 9 ? "cutline" : ""} ${r.id === settings.fav ? "favrow" : ""}" style="--tc:${t.color};animation-delay:${i * 30}ms">
+          <span class="rk">${i + 1}</span>${logoHTML(t)}<span class="tn">${t.name}</span>
+          <span class="n">${r.w}</span><span class="n">${r.l}</span><span class="n pc">${(pct(r) * 100).toFixed(1).replace(".", ",")}</span>
+          <span class="n gb">${gb === 0 ? "–" : gb.toFixed(1).replace(".0", "").replace(".", ",")}</span></div>`;
+      }).join("")}</div>`;
   };
-  main.innerHTML = `<p class="eyebrow">La hiérarchie<i></i></p>
-    <div class="nightline"><h1 class="night">Le classement</h1></div>
+  main.innerHTML = `<section class="ptitle"><p class="greet"><i></i>La hiérarchie</p><h1>Classement</h1></section>
     <div class="cutbar">
       ${cutPossible ? `<span>${cut ? "Arrêté avant la dernière nuit, pour ne rien te gâcher." : "À jour, dernière nuit comprise."}</span>
       <button class="sw ${cut ? "" : "on"}" id="swcut" role="switch" aria-checked="${!cut}"></button>
       <span>Inclure la dernière nuit</span>` : `<span>Classement à jour.</span>`}
-      <span style="margin-left:auto">🟢 1-6 play-offs · 🟠 7-10 play-in</span></div>
+      <span class="legend"><span><i style="background:#43c47a"></i>Play-offs</span><span><i style="background:#e7a33c"></i>Play-in</span></span></div>
     <div class="standwrap">${confs.map(confHTML).join("")}</div>`;
   const sw = $("#swcut");
   if (sw) sw.addEventListener("click", () => { state.cutLast = !state.cutLast; renderStandings(); });
@@ -929,13 +977,13 @@ const setovl = $("#setovl"), setsheet = $("#setsheet");
 function openSettings() {
   const picker = Object.keys(TEAMS).map(id => {
     const t = team(+id);
-    return `<button class="tpk ${settings.fav === +id ? "on" : ""}" data-fav="${id}">${logoHTML(t)}<b>${t.name}</b></button>`;
+    return `<button class="tpk ${settings.fav === +id ? "on" : ""}" data-fav="${id}" style="--tc:${t.color}">${logoHTML(t)}<b>${t.name}</b></button>`;
   }).join("");
   setsheet.innerHTML = `<div class="setbody">
     <button class="x" aria-label="Fermer">✕</button>
     <h2>Réglages</h2>
     <div><h3>Mon équipe</h3><div class="tpick">${picker}</div>
-      ${settings.fav ? `<p style="margin:10px 0 0"><button class="bt" id="nofav">Ne plus suivre d'équipe</button></p>` : ""}</div>
+      ${settings.fav ? `<p style="margin:10px 0 0"><button class="btn" id="nofav">Ne plus suivre d'équipe</button></p>` : ""}</div>
     <div><h3>Spoilers</h3>
       <div class="swrow"><p>Toujours montrer les scores<small>Pour ceux qui ne craignent pas le spoil : tout est révélé d'office.</small></p>
         <button class="sw ${settings.showAll ? "on" : ""}" id="swall" role="switch" aria-checked="${settings.showAll}"></button></div></div>
@@ -956,14 +1004,13 @@ function openSettings() {
 }
 function closeSettings() {
   setovl.classList.remove("open"); document.body.style.overflow = "";
-  if (state.vue === "nuit") renderNight(true); else renderProgramme();
+  go(state.vue);
 }
 
 /* ---------- bande des nuits ---------- */
 function renderChips() {
   const el = $("#nights");
-  if (state.vue !== "nuit") { el.hidden = true; return; }
-  el.hidden = false;
+  if (!el) return;
   const tonight = defaultNight();
   const last = state.night > tonight ? state.night : tonight;
   const keys = [...Array(7)].map((_, i) => addDays(last, i - 6));
@@ -975,7 +1022,12 @@ function renderChips() {
     if (k === tonight && k === state.night && live) dot = `<span class="dot red"></span>`;
     else if (k < tonight && !seen.has(k)) dot = `<span class="dot gold"></span>`;
     return `<button class="chip ${cur ? "on" : ""}" data-night="${k}"><small>${c.s}</small><b>${c.b}</b>${dot}</button>`;
-  }).join("");
+  }).join("") + `<span class="nnav">
+      <button class="narrow" data-nav="-1" title="Nuit précédente">‹</button>
+      <button class="narrow" data-nav="1" title="Nuit suivante">›</button>
+      <button class="narrow" title="Choisir une date"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><input type="date" id="dpick" value="${state.night.slice(0, 4)}-${state.night.slice(4, 6)}-${state.night.slice(6, 8)}"></button></span>`;
+  const dp = $("#dpick");
+  if (dp) dp.addEventListener("change", () => { if (dp.value) { state.night = dp.value.replaceAll("-", ""); state.revealed.clear(); renderNight(); } });
   // sur téléphone, centrer la bande sur la nuit affichée
   const on = el.querySelector(".chip.on");
   if (on) el.scrollLeft = on.offsetLeft - (el.clientWidth - on.offsetWidth) / 2;
@@ -993,12 +1045,15 @@ function go(vue) {
   state.vue = vue;
   $$(".tab[data-vue]").forEach(t => t.classList.toggle("on", t.dataset.vue === vue));
   if (vue === "nuit") renderNight();
-  else { $("#nights").hidden = true; if (vue === "classement") renderStandings(); else renderProgramme(); }
+  else if (vue === "classement") renderStandings(); else renderProgramme();
+  const m = $("#main"); // petite entrée en scène à chaque changement d'onglet
+  if (m && !RM) { m.style.animation = "none"; void m.offsetWidth; m.style.animation = ""; }
+  window.scrollTo({ top: 0, behavior: RM ? "auto" : "smooth" });
 }
 
 /* ---------- événements globaux ---------- */
 document.addEventListener("click", e => {
-  const sc = e.target.closest(".sc:not(.rev):not(.pre)");
+  const sc = e.target.closest(".led.hid");
   if (sc) { reveal(sc.dataset.g); return; }
   const f = e.target.closest("[data-fiche]");
   if (f) { openFiche(f.dataset.fiche); return; }
@@ -1034,7 +1089,7 @@ document.addEventListener("keydown", e => {
     if (setovl.classList.contains("open")) closeSettings();
   }
   if (e.key === "Enter" || e.key === " ") {
-    const sc = e.target.closest && e.target.closest(".sc:not(.rev):not(.pre)");
+    const sc = e.target.closest && e.target.closest(".led.hid");
     if (sc) { e.preventDefault(); reveal(sc.dataset.g); }
   }
 });
@@ -1049,15 +1104,15 @@ function welcome() {
   if (store.get("hello", false)) return;
   const w = $("#welcome");
   w.hidden = false;
-  w.innerHTML = `<div class="welcome"><p><b>Bienvenue !</b> Ici, aucun score ne s'affiche tant que <b>tu</b> ne l'as pas demandé :
-    touche les cases « ? » pour révéler un match, et seulement celui-là. Bonne nuit NBA 🌙</p>
-    <button class="bt gold" id="hellok">C'est parti</button></div>`;
+  w.innerHTML = `<div class="welcome"><p><b>Nouveau sur Nocturne ?</b> Aucun score ne s'allume tant que <b>tu</b> ne le demandes pas :
+    touche un afficheur pour revivre ce match, et seulement celui-là.</p>
+    <button class="btn amber" id="hellok">Compris</button></div>`;
   $("#hellok").addEventListener("click", () => { store.set("hello", true); w.hidden = true; });
 }
 
 /* ---------- démarrage ---------- */
 (function init() {
-  if (DEMO) { $("#demopill").hidden = false; $("#demopill2").hidden = false; }
+  if (DEMO) $("#demopill").hidden = false;
   const nuit = QS.get("nuit");
   state.night = nuit && /^\d{4}-\d{2}-\d{2}$/.test(nuit) ? nuit.replaceAll("-", "") : defaultNight();
   welcome();

@@ -339,6 +339,10 @@ function ytURL(g) { // filet de sécurité : la recherche YouTube
 }
 const vidovl = $("#vidovl"), vplayer = $("#vplayer");
 function playVideo(vid, label) { // lecteur intégré, sans quitter le site
+  // beIN SPORTS interdit la lecture de ses vidéos hors de YouTube (« Vidéo non disponible ») : NBA Extra s'ouvre sur YouTube.
+  if (VIDS && VIDS.some(v => v.id === vid && v.c === "bein")) {
+    window.open("https://www.youtube.com/watch?v=" + vid, "_blank", "noopener"); return;
+  }
   vplayer.innerHTML = `
     <button class="x" aria-label="Fermer">✕</button>
     <div class="vframe"><iframe src="https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0&hl=fr"

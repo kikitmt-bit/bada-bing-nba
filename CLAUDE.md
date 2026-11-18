@@ -52,7 +52,8 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   « Tout révéler » = cérémonie du moins bon au meilleur, le match de la nuit en dernier (800 ms d'écart).
 - **NBA Extra de retour** : bouton par match (titre beIN « Résumé : X @ Y », `findExtra`), journal du matin
   (« REPLAY - NBA Extra (13/11) » = nuit du 12 au 13, `findJournal`) et « Résumé de la nuit » NBA (`findNightRecap`,
-  « nightly recap » + date) en tête de page ; tout se lit dans le lecteur intégré (`playVideo`).
+  « nightly recap » + date) en tête de page ; lecteur intégré (`playVideo`), SAUF les vidéos beIN (`c: "bein"`) : beIN bloque
+  leur lecture hors de YouTube (« Vidéo non disponible »), donc NBA Extra s'ouvre dans un nouvel onglet YouTube (app sur téléphone).
 - Fiche : feuille de match complète (Min/Tirs/3 pts/Reb/Pas/Pts) ; clic sur un joueur = **carte de tirs animée**
   (tirs ESPN `plays[].coordinate`, panier en (25, 5.25) pieds, moitiés de terrain repliées, lancers francs exclus),
   replay ~5 s avec compteur en direct (quart-temps, n° de tir, points cumulés) + bouton « ↻ Rejouer ».

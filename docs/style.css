@@ -792,3 +792,54 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .sky.one .narrow.cal{width:34px;height:34px}
   .sky.one .actions{margin:0;width:100%}
 }
+
+/* ---- L'essentiel de la nuit ---- */
+.ess{padding:4px 0 26px}
+.ess-h{display:flex;align-items:center;gap:14px;padding:6px 28px 12px}
+.ess-h i{flex:1;height:1px;background:var(--line)}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:0 28px 18px}
+.fact{position:relative;min-width:0;display:flex;flex-direction:column;gap:6px;padding:16px 18px 14px;overflow:hidden;isolation:isolate;
+  background:linear-gradient(115deg,color-mix(in srgb,var(--ca) 42%,#05060c) 0 50%,color-mix(in srgb,var(--cb) 42%,#05060c) 50% 100%);
+  clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));animation:pagein .5s backwards}
+.fact::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(5,6,12,.86),rgba(5,6,12,.55)),
+  repeating-linear-gradient(115deg,transparent 0 6px,rgba(255,255,255,.025) 6px 7px)}
+.fact.has-ph{padding-right:96px}
+.fph{position:absolute;right:-6px;bottom:0;width:110px;height:auto;z-index:-1;opacity:.92;filter:drop-shadow(0 0 12px rgba(0,0,0,.6))}
+.ftag{font:800 11px var(--disp);letter-spacing:.22em;text-transform:uppercase;color:var(--amber)}
+.fact h4{margin:0;font:900 clamp(19px,1.7vw,24px)/1.05 var(--disp);text-transform:uppercase;letter-spacing:.01em}
+.fact p{margin:0;color:var(--ink2);font-size:13px}
+.fsc{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:6px}
+.fsc .lg{width:26px;height:26px;font-size:9px}
+.fsc b{font:900 20px var(--led);color:rgba(255,176,46,.45);font-variant-numeric:tabular-nums}
+.fsc b.w{color:var(--amber);text-shadow:0 0 8px rgba(255,176,46,.6)}
+.fsc i{color:var(--ink3);font-style:normal}
+.essrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;padding:8px 28px 0}
+.essb{min-width:0;background:rgba(255,255,255,.035);padding:14px 16px;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%)}
+.essb h4{margin:0 0 10px;font:900 13px var(--disp);letter-spacing:.2em;text-transform:uppercase;color:var(--ink2)}
+.essn{margin:0;color:var(--ink3);font-size:13px}
+.frl,.mvl,.hul{display:grid;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line)}
+.essb h4+div{border-top:0}
+.frl{grid-template-columns:44px minmax(0,1fr) auto}
+.frp{width:44px;height:44px;border-radius:0;overflow:hidden;background:color-mix(in srgb,var(--tc) 55%,#05060c);clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
+.frp img{width:150%;margin-left:-25%;margin-top:2px}
+.frn,.mvn{min-width:0;display:flex;flex-direction:column}
+.frn b,.mvn b{font:800 15px var(--disp);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frn small,.mvn small{color:var(--ink3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frs{display:flex;align-items:baseline;gap:3px;white-space:nowrap}
+.frs b{font:800 17px var(--disp);color:var(--amber);margin-left:6px}
+.frs small{color:var(--ink3);font-size:11px}
+.mvl,.hul{grid-template-columns:30px minmax(0,1fr) auto}
+.mvl .lg,.hul .lg{width:30px;height:30px;font-size:10px}
+.mvr{display:flex;align-items:center;gap:6px;font:800 15px var(--disp);white-space:nowrap}
+.mvr i{font-style:normal;color:var(--ink3)}
+.mvr em{font-style:normal;font-size:11px}
+.mvl.up .mvr em,.mvl.up .mvr b{color:#47d17a}
+.mvl.down .mvr em,.mvl.down .mvr b{color:#ff6b6b}
+@media (max-width:1100px){ .facts{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:900px){ .facts{grid-template-columns:1fr;padding:0 16px 16px} .ess-h{padding:6px 16px 10px} .essrow{padding:8px 16px 0} }
+/* un bloc seul sur sa ligne (souvent les Français) : ses lignes en 2 colonnes */
+@media (min-width:901px){
+  .essb:only-child{display:grid;grid-template-columns:1fr 1fr;column-gap:28px}
+  .essb:only-child h4,.essb:only-child .essn{grid-column:1/-1}
+  .essb:only-child h4+div+div{border-top:0}
+}

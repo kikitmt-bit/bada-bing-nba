@@ -116,6 +116,14 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
 - Fiche : feuille de match complète (Min/Tirs/3 pts/Reb/Pas/Pts) ; clic sur un joueur = **carte de tirs animée**
   (tirs ESPN `plays[].coordinate`, panier en (25, 5.25) pieds, moitiés de terrain repliées, lancers francs exclus),
   replay ~5 s avec compteur en direct (quart-temps, n° de tir, points cumulés) + bouton « ↻ Rejouer ».
+- **« L'essentiel de la nuit » (20/11, remplace « Qui a tout cassé »)** : une seule rubrique, cachée derrière « Voir l'essentiel »
+  (seule rubrique qui assume les résultats). `loadMVP` : **faits marquants** (`nightFacts`, 6 max, 2 par match/type : surprise =
+  bilans d'avant-match (`moins`) écart ≥ 0,2 ; prolongation / thriller ≤ 3 pts ; remontée ≥ 15 pts (`series`) ; démonstration ≥ 25 ;
+  40 pts, triple-double, 8 paniers à 3 ; cartes `factHTML` aux 2 couleurs + score LED + photo pour les perfs) ; **MVP + 6 perfs** ;
+  **Les Français** (lieu de naissance / citoyenneté des effectifs ESPN `teams/<id>/roster`, `frenchIds`, gardé 7 jours en
+  `bb2_fr`) ; **ça a bougé au classement** (dernière nuit seulement : classement ESPN actuel vs moins les résultats de la nuit,
+  `standingMoves`, ≥ 2 places ou changement de zone) ; **sortis blessés** (blessés du matin absents de la photo d'avant-match).
+  Articles accordés : `le`/`du`/`au` (le Jazz, le Magic, le Heat, le Thunder ; les autres au pluriel).
 - **Infos clés d'avant-match (20/11, `keyFacts`, TOUJOURS 3 par match si possible, place de 3 lignes réservée : tuiles de même
   hauteur)** : grosse absence / incertain (star ou meilleur marqueur dans ESPN `/injuries`), choc au sommet / grand favori / pile ou
   face, duel de stars (2 × ≥ 25 pts) ou homme en forme (≥ 26 pts), fatigue (2e soir, ou les deux équipes), forteresse / mal chez eux /

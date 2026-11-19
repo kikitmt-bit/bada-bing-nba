@@ -60,7 +60,10 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   connexion de particulier : pas de blocage YouTube), en lit le chrono 1 image / 2 s (`chrono_video.py` : même lecture en 2 temps
   que le site, puis plus longue suite chronologique) et publie `v2/chrono/<id>.json` (`pts` = [seconde vidéo, quart, secondes
   restantes]) + `v2/chrono/index.json` sur la branche data (clé de déploiement « Téléphone serveur Nocturne », écriture).
-  ~7 min par résumé. Format : H.264 720p 30 i/s d'abord (l'AV1 fait planter le décodeur du téléphone) ; yt-dlp utilise Node.js
+  ~10-15 min par résumé. Format : 720p OBLIGATOIRE (en 480p le bandeau est illisible), H.264 puis VP9 (l'AV1 fait planter le
+  décodeur du téléphone). Bandeaux testés : NBC (chrono au-dessus de « 1ST ») et ESPN (tout sur une ligne, chrono sur fond blanc,
+  « 2ND » illisible → quart-temps déduit de la chronologie dans `nettoyer`, le plus tôt en cas de doute). Garde-fou : publiée
+  seulement si ≥ 40 points et jusqu'au 4e quart-temps. yt-dlp utilise Node.js
   (`~/.config/yt-dlp/config` = `--js-runtimes node`, sinon téléchargement bridé). Journal : `~/nocturne/boucle.log`, état : `etat.json`. Le site (`attach` → `prepLoop`) suit la position du lecteur YouTube (postMessage) et affiche le dernier point
   déjà passé (jamais en avance) : aucun partage d'écran, marche aussi sur téléphone. Sans table : mode direct ci-dessous (PC),
   sinon pas de panneau sur téléphone.

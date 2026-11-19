@@ -437,8 +437,8 @@ function refreshReplays() { // l'index des vidéos analysées arrive parfois apr
 function btnsHTML(g) {
   if (g.state === "pre") return "";
   const r = g.state === "post" ? `<button class="btn amber" data-resume="${g.id}">${replayLabel(g)}</button>` : "";
-  const x = g.state === "post" && findExtra(g) ? `<button class="btn extra" data-extra="${g.id}">Replay FR</button>` : "";
-  return `${r}${x}<button class="btn" data-fiche="${g.id}">Stats</button>`;
+  // plus de « Replay FR » par match (choix de Kiki, 20/11) : seul reste le journal NBA Extra du matin, en tête de la nuit
+  return `${r}<button class="btn" data-fiche="${g.id}">Stats</button>`;
 }
 function cardHTML(g, i) {
   const a = g.teams.away, h = g.teams.home, pre = g.state === "pre";

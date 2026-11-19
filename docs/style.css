@@ -753,6 +753,32 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .sky.one .nnav{display:flex;align-items:center;align-self:center;margin-left:4px}
 .sky.one .narrow.cal{width:40px;height:40px;background:rgba(255,255,255,.05);clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%)}
 .sky.one .actions{margin:0 0 0 auto}
+/* tout s'aligne sur le centre des chiffres de la nuit affichée : on cale les éléments sur le bas de la ligne */
+@media (min-width:901px){
+  .sky.one .skyrow{align-items:flex-end}
+  .sky.one .chip{padding:4px 26px 10px}
+  .sky.one .chip.on b{font-size:42px}
+  .sky.one .nnav{align-self:flex-end;margin:0 0 9px 6px}
+  .sky.one .narrow.cal{width:46px;height:46px}
+  .sky.one .narrow.cal svg{width:20px;height:20px}
+  .sky.one .actions{align-self:flex-end;align-items:center;margin-bottom:9px;gap:12px}
+  .sky.one .actions .btn{padding:10px 26px 9px;font-size:14px}
+  .sky.one .actions .btn.big{padding:13px 38px 12px;font-size:17px}
+  .sky.one .actions .btn.extra{padding-left:40px}
+}
+@media (min-width:901px){
+  /* les boutons se partagent toute la place restante : plus de trou entre les nuits et les boutons */
+  .sky.one .actions{flex:1 1 auto;margin-left:12px}
+  .sky.one .actions .btn{flex:1 1 auto;justify-content:center}
+  .sky.one .actions .btn.big{flex-grow:1.4}
+}
+@media (min-width:901px) and (max-width:1400px){
+  .sky.one .chip{padding:4px 16px 10px}
+  .sky.one .actions{gap:8px}
+  .sky.one .actions .btn{padding:10px 18px 9px;font-size:13px}
+  .sky.one .actions .btn.big{padding:13px 26px 12px;font-size:16px}
+  .sky.one .actions .btn.extra{padding-left:36px}
+}
 @media (max-width:900px){
   .sky.one .skyrow{gap:12px}
   .sky.one .nights{width:100%;justify-content:space-between}

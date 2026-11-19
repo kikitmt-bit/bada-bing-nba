@@ -25,6 +25,8 @@ liseré de côté ») — à respecter dans toute nouvelle page** : l'habillage 
   le contexte « Retour sur la nuit »… en petite étiquette ambre au-dessus) · nuit d'après] [calendrier] … [Révéler la nuit, Résumé de
   la nuit, journal NBA Extra]. `renderChips` ne montre plus que ces 3 nuits (libellés « Nuit dernière », « Cette nuit », « Demain »
   si c'est le cas) ; plus de flèches ‹ › ni de grande date « 18 → 19 » à part. Compteurs supprimés. Match de la nuit EN GRAND dessous.
+  Sur PC : calendrier et boutons CENTRÉS sur les chiffres de la nuit affichée (ligne calée en bas, marge 9 px), et les 3 boutons
+  s'élargissent pour remplir la place (`flex:1`, plus de trou au milieu) ; resserré entre 900 et 1400 px de large (validé par Kiki).
 - Le brief (`skyHTML`) : salutation selon l'heure + contexte, grande date « 16 → 17 », compteurs LED animés (matchs, à voir, en direct),
   « 🎬 Révéler la nuit » = cérémonie qui défile et révèle du moins bon au meilleur (1,3 s d'écart, le match de la nuit en dernier),
   bande des nuits ; « Le match de la nuit » = **jumbotron** (`heroHTML`) coupé en diagonale aux 2 couleurs, grands logos, projecteurs

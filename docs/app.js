@@ -853,12 +853,14 @@ async function loadMVP(btn) {
   const factsBlock = facts.length ? `<div class="ess-h"><span class="tag">Les faits marquants</span><i></i></div><div class="facts">${facts.map(factHTML).join("")}</div>` : "";
   // les Français
   const fr = all.filter(p => frIds.has(p.aid)).sort((a, b) => gscore(b) - gscore(a));
-  const frBlock = `<div class="essb"><h4>Les Français de la nuit</h4>${fr.length ? fr.map(p => {
+  const frCols = fr.length <= 5 ? Math.max(1, fr.length) : fr.length === 6 ? 3 : 4; // 1 à 5 sur une ligne, 6 = 2 × 3, puis 4 par ligne
+  const frBlock = `<div class="ess-h"><span class="tag">Les Français de la nuit</span><i></i></div>${fr.length ? `<div class="frg" style="--n:${frCols}">${fr.map((p, i) => {
       const pt = team(p.tid), og = p.g.teams.away.id === p.tid ? p.g.teams.home : p.g.teams.away;
       const ph = /^\d+$/.test(p.aid) && !DEMO ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${p.aid}.png" alt="" loading="lazy" onerror="this.remove()">` : "";
-      return `<div class="frl" style="--tc:${pt.color}"><span class="frp">${ph}</span><span class="frn"><b>${p.full || p.name}</b><small>${pt.tri} contre ${og.tri} · ${p.min} min</small></span>
-        <span class="frs"><b>${p.pts}</b><small>pts</small><b>${p.reb}</b><small>reb</small><b>${p.ast}</b><small>pd</small></span></div>`;
-    }).join("") : `<p class="essn">Aucun Français sur les parquets cette nuit.</p>`}</div>`;
+      return `<div class="frt" style="--tc:${pt.color};animation-delay:${i * 60}ms"><span class="frp">${ph}${logoHTML(pt)}</span>
+        <span class="frn"><b>${p.full || p.name}</b><small>${pt.tri} contre ${og.tri} · ${p.min} min</small>
+        <span class="frs"><b>${p.pts}</b><small>pts</small><b>${p.reb}</b><small>reb</small><b>${p.ast}</b><small>pd</small></span></span></div>`;
+    }).join("")}</div>` : `<p class="essn pad">Aucun Français sur les parquets cette nuit.</p>`}`;
   // le classement
   const mvBlock = moves.length ? `<div class="essb"><h4>Ça a bougé au classement</h4>${moves.map(m => {
       const tt = team(m.id), up = m.a < m.b;
@@ -877,7 +879,9 @@ async function loadMVP(btn) {
   const huBlock = hurt.length ? `<div class="essb"><h4>Sortis blessés</h4>${hurt.slice(0, 5).map(({ o, T }) => `<div class="hul">${logoHTML(T)}<span class="mvn"><b>${o.n}</b><small>${o.ty ? blessFr(o.ty) : "blessure"} · ${/^out$/i.test(o.st) ? "forfait" : "incertain"} pour la suite</small></span></div>`).join("")}</div>` : "";
   btn.hidden = true;
   const body = $("#mvpbody");
-  body.innerHTML = `<div class="ess">${factsBlock}${mvpBlock}<div class="essrow">${frBlock}${mvBlock}${huBlock}</div></div>`;
+  const more = mvBlock || huBlock ? `<div class="ess-h"><span class="tag">Et aussi</span><i></i></div><div class="essrow">${mvBlock}${huBlock}</div>` : "";
+  body.innerHTML = `<div class="ess"><div class="ess-top"><span class="q">L'essentiel <em>de la nuit</em></span><small>Tout ce qu'il faut retenir, en une minute</small></div>
+    ${factsBlock}<div class="ess-h"><span class="tag">Le MVP et les grosses perfs</span><i></i></div>${mvpBlock}${frBlock}${more}</div>`;
   for (const v of body.querySelectorAll("[data-count]")) countUp(v, +v.dataset.count, 1100);
 }
 

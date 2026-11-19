@@ -124,6 +124,11 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   `bb2_fr`) ; **ça a bougé au classement** (dernière nuit seulement : classement ESPN actuel vs moins les résultats de la nuit,
   `standingMoves`, ≥ 2 places ou changement de zone) ; **sortis blessés** (blessés du matin absents de la photo d'avant-match).
   Articles accordés : `le`/`du`/`au` (le Jazz, le Magic, le Heat, le Thunder ; les autres au pluriel).
+  Hiérarchie (demande de Kiki : « trop fouillis ») : le titre « L'essentiel de la nuit » reste une fois ouvert (`.ess-top`), puis
+  une étiquette + un trait par partie (`.ess-h`) : Les faits marquants · Le MVP et les grosses perfs · Les Français de la nuit ·
+  Et aussi (classement, blessés). Français = **tuiles** (`.frt` : photo cadrée dans un carré aux couleurs de l'équipe + logo,
+  nom, équipe · minutes, stats dessous), `--n` colonnes : 1 à 5 sur une ligne, 6 = 2 × 3, puis 4 ; 370 px max par tuile ;
+  2 par ligne sur téléphone (photo au-dessus).
 - **Infos clés d'avant-match (20/11, `keyFacts`, TOUJOURS 3 par match si possible, place de 3 lignes réservée : tuiles de même
   hauteur)** : grosse absence / incertain (star ou meilleur marqueur dans ESPN `/injuries`), choc au sommet / grand favori / pile ou
   face, duel de stars (2 × ≥ 25 pts) ou homme en forme (≥ 26 pts), fatigue (2e soir, ou les deux équipes), forteresse / mal chez eux /

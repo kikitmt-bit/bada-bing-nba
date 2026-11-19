@@ -643,18 +643,17 @@ function skyHTML(games, hero, scored) {
   const nr = started && !DEMO ? findNightRecap(state.night) : null;
   const jr = started && !DEMO ? findJournal(state.night) : null;
   const left = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).length;
-  // en-tête sur 2 lignes (20/11, choix de Kiki) : [salutation / nuit du…] [date en grand] [boutons], puis la frise des nuits
-  return `<section class="sky">
+  // en-tête sur UNE ligne (20/11, carte blanche de Kiki) : la nuit d'avant, celle affichée, celle d'après, le calendrier,
+  // puis les boutons. Le contexte (« Retour sur la nuit »…) passe en petite étiquette au-dessus de la nuit affichée.
+  return `<section class="sky one">
     <div class="skyrow">
-      <div class="skyt"><p class="greet"><i></i>${greeting()} — ${ctx}</p><h1 class="nsub">${small}</h1></div>
-      <div class="skyd">${big}</div>
+      <div class="nights" id="nights" data-ctx="${ctx}"></div>
       ${started || nr || jr ? `<div class="actions">
       ${started ? `<button class="btn amber big" id="revall" ${left ? "" : "disabled"}>${left ? "🎬 Révéler la nuit" : "✓ Nuit révélée"}</button>` : ""}
       ${nr ? `<button class="btn" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
       ${jr ? `<button class="btn extra" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin">NBA Extra · le journal</button>` : ""}
       </div>` : ""}
     </div>
-    <div class="nights" id="nights"></div>
   </section>`;
 }
 async function renderNight(soft) {
@@ -1115,8 +1114,8 @@ function renderChips() {
   const el = $("#nights");
   if (!el) return;
   const tonight = defaultNight();
-  const last = state.night > tonight ? state.night : tonight;
-  const keys = [...Array(7)].map((_, i) => addDays(last, i - 6));
+  // seulement 3 nuits : celle d'avant, celle affichée, celle d'après ; le calendrier pour aller plus loin
+  const keys = [addDays(state.night, -1), state.night, addDays(state.night, 1)];
   const live = state.games.some(g => g.state === "live");
   el.innerHTML = keys.map(k => {
     const c = chipText(k);
@@ -1124,16 +1123,12 @@ function renderChips() {
     let dot = "";
     if (k === tonight && k === state.night && live) dot = `<span class="dot red"></span>`;
     else if (k < tonight && !seen.has(k)) dot = `<span class="dot gold"></span>`;
-    return `<button class="chip ${cur ? "on" : ""}" data-night="${k}"><small>${c.s}</small><b>${c.b}</b>${dot}</button>`;
+    const lab = k === tonight ? (EURO ? "Cette nuit" : "Ce soir") : k === addDays(tonight, -1) ? (EURO ? "Nuit dernière" : "Hier") : k === addDays(tonight, 1) ? "Demain" : c.s;
+    return `<button class="chip ${cur ? "on" : ""}" data-night="${k}">${cur ? `<em>${el.dataset.ctx || ""}</em>` : ""}<small>${lab}</small><b>${c.b}</b>${dot}</button>`;
   }).join("") + `<span class="nnav">
-      <button class="narrow" data-nav="-1" title="Nuit précédente">‹</button>
-      <button class="narrow" data-nav="1" title="Nuit suivante">›</button>
-      <button class="narrow" title="Choisir une date"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><input type="date" id="dpick" value="${state.night.slice(0, 4)}-${state.night.slice(4, 6)}-${state.night.slice(6, 8)}"></button></span>`;
+      <button class="narrow cal" title="Choisir une date"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><input type="date" id="dpick" value="${state.night.slice(0, 4)}-${state.night.slice(4, 6)}-${state.night.slice(6, 8)}"></button></span>`;
   const dp = $("#dpick");
   if (dp) dp.addEventListener("change", () => { if (dp.value) { state.night = dp.value.replaceAll("-", ""); state.revealed.clear(); renderNight(); } });
-  // sur téléphone, centrer la bande sur la nuit affichée
-  const on = el.querySelector(".chip.on");
-  if (on) el.scrollLeft = on.offsetLeft - (el.clientWidth - on.offsetWidth) / 2;
 }
 
 /* ---------- navigation / adresse ---------- */

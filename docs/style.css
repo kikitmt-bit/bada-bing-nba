@@ -740,18 +740,29 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 @media (max-width:1100px){ .mvpw .perfs{grid-template-columns:1fr} }
 @media (max-width:900px){ .mvpw{grid-template-columns:1fr;padding-right:0} .mvpw .perfs{padding:0 16px 20px} }
 
-/* ---- en-tête de la nuit sur 2 lignes (20/11, choix de Kiki) : [salutation / nuit du…] [date] [boutons], puis la frise ---- */
-.sky{padding-block:22px 10px}
-.skyrow{display:flex;align-items:center;gap:14px 28px;flex-wrap:wrap}
-.skyt{min-width:0}
-.skyt .greet{margin:0 0 6px}
-.nsub{margin:0;font:700 clamp(14px,1.3vw,18px) var(--disp);letter-spacing:.22em;text-transform:uppercase;color:var(--ink2);white-space:nowrap}
-.skyd{font:900 clamp(44px,4.6vw,68px)/.9 var(--disp);letter-spacing:-.01em;white-space:nowrap;
-  background:linear-gradient(180deg,#fff,#b9bfdc);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.skyd em{font-style:normal;color:var(--moon);-webkit-text-fill-color:var(--moon);padding:0 .08em}
-.skyrow .actions{margin:0}
-.sky .nights{margin-top:16px}
+/* ---- en-tête sur UNE ligne (20/11) : nuit d'avant · nuit affichée · nuit d'après · calendrier · boutons ---- */
+.sky.one{padding-block:18px 14px;margin-bottom:10px;border-bottom:1px solid var(--line)}
+.sky.one .skyrow{display:flex;align-items:center;gap:14px 28px;flex-wrap:wrap}
+.sky.one .nights{margin:0;border:0;overflow:visible;align-items:flex-end;gap:6px}
+.sky.one .chip{padding:4px 16px 10px}
+.sky.one .chip small{font:700 12px var(--disp);letter-spacing:.14em}
+.sky.one .chip b{font:900 24px/1.05 var(--disp);color:var(--ink3)}
+.sky.one .chip.on b{font-size:38px;color:var(--ink);text-shadow:0 0 18px rgba(243,197,82,.25)}
+.sky.one .chip.on small{font-size:13px}
+.sky.one .chip em{display:block;font:700 10px var(--disp);font-style:normal;letter-spacing:.24em;text-transform:uppercase;color:var(--amber);white-space:nowrap;margin-bottom:2px}
+.sky.one .nnav{display:flex;align-items:center;align-self:center;margin-left:4px}
+.sky.one .narrow.cal{width:40px;height:40px;background:rgba(255,255,255,.05);clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%)}
+.sky.one .actions{margin:0 0 0 auto}
 @media (max-width:900px){
-  .skyrow .actions{margin-left:0;width:100%}
-  .nsub{white-space:normal}
+  .sky.one .skyrow{gap:12px}
+  .sky.one .nights{width:100%;justify-content:space-between}
+  .sky.one .nights{gap:0}
+  .sky.one .chip{padding:4px 4px 10px}
+  .sky.one .chip small{font-size:10px;letter-spacing:.06em}
+  .sky.one .chip em{font-size:9px;letter-spacing:.12em}
+  .sky.one .chip b{font-size:18px}
+  .sky.one .chip.on b{font-size:26px}
+  .sky.one .nnav{margin-left:0}
+  .sky.one .narrow.cal{width:34px;height:34px}
+  .sky.one .actions{margin:0;width:100%}
 }

@@ -42,7 +42,7 @@ const Chrono = (() => {
         hs: +p.homeScore || 0, as: +p.awayScore || 0, tx, tt,
         shoot: !!p.shootingPlay, made: !!p.scoringPlay,
         ft: /free throw/i.test(tt), three: p.pointsAttempted ? p.pointsAttempted === 3 : /three point/i.test(tx),
-        a0: pa[0] || "", a1: pa[1] || "", ast: /assists?\)/i.test(tx), stl: /steals?\)/i.test(tx),
+        a0: pa[0] || "", a1: pa[1] || "", ast: /assists?\)/i.test(tx), stl: /steals?\)/i.test(tx), blk: /\bblocks\b/i.test(tx),
       };
     });
     return { names, plays, home: ids.home, away: ids.away };
@@ -348,7 +348,7 @@ const Chrono = (() => {
       ${S.map ? "" : `<button class="lv-ico" data-live-diag title="Diagnostic">🔧</button><button class="lv-ico" data-live-stop title="Arrêter le partage">■</button>`}</div>
       ${DEMO ? `<input class="lv-demo" type="range" min="0" max="${S.D.plays.length - 1}" value="${S.demoI || 0}" aria-label="Simuler le moment du match">` : ""}${diag}`;
     if (!S.at) { el.innerHTML = head + `<p class="lv-wait">Lance la vidéo : dès que le bandeau du match est à l'écran, les stats apparaissent.</p>`; if (S.below) S.below.innerHTML = ""; return; }
-    const D = S.D, A = statsAt(D, S.at.per, S.at.sec), h = team(D.home), a = team(D.away), th = A.T[D.home], ta = A.T[D.away];
+    const D = S.D, A = statsAt(D, S.at.per, S.at.sec), h = team(D.home), a = { ...team(D.away), color: vsColor(D.away, D.home) }, th = A.T[D.home], ta = A.T[D.away];
     const pc = (m, n) => n ? Math.round(100 * m / n) + " %" : "–";
     const row = (lab, va, vh, sa, sh) => { const tot = (sa + sh) || 1;
       return `<div class="lv-row"><b data-k="${lab}a">${va}</b><span>${lab}</span><b data-k="${lab}h">${vh}</b><i style="--a:${a.color};--h:${h.color};--p:${(sa / tot * 100).toFixed(1)}%"></i></div>`; };
@@ -415,7 +415,7 @@ const Chrono = (() => {
     return { pts, qEnd, hs, as, maxH, maxA, leads, runT, runP, bestT, bestP, leadH, leadA, now };
   }
   function curveHTML(D, at, F) {
-    const h = team(D.home), a = team(D.away);
+    const h = team(D.home), a = { ...team(D.away), color: vsColor(D.away, D.home) };
     // l'axe couvre le temps réglementaire ; une prolongation n'apparaît qu'une fois atteinte (sans spoil)
     const nq = Math.max(4, at.per), span = 2880 + (nq - 4) * 300, W = 1000, H = 200, mid = 100;
     const amp = Math.max(8, ...F.pts.map(p => Math.abs(p[1]))) * 1.12;
@@ -455,7 +455,7 @@ const Chrono = (() => {
   const HALF = `<rect x="0" y="17" width="19" height="16"/><circle cx="19" cy="25" r="6"/><path d="M0 3H14A23.75 23.75 0 0 1 14 47H0"/>
     <path d="M4 22V28"/><circle cx="5.25" cy="25" r=".75"/><path d="M5.25 21A4 4 0 0 1 5.25 29"/>`;
   function shotsHTML(D, at) {
-    const h = team(D.home), a = team(D.away);
+    const h = team(D.home), a = { ...team(D.away), color: vsColor(D.away, D.home) };
     const Z = { [D.away]: [[0, 0], [0, 0], [0, 0]], [D.home]: [[0, 0], [0, 0], [0, 0]] }; // raquette, mi-distance, 3 pts : [réussis, tentés]
     const dots = []; let last = null;
     for (const p of D.plays) {
@@ -480,7 +480,7 @@ const Chrono = (() => {
         <span style="--mc:${h.color}">${h.tri}</span><i>${z(D.home, 0)}</i><i>${z(D.home, 1)}</i><i>${z(D.home, 2)}</i></div></div>`;
   }
   function trendsHTML(D, F) {
-    const h = team(D.home), a = team(D.away), dNow = F.hs - F.as;
+    const h = team(D.home), a = { ...team(D.away), color: vsColor(D.away, D.home) }, dNow = F.hs - F.as;
     const tile = (lab, val, sub) => `<div class="lv-tile"><span>${lab}</span><b>${val}</b><small>${sub || "&nbsp;"}</small></div>`;
     return `<div class="lv-trends"><h4>Les tendances</h4><div class="lv-tiles">
       ${tile("Écart", dNow ? `+${Math.abs(dNow)} ${(dNow > 0 ? h : a).tri}` : "Égalité", dNow ? "en tête" : "")}

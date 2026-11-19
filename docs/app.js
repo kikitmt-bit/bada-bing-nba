@@ -36,6 +36,23 @@ const TEAMS = {
   27:["WAS","Washington","Wizards","#E31837","wsh"], 28:["TOR","Toronto","Raptors","#CE1141","tor"],
   29:["MEM","Memphis","Grizzlies","#5D76A9","mem"], 30:["CHA","Charlotte","Hornets","#00788C","cha"],
 };
+// 2e couleur de chaque équipe (lisible sur fond de nuit), prise par les VISITEURS quand les deux couleurs se ressemblent
+const ALT = { 1: "#C1D32F", 2: "#BA9653", 3: "#C8102E", 4: "#D9D9D9", 5: "#FDBB30", 6: "#B8C4CA", 7: "#1D428A", 8: "#1D42BA",
+  9: "#1D428A", 10: "#C4CED4", 11: "#BEC0C2", 12: "#C8102E", 13: "#FDB927", 14: "#F9A01B", 15: "#EEE1C6", 16: "#78BE20",
+  17: "#F2F2F2", 18: "#006BB6", 19: "#C4CED4", 20: "#ED174C", 21: "#F9AD1B", 22: "#BAC3C9", 23: "#9EA2A2", 24: "#E8E8E8",
+  25: "#EF3B24", 26: "#F9A01B", 27: "#C4CED4", 28: "#A1A1A4", 29: "#FFBB22", 30: "#A1A1A4" };
+function colorGap(c1, c2) { // écart perçu entre deux couleurs (« redmean »), 0 = identiques, ~765 = noir/blanc
+  const v = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)), [r1, g1, b1] = v(c1), [r2, g2, b2] = v(c2), rm = (r1 + r2) / 2;
+  return Math.sqrt((2 + rm / 256) * (r1 - r2) ** 2 + 4 * (g1 - g2) ** 2 + (2 + (255 - rm) / 256) * (b1 - b2) ** 2);
+}
+function vsColor(awayId, homeId) { // la couleur des visiteurs face à ce domicile (le domicile garde toujours la sienne)
+  const ca = (TEAMS[awayId] || [])[3] || "#555", ch = (TEAMS[homeId] || [])[3] || "#555";
+  if (colorGap(ca, ch) >= 170) return ca;
+  const alt = ALT[awayId];
+  if (alt && colorGap(alt, ch) >= 170) return alt;
+  return "#E8E8E8"; // en dernier recours : blanc cassé, toujours distinct d'une couleur d'équipe
+}
+function teamIn(g, tid) { const t = g && (g.teams.away.id === tid ? g.teams.away : g.teams.home.id === tid ? g.teams.home : null); return t || team(tid); }
 function team(id) {
   const t = TEAMS[id] || ["NBA", "", "Équipe", "#555", null];
   return { id, tri: t[0], city: t[1], name: t[2], color: t[3], logo: t[4] };
@@ -137,10 +154,12 @@ function normEvent(ev) {
         g.leaders.push({ name: l.athlete && l.athlete.shortName || "", pts: +l.value || 0 });
   }
   g.ot = g.state === "post" && g.period > 4;
+  pairColors(g);
   return g;
 }
+function pairColors(g) { if (g.teams.away && g.teams.home) g.teams.away.color = vsColor(g.teams.away.id, g.teams.home.id); return g; }
 async function scoreboard(key) {
-  if (DEMO) return window.DEMO.scoreboard(key);
+  if (DEMO) return (await window.DEMO.scoreboard(key)).map(pairColors);
   const url = API + "scoreboard?dates=" + key;
   try {
     const j = await fetchJSON(url);
@@ -150,7 +169,7 @@ async function scoreboard(key) {
     return games;
   } catch (e) {
     const c = store.get("sb_" + key, null);
-    if (c) { alertBar("ESPN ne répond pas : scores de " + new Date(c.t).toLocaleTimeString("fr-FR") + "."); return c.games.map(g => ({ ...g, date: new Date(g.date) })); }
+    if (c) { alertBar("ESPN ne répond pas : scores de " + new Date(c.t).toLocaleTimeString("fr-FR") + "."); return c.games.map(g => pairColors({ ...g, date: new Date(g.date) })); }
     throw e;
   }
 }
@@ -180,14 +199,14 @@ function normSummary(j) {
       const tid = +side.team.id;
       const stt = side.statistics[0];
       const ix = n => stt.names.indexOf(n);
-      const [iM, iF, i3, iR, iA, iP] = [ix("MIN"), ix("FG"), ix("3PT"), ix("REB"), ix("AST"), ix("PTS")];
+      const [iM, iF, i3, iR, iA, iP, iB] = [ix("MIN"), ix("FG"), ix("3PT"), ix("REB"), ix("AST"), ix("PTS"), ix("BLK")];
       for (const a of stt.athletes || []) {
         if (!a.athlete || !a.stats || !a.stats.length) continue;
         out.players.push({
           aid: String(a.athlete.id || ""), name: a.athlete.shortName || a.athlete.displayName,
           full: a.athlete.displayName || "", tid,
           min: a.stats[iM] || "0", fg: a.stats[iF] || "", tp: a.stats[i3] || "",
-          pts: +a.stats[iP] || 0, reb: +a.stats[iR] || 0, ast: +a.stats[iA] || 0,
+          pts: +a.stats[iP] || 0, reb: +a.stats[iR] || 0, ast: +a.stats[iA] || 0, blk: iB >= 0 ? +a.stats[iB] || 0 : 0,
           shots: [],
         });
       }
@@ -949,13 +968,13 @@ async function openFiche(id) {
   body.innerHTML = `
     ${s.series ? `<div class="fsect"><h3><span class="tag">Le film du match</span><i></i></h3>${chartHTML(g, s.series, s.span)}</div>` : ""}
     ${s.quarters ? `<div class="fsect"><h3><span class="tag">Par quart-temps</span><i></i></h3>${quartersHTML(g, s)}</div>` : ""}
-    ${s.players.length ? `<div class="fsect"><h3><span class="tag">Les patrons du match</span><i></i></h3>${prosHTML(s.players.slice(0, 6))}</div>` : ""}
+    ${s.players.length ? `<div class="fsect"><h3><span class="tag">Les patrons du match</span><i></i></h3>${prosHTML(s.players.slice(0, 6), g)}</div>` : ""}
     ${s.players.length ? `<div class="fsect"><h3><span class="tag">La feuille de match</span><i></i></h3>
       <p class="bx-hint">Touche un joueur pour voir tous ses tirs sur le terrain 🎯</p>
       ${boxHTML(g, s, "away")}${boxHTML(g, s, "home")}</div>` : ""}
     <div class="fbtns">${g.state === "post" ? `<button class="btn amber big" data-resume="${g.id}">${replayLabel(g)}</button>` : ""}</div>
     <div class="next-note">Bientôt dans la fiche : face-à-face des deux équipes, avant-match détaillé, absents.</div>`;
-  state.fiche = s; // pour la carte de tirs
+  state.fiche = s; state.ficheG = g; // pour la carte de tirs
   requestAnimationFrame(() => {
     body.querySelectorAll(".fl").forEach(b => b.style.width = b.dataset.w + "%");
     const line = body.querySelector(".filmline");
@@ -1035,17 +1054,15 @@ function quartersHTML(g, s) {
   return `<div class="qtwrap"><table class="qt"><thead><tr><th>Équipe</th>${lab.map(l => `<th>${l}</th>`).join("")}<th>Total</th></tr></thead>
     <tbody>${row("away")}${row("home")}</tbody></table></div>`;
 }
-function prosHTML(players) {
-  return `<div class="pros">` + players.map((p, i) => {
-    const t = team(p.tid);
-    return `<div class="pro" style="--mc:${t.color}">${i === 0 ? '<span class="mvp">TOP MATCH</span>' : ""}
-      <div class="who"><b>${p.name}</b><small>${t.tri}</small></div>
+function prosHTML(players, g) {
+  return `<div class="pros">` + players.map(p => {
+    const t = teamIn(g, p.tid);
+    const bar = (lab, v, max) => `<div class="bar"><em>${lab}</em><div class="tr"><div class="fl" data-w="${Math.min(100, v / max * 100)}"></div></div><b>${v}</b></div>`;
+    return `<div class="pro" style="--mc:${t.color}">
+      <div class="pteam">${logoHTML(t)}<span>${t.name}</span></div>
+      <div class="who"><b>${p.name}</b></div>
       <div class="big">${p.pts}<small>pts</small></div>
-      <div class="bars">
-        <div class="bar"><em>PTS</em><div class="tr"><div class="fl" data-w="${Math.min(100, p.pts * 2)}"></div></div><b>${p.pts}</b></div>
-        <div class="bar"><em>REB</em><div class="tr"><div class="fl" data-w="${Math.min(100, p.reb / 15 * 100)}"></div></div><b>${p.reb}</b></div>
-        <div class="bar"><em>AST</em><div class="tr"><div class="fl" data-w="${Math.min(100, p.ast / 15 * 100)}"></div></div><b>${p.ast}</b></div>
-      </div></div>`;
+      <div class="bars">${bar("REB", p.reb, 15)}${bar("PD", p.ast, 15)}${bar("CTR", p.blk || 0, 6)}</div></div>`;
   }).join("") + `</div>`;
 }
 
@@ -1056,9 +1073,9 @@ function boxHTML(g, s, side) {
   if (!list.length) return "";
   const row = p => `<tr class="${p.shots.length ? "shootable" : ""}" ${p.shots.length ? `data-shot="${p.aid || p.name}"` : ""}>
     <td><span class="bxn">${p.name}</span>${p.shots.length ? `<span class="tgt">🎯</span>` : ""}</td>
-    <td>${p.min}</td><td>${p.fg}</td><td>${p.tp}</td><td>${p.reb}</td><td>${p.ast}</td><td class="tot">${p.pts}</td></tr>`;
+    <td>${p.min}</td><td>${p.fg}</td><td>${p.tp}</td><td>${p.reb}</td><td>${p.ast}</td><td>${p.blk || 0}</td><td class="tot">${p.pts}</td></tr>`;
   return `<div class="bxteam"><div class="bxh" style="--mc:${t.color}">${logoHTML(t)}<b>${t.name}</b></div>
-    <div class="qtwrap"><table class="qt bx"><thead><tr><th>Joueur</th><th>Min</th><th>Tirs</th><th>3 pts</th><th>Reb</th><th>Pas</th><th>Pts</th></tr></thead>
+    <div class="qtwrap"><table class="qt bx"><thead><tr><th>Joueur</th><th>Min</th><th>Tirs</th><th>3 pts</th><th>Reb</th><th>Pas</th><th title="Contres">Ctr</th><th>Pts</th></tr></thead>
     <tbody>${list.map(row).join("")}</tbody></table></div></div>`;
 }
 
@@ -1090,7 +1107,7 @@ let shotTimer = null;
 function openShots(key) {
   const s = state.fiche; if (!s) return;
   const p = s.players.find(q => q.aid === key || q.name === key); if (!p) return;
-  const t = team(p.tid);
+  const t = teamIn(state.ficheG, p.tid);
   const made = p.shots.filter(x => x.m).length, three = p.shots.filter(x => x.v === 3);
   const { svg, step } = courtSVG(p.shots, t.color);
   shotsheet.innerHTML = `<div class="setbody">

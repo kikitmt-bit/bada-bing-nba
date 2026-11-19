@@ -151,6 +151,7 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   que le match n'a pas commencé) ; sans photo, bilans recalculés en retirant le résultat (`moins`), sans leaders ni blessés
   (après le match ESPN remplace les leaders de la saison par ceux du match). Testé : des données d'après-match truquées ne
   changent rien. Afficheurs de score : largeur fixe de 3 chiffres (`min-width:calc(3ch …)`), « ?? » compris.
+- **Couleurs proches (21/11, demande de Kiki : 76ers / Magic tous deux bleus)** : `ALT` = 2e couleur de chaque équipe ; `vsColor(visiteurs, domicile)` : si l'écart perçu (`colorGap`, « redmean ») est < 170, les VISITEURS prennent leur 2e couleur (sinon blanc cassé), le domicile garde la sienne. Appliqué à chaque match dans `normEvent`/`scoreboard` (`pairColors`, démo et copie de secours comprises), dans la fiche (`teamIn`, carte de tirs) et le Replay + (chrono.js). **Patrons du match** : plus de « TOP MATCH » (il passait sous les barres), logo + nom de l'équipe en tête de carte à sa couleur, barres REB / PD / CTR. **Contres** : colonne « Ctr » de la feuille de match (ESPN `BLK`) et barre CTR des patrons.
 - **Mode démo** : `?demo=1` = fausse saison stable (`demo.js`), l'équivalent de `BB_FAUX_ESPN=1`. Test local :
   `python3 -m http.server 8777` dans `docs/` puis `http://localhost:8777/?demo=1` (Playwright : PC 1400px + téléphone 393px,
   vérifier zéro erreur JS et zéro défilement horizontal).

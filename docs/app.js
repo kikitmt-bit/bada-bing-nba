@@ -643,34 +643,19 @@ function skyHTML(games, hero, scored) {
   const nr = started && !DEMO ? findNightRecap(state.night) : null;
   const jr = started && !DEMO ? findJournal(state.night) : null;
   const left = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).length;
-  const right = hero ? heroHTML(hero.g, hero.lvl) : topHTML(scored || [], started);
-  return `<section class="sky ${right ? "two" : ""}">
-    <div class="skyl">
-    <p class="greet"><i></i>${greeting()} — ${ctx}</p>
-    <div class="ntitle">
-      <h1><small>${small}</small><span>${big}</span></h1>
-    </div>
-    ${started || nr || jr ? `<div class="actions">
+  // en-tête sur 2 lignes (20/11, choix de Kiki) : [salutation / nuit du…] [date en grand] [boutons], puis la frise des nuits
+  return `<section class="sky">
+    <div class="skyrow">
+      <div class="skyt"><p class="greet"><i></i>${greeting()} — ${ctx}</p><h1 class="nsub">${small}</h1></div>
+      <div class="skyd">${big}</div>
+      ${started || nr || jr ? `<div class="actions">
       ${started ? `<button class="btn amber big" id="revall" ${left ? "" : "disabled"}>${left ? "🎬 Révéler la nuit" : "✓ Nuit révélée"}</button>` : ""}
       ${nr ? `<button class="btn" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
       ${jr ? `<button class="btn extra" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin">NBA Extra · le journal</button>` : ""}
-    </div>` : ""}
+      </div>` : ""}
     </div>
-    ${right ? `<div class="skyr">${right}</div>` : ""}
     <div class="nights" id="nights"></div>
   </section>`;
-}
-// quand aucun match ne sort du lot : les 3 meilleurs de la nuit, une ligne chacun (sans spoil)
-function topHTML(scored, started) {
-  if (!scored.length) return "";
-  const row = ({ g, lvl }) => {
-    const a = g.teams.away, h = g.teams.home;
-    const act = g.state === "post" ? `<button class="btn amber" data-resume="${g.id}">${replayLabel(g)}</button>`
-      : g.state === "live" ? `<span class="tl-live">● En direct</span>` : `<span class="tl-time">${hourLocal(g.date)}</span>`;
-    return `<div class="tl r${lvl}">${logoHTML(a)}${logoHTML(h)}<span class="tl-n"><b>${a.name}</b><b>${h.name}</b></span>
-      <span class="tl-h">${heatHTML(lvl)}</span>${act}</div>`;
-  };
-  return `<div class="topn"><span class="tag">${started ? "Le top de la nuit" : "Les affiches de la nuit"}</span>${scored.slice(0, 3).map(row).join("")}</div>`;
 }
 async function renderNight(soft) {
   const tok = ++state.tok;
@@ -699,6 +684,7 @@ async function renderNight(soft) {
 
   main.innerHTML = `${skyHTML(games, hero, scored)}
     ${!games.length ? `<p class="loadmsg">Pas de match cette nuit-là. Les joueurs dorment aussi. 🌙</p>` : ""}
+    ${hero ? heroHTML(hero.g, hero.lvl) : ""}
     ${rest.length ? `<div class="sect"><h2>${hero ? "Les autres matchs" : "Les matchs de la nuit"}</h2><i></i></div>
     <div class="bugs">${rest.map((g, i) => cardHTML(g, i)).join("")}</div>` : ""}
     ${nPost >= 2 ? `<section class="stage" id="stage">

@@ -21,10 +21,9 @@ liseré de côté ») — à respecter dans toute nouvelle page** : l'habillage 
 - Tuiles = plaques de score TV (`cardHTML` → `.bug`) : une rangée par équipe (pastille biseautée à la couleur de l'équipe avec logo,
   nom en capitales, LED), en-tête horloge + **jauge de chaleur** 5 barres (`heatHTML`) + mot de rareté (`RARL`). Rareté = lumière
   de plaque (`.r0`…`.r5` : or animé, argent, cuivre…) et lueur au sol ; direct = rouge. 3 par ligne sur PC.
-- **En-tête compact (20/11, demande de Kiki : « trop de vide à droite »)** : `skyHTML` en 2 colonnes (`.sky.two`) : à gauche salutation,
-  titre (date « 18 → 19 » réduite), boutons ; à droite le **match de la nuit en version compacte** (`.skyr .jumbo`, il n'a plus sa
-  propre bande sous l'en-tête) ou, sans match ≥ 4 barres, **« Le top de la nuit »** (`topHTML` : les 3 meilleurs, une ligne chacun :
-  2 logos, noms, jauge, Replay ou heure). Compteurs « matchs / à voir » SUPPRIMÉS. Bande des nuits en pleine largeur dessous.
+- **En-tête sur 2 lignes (20/11, choix de Kiki après un essai « match de la nuit à droite » jugé sans impact)** : ligne 1
+  (`.skyrow`) = [salutation + « Nuit du … » (`.nsub`)] [date « 18 → 19 » en grand (`.skyd`)] [Révéler la nuit, Résumé de la nuit,
+  journal] ; ligne 2 = la frise des nuits. Compteurs « matchs / à voir » SUPPRIMÉS. Le match de la nuit reste EN GRAND dessous.
 - Le brief (`skyHTML`) : salutation selon l'heure + contexte, grande date « 16 → 17 », compteurs LED animés (matchs, à voir, en direct),
   « 🎬 Révéler la nuit » = cérémonie qui défile et révèle du moins bon au meilleur (1,3 s d'écart, le match de la nuit en dernier),
   bande des nuits ; « Le match de la nuit » = **jumbotron** (`heroHTML`) coupé en diagonale aux 2 couleurs, grands logos, projecteurs

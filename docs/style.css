@@ -740,55 +740,18 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 @media (max-width:1100px){ .mvpw .perfs{grid-template-columns:1fr} }
 @media (max-width:900px){ .mvpw{grid-template-columns:1fr;padding-right:0} .mvpw .perfs{padding:0 16px 20px} }
 
-/* ---- en-tête de la nuit compact (20/11) : titre + boutons à gauche, match de la nuit (ou top 3) à droite ---- */
-.sky.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:8px 32px;align-items:center;padding-block:22px 16px}
-.sky.two .nights{grid-column:1/-1}
-.skyl{min-width:0}
-.sky .ntitle h1 span{font-size:clamp(40px,5vw,72px)}
-.sky .ntitle h1 small{font-size:clamp(13px,1.2vw,16px);margin-bottom:6px}
-.sky .actions{margin-top:16px}
-.skyr{min-width:0}
-/* le match de la nuit en version compacte */
-.skyr .jumbo{margin:0}
-.skyr .jumbo-in{min-height:0}
-.skyr .jtop{padding:10px 16px 0}
-.skyr .jtop .tag{font-size:11px}
-.skyr .jmid{padding:2px 16px;gap:10px}
-.skyr .jteam{gap:5px}
-.skyr .jteam .lg{width:78px;height:78px;font-size:24px}
-.skyr .jteam .plate{padding:4px 10px 5px}
-.skyr .jteam .plate small{font-size:10px}
-.skyr .jteam .plate b{font-size:clamp(17px,1.6vw,23px)}
-.skyr .jteam .rec{font-size:12px;min-height:0}
-.skyr .jscore .st{font-size:11px}
-.skyr .jscore .led{height:56px;font-size:42px}
-.skyr .jscore .led.time{min-width:130px;font-size:30px}
-.skyr .jscore .hint{font-size:11px}
-.skyr .jfoot{padding:8px 16px 10px;gap:10px}
-.skyr .jfoot .kfs{flex:1 1 300px}
-.skyr .kf{font-size:12.5px}
-.skyr .beam{display:none}
-/* le top de la nuit (pas de match qui sort du lot) */
-.topn{display:flex;flex-direction:column;gap:4px}
-.topn .tag{align-self:flex-start;margin-bottom:6px}
-.tl{display:grid;grid-template-columns:34px 34px minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:7px 12px;background:var(--panel);
-  clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%)}
-.tl .lg{width:34px;height:34px;font-size:11px}
-.tl-n{display:flex;gap:8px;min-width:0;font:900 17px var(--disp);text-transform:uppercase}
-.tl-n b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tl-n b:first-child::after{content:" –";color:var(--ink3)}
-.tl-h .heat{margin-left:0}
-.tl-time{font:900 16px var(--led);color:var(--amber)}
-.tl-live{font:700 12px var(--disp);letter-spacing:.14em;color:var(--live)}
-.tl .btn{font-size:12px;padding:6px 14px 5px}
-@media (max-width:1000px){
-  .sky.two{grid-template-columns:1fr}
-  .sky .ntitle h1 span{font-size:clamp(40px,11vw,64px)}
-}
-@media (max-width:600px){
-  .tl{grid-template-columns:30px 30px minmax(0,1fr) auto;gap:8px}
-  .tl-h{display:none}
-  .tl .lg{width:30px;height:30px}
-  .tl-n{flex-direction:column;gap:0;font-size:15px}
-  .tl-n b:first-child::after{content:""}
+/* ---- en-tête de la nuit sur 2 lignes (20/11, choix de Kiki) : [salutation / nuit du…] [date] [boutons], puis la frise ---- */
+.sky{padding-block:22px 10px}
+.skyrow{display:flex;align-items:center;gap:14px 28px;flex-wrap:wrap}
+.skyt{min-width:0}
+.skyt .greet{margin:0 0 6px}
+.nsub{margin:0;font:700 clamp(14px,1.3vw,18px) var(--disp);letter-spacing:.22em;text-transform:uppercase;color:var(--ink2);white-space:nowrap}
+.skyd{font:900 clamp(44px,4.6vw,68px)/.9 var(--disp);letter-spacing:-.01em;white-space:nowrap;
+  background:linear-gradient(180deg,#fff,#b9bfdc);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.skyd em{font-style:normal;color:var(--moon);-webkit-text-fill-color:var(--moon);padding:0 .08em}
+.skyrow .actions{margin:0}
+.sky .nights{margin-top:16px}
+@media (max-width:900px){
+  .skyrow .actions{margin-left:0;width:100%}
+  .nsub{white-space:normal}
 }

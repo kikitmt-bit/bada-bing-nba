@@ -1028,3 +1028,19 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .tvg .tvt:last-child{flex-direction:row;text-align:left}
   .tvg .tvt b{font-size:17px}
 }
+
+/* ---- Programme : un sigle n'est JAMAIS coupé (« GS… » sur une colonne étroite) : la tuile se resserre selon sa propre largeur ---- */
+.tvg{container-type:inline-size;padding:0 8px;column-gap:6px}
+.tvg .tvt b{flex:none;overflow:visible;text-overflow:clip}
+@container (max-width:200px){
+  .tvg .tvt{gap:5px}
+  .tvg .tvt .lg{width:20px;height:20px}
+  .tvg .tvt b{font-size:15.5px;letter-spacing:0}
+}
+@container (max-width:160px){
+  .tvg .tvt{gap:4px}
+  .tvg .tvt .lg{width:17px;height:17px}
+  .tvg .tvt b{font-size:14px;letter-spacing:-.01em}
+}
+.tvslot{align-items:stretch}
+.tvgs{width:100%}

@@ -78,11 +78,11 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   Tables d'essai publiées : Lakers-Hornets, Celtics-Nuggets, Suns-Kings (17-18/11).
   **Plein écran (19/11, demande de Kiki)** : avec stats possibles (`Chrono.wantsFull`), le lecteur s'ouvre en plein écran
   (`requestFullscreen` pendant le clic, classes `.full`), **sans défilement sur PC** (vidéo dimensionnée pour laisser ~250 px
-  dessous) : stats à droite (5 joueurs par équipe) + **tendances** en 6 tuiles sous les joueurs (`trendsHTML`, rangées par thème :
-  maintenant = écart, série en cours ; moments forts = plus gros run, plus grosse avance ; contrôle = temps en tête, changements
-  de leader) puis **le mini-terrain des tirs** (`shotsHTML` : terrain entier, visiteurs à gauche, domicile à droite, ● réussi /
+  dessous) : stats à droite, joueurs en **tableau compact** (une ligne par joueur, Pts/Reb/Pd ; toujours 5 par équipe : ceux qui
+  ont des stats, complétés par le 5 de départ ESPN `starter`) + **tendances** en 4 tuiles (`trendsHTML` : écart, série en cours,
+  plus gros run, plus grosse avance ; « temps en tête » et « changements de leader » sont dans l'en-tête du film, `.lv-fx`) puis **le mini-terrain des tirs** (`shotsHTML` : terrain entier, visiteurs à gauche, domicile à droite, ● réussi /
   ✕ raté à la couleur de l'équipe, anneau sur le dernier tir, tirs ESPN `coordinate` gardés dans `parsePlays` sx/sy, lancers exclus)
-  + tableau Raquette / Mi-distance / 3 points. Écran < 1080 px de haut : version resserrée ; < 820 px : terrain masqué (zones gardées) ; sous la vidéo (`curveHTML`, `#lvbelow`) le film du match en ligne continue FUSIONNÉ avec les scores
+  + tableau Raquette / Mi-distance / 3 points. Écran < 900 px de haut : version resserrée ; < 740 px : terrain masqué (zones gardées) ; sous la vidéo (`curveHTML`, `#lvbelow`) le film du match en ligne continue FUSIONNÉ avec les scores
   par quart-temps, alignés sous chaque quart (quarts TERMINÉS seulement, le quart en cours = « en cours » ; prolongation ajoutée
   à l'axe seulement une fois atteinte). Calculs communs : `flow(D, at)`.
   « Dernières actions » retirées (illisibles sur un résumé). Téléphone : vidéo, stats, puis le dessous, en une colonne. Sans table : mode direct ci-dessous (PC),

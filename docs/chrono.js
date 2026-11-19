@@ -21,7 +21,7 @@ const Chrono = (() => {
     const names = {};
     try {
       for (const side of j.boxscore.players || []) for (const a of side.statistics[0].athletes || [])
-        if (a.athlete) names[String(a.athlete.id)] = { n: a.athlete.shortName || a.athlete.displayName, t: +side.team.id };
+        if (a.athlete) names[String(a.athlete.id)] = { n: a.athlete.shortName || a.athlete.displayName, t: +side.team.id, st: !!a.starter, o: Object.keys(names).length };
     } catch (e) { /* pas de feuille */ }
     let ids = {};
     try { for (const c of j.header.competitions[0].competitors) ids[c.homeAway] = +c.team.id; } catch (e) { /* */ }
@@ -50,7 +50,7 @@ const Chrono = (() => {
   function demoPlays(sum, g) {
     let seed = 7; for (const c of g.id) seed = (seed * 31 + c.charCodeAt(0)) % 99991;
     const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    const names = {}; for (const p of sum.players) names[p.aid] = { n: p.name, t: p.tid };
+    const names = {}; sum.players.forEach((p, i) => { names[p.aid] = { n: p.name, t: p.tid, st: true, o: i }; });
     const home = g.teams.home.id, away = g.teams.away.id;
     const roster = t => sum.players.filter(p => p.tid === t);
     const plays = []; let hs = 0, as = 0;
@@ -350,8 +350,16 @@ const Chrono = (() => {
     const pc = (m, n) => n ? Math.round(100 * m / n) + " %" : "–";
     const row = (lab, va, vh, sa, sh) => { const tot = (sa + sh) || 1;
       return `<div class="lv-row"><b data-k="${lab}a">${va}</b><span>${lab}</span><b data-k="${lab}h">${vh}</b><i style="--a:${a.color};--h:${h.color};--p:${(sa / tot * 100).toFixed(1)}%"></i></div>`; };
-    const top = t => Object.entries(A.P).filter(([id]) => D.names[id] && D.names[id].t === t).sort((x, y) => y[1].pts - x[1].pts).slice(0, 5)
-      .map(([id, p]) => `<li><span>${D.names[id].n}</span><b data-k="p${id}">${p.pts}</b><small>pts</small><b data-k="r${id}">${p.reb}</b><small>reb</small><b data-k="a${id}">${p.ast}</b><small>pd</small></li>`).join("");
+    const Z0 = { pts: 0, reb: 0, ast: 0 };
+    const top = t => {
+      const ids = Object.keys(D.names).filter(id => D.names[id].t === t);
+      const val = id => A.P[id] || Z0;
+      ids.sort((x, y) => (val(y).pts - val(x).pts) || ((val(y).reb + val(y).ast) - (val(x).reb + val(x).ast))
+        || (D.names[y].st - D.names[x].st) || (D.names[x].o - D.names[y].o));
+      return ids.slice(0, 5).map(id => { const p = val(id);
+        return `<tr><td>${D.names[id].n}</td><td><b data-k="p${id}">${p.pts}</b></td><td><b data-k="r${id}">${p.reb}</b></td><td><b data-k="a${id}">${p.ast}</b></td></tr>`; }).join("");
+    };
+    const ptab = (tm, t) => `<table><thead><tr><th style="--mc:${tm.color}">${tm.name}</th><th>Pts</th><th>Reb</th><th>Pd</th></tr></thead><tbody>${top(t)}</tbody></table>`;
     el.innerHTML = head + (DEBUG || !S.map ? `
       <div class="lv-score"><span class="lv-t" style="--mc:${a.color}">${a.tri}</span><span class="led">${A.as}</span><span class="lv-dash">–</span><span class="led">${A.hs}</span><span class="lv-t" style="--mc:${h.color}">${h.tri}</span></div>` : "") + `
       <div class="lv-rows">
@@ -363,8 +371,7 @@ const Chrono = (() => {
         ${row("Passes", ta.ast, th.ast, ta.ast, th.ast)}
         ${row("Balles perdues", ta.to, th.to, ta.to, th.to)}
       </div>
-      <div class="lv-pl"><div><h4 style="--mc:${a.color}">${a.name}</h4><ol>${top(D.away) || "<li class=e>—</li>"}</ol></div>
-        <div><h4 style="--mc:${h.color}">${h.name}</h4><ol>${top(D.home) || "<li class=e>—</li>"}</ol></div></div>`;
+      <div class="lv-pl">${ptab(a, D.away)}${ptab(h, D.home)}</div>`;
     const F = flow(D, S.at);
     el.insertAdjacentHTML("beforeend", trendsHTML(D, F) + shotsHTML(D, S.at));
     if (S.below) S.below.innerHTML = curveHTML(D, S.at, F);
@@ -435,7 +442,9 @@ const Chrono = (() => {
     };
     const tmpl = cols.map(q => (q <= 4 ? 720 : 300) + "fr").join(" ");
     return `<div class="lv-sec lv-film">
-      <div class="lv-filmh"><h4>Le film du match</h4><div class="lv-leg"><i style="--mc:${a.color}"></i>${a.name}<i style="--mc:${h.color}"></i>${h.name}</div></div>
+      <div class="lv-filmh"><h4>Le film du match</h4><div class="lv-leg"><i style="--mc:${a.color}"></i>${a.name}<i style="--mc:${h.color}"></i>${h.name}</div>
+        <div class="lv-fx"><span>Temps en tête <b>${F.now > 0 ? `${a.tri} ${pct(F.leadA, F.now)} · ${h.tri} ${pct(F.leadH, F.now)}` : "—"}</b></span>
+        <span>Changements de leader <b>${F.leads}</b></span></div></div>
       <div class="lv-plot">${svg}${dot}</div>
       <div class="lv-qs" style="grid-template-columns:${tmpl}">${cols.map(qcell).join("")}</div></div>`;
   }
@@ -477,8 +486,7 @@ const Chrono = (() => {
       ${tile("Série en cours", F.runP >= 4 ? `${F.runP}-0 ${team(F.runT).tri}` : "—", F.runP >= 4 ? "points d'affilée" : "aucune")}
       ${tile("Plus gros run", F.bestP >= 4 ? `${F.bestP}-0 ${team(F.bestT).tri}` : "—", F.bestP >= 4 ? "depuis le début" : "pas encore")}
       ${tile("Plus grosse avance", `${a.tri} +${F.maxA} · ${h.tri} +${F.maxH}`)}
-      ${tile("Temps en tête", F.now > 0 ? `${a.tri} ${pct(F.leadA, F.now)} · ${h.tri} ${pct(F.leadH, F.now)}` : "—", "du temps joué")}
-      ${tile("Changements de leader", F.leads, F.leads > 1 ? "fois" : "")}</div></div>`;
+</div></div>`;
   }
 
   /* ---------- boucle de lecture ---------- */

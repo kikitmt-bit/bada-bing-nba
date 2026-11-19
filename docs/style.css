@@ -662,7 +662,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   *,*::before,*::after{animation:none!important;transition:none!important}
 }
 /* écrans peu hauts : le panneau plein écran se resserre pour tout tenir sans défiler */
-@media (min-width:901px) and (max-height:1080px){
+@media (min-width:901px) and (max-height:900px){
   .vplayer.full .lv{padding:10px 14px 10px}
   .vplayer.full .lv-head{margin-bottom:4px}
   .vplayer.full .lv-row{padding:2px 0 5px}
@@ -689,8 +689,21 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .lv-zones b{font:700 10px var(--disp);letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);text-align:center;white-space:nowrap}
 .lv-zones span{font:900 13px var(--disp);border-left:3px solid var(--mc);padding-left:6px}
 .lv-zones i{font:700 16px var(--disp);font-style:normal;text-align:center;color:var(--ink)}
-@media (min-width:901px) and (max-height:1080px){
+@media (min-width:901px) and (max-height:900px){
   .vplayer.full .lv-shots{padding-top:6px;margin-top:6px}
   .vplayer.full .lv-zones{margin-top:4px}
 }
-@media (min-width:901px) and (max-height:820px){ .vplayer.full .lv-court{display:none} .vplayer.full .lv-shots{padding-top:4px;margin-top:4px} .vplayer.full .lv-zones{gap:0 8px;margin-top:2px} .vplayer.full .lv h4{margin-bottom:3px} }
+@media (min-width:901px) and (max-height:740px){ .vplayer.full .lv-court{display:none} .vplayer.full .lv-shots{padding-top:4px;margin-top:4px} .vplayer.full .lv-zones{gap:0 8px;margin-top:2px} .vplayer.full .lv h4{margin-bottom:3px} }
+
+/* joueurs en tableau compact (une ligne par joueur) */
+.lv-pl{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:8px 0;border-top:1px solid var(--line)}
+.lv-pl table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}
+.lv-pl th{font:700 10px var(--disp);letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);text-align:right;padding:0 0 4px;width:24px}
+.lv-pl th:first-child{width:auto;text-align:left;font:900 12px var(--disp);letter-spacing:.12em;color:var(--ink2);border-bottom:2px solid var(--mc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lv-pl td{padding:3px 0;text-align:right;white-space:nowrap}
+.lv-pl td:first-child{text-align:left;font-weight:600;overflow:hidden;text-overflow:ellipsis;padding-right:4px}
+.lv-pl td b{font:700 15px var(--disp);color:var(--amber)}
+/* temps en tête et changements de leader, dans l'en-tête du film du match */
+.lv-fx{display:flex;gap:16px;margin-left:auto;flex-wrap:wrap}
+.lv-fx span{font:700 11px var(--disp);letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.lv-fx b{font:900 15px var(--disp);letter-spacing:.02em;color:var(--amber);margin-left:6px}

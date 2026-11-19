@@ -326,7 +326,7 @@ const Chrono = (() => {
       <p class="lv-small">Le navigateur demande de partager <b>cet onglet</b> (une fois par visite) : c'est la seule façon pour le site de voir le chrono du match.
       L'image reste sur ton ordinateur, rien n'est envoyé.</p>${DEMO ? `<p class="lv-small">Démo : pas de vraie vidéo, un curseur simule le chrono.</p>` : ""}</div>`;
   }
-  const STXT = { load: "Préparation…", seek: "Recherche du bandeau…", ok: "● Synchro", lost: "Bandeau caché", pause: "En pause", prep: "● Synchro" };
+  const STXT = { load: "Préparation…", seek: "Recherche du bandeau…", ok: "● Synchro", lost: "Bandeau caché", pause: "En pause", prep: "● Synchro", wait: "En attente du chrono…" };
   function render(force) {
     const el = S && S.el; if (!el) return;
     const key = [S.on, S.status, S.at && S.at.per, S.at && (S.map && !DEBUG ? playIndex(S.D, S.at) : S.at.sec), S.diag && S.reads].join("|");
@@ -528,8 +528,10 @@ const Chrono = (() => {
       if (n++ % 6 === 0) listenYT();
       // entre deux messages du lecteur, on avance au plus de 1,5 s (pub, vidéo bloquée : on s'arrête au lieu de courir devant)
       const t = my.ytT === undefined ? null : my.ytT + (my.ytState === 1 ? Math.min(1.5, (performance.now() - my.ytAt) / 1000) : 0);
-      my.at = t === null ? null : momentAt(my.map, t);
-      my.status = my.ytState === 2 ? "pause" : "prep";
+      // avant le premier chrono lu (ou avant le lancement) : le début du match, stats à zéro (rien ne peut être spoilé)
+      const m = t === null ? null : momentAt(my.map, t);
+      my.at = m || { per: 1, sec: 720 };
+      my.status = my.ytState === 2 ? "pause" : m ? "prep" : "wait";
       render();
       await wait(150);
     }

@@ -37,8 +37,9 @@ def read_quarter(s):
     return 4 + (int(ot[0]) if ot[0].isdigit() and int(ot[0]) > 1 else 1)
 
 
-def read_clock(s):
-    """(secondes, variante) ; « 1:05 » peut être un « 11:05 » mal lu."""
+def read_clock(s, dixiemes=True):
+    """(secondes, variante) ; « 1:05 » peut être un « 11:05 » mal lu. Les « 45.3 » (dernière minute) seulement
+    si dixiemes : pendant la recherche, un bilan « 4-9 » lu « 4.9 » passerait sinon pour un chrono."""
     s = s.replace("o", "0").replace("O", "0")
     for c in "lI|!":
         s = s.replace(c, "1")
@@ -50,7 +51,7 @@ def read_clock(s):
             alt = (mm + 10) * 60 + ss if len(m.group(1)) == 1 and mm <= 2 else None
             return mm * 60 + ss, alt
     m = re.match(r"^(\d{1,2})\.(\d)$", s)  # dernière minute : « 45.3 »
-    if m and int(m.group(1)) < 60:
+    if dixiemes and m and int(m.group(1)) < 60:
         return int(m.group(1)) + int(m.group(2)) / 10, None
     return None
 
@@ -92,12 +93,12 @@ def find_quarter(words):
     return q
 
 
-def find_clock(words, near=None):
+def find_clock(words, near=None, dixiemes=True):
     best = None
     for w in words:
         if near is not None and w is near:
             continue
-        c = read_clock(w["t"])
+        c = read_clock(w["t"], dixiemes)
         if not c:
             continue
         d = 0
@@ -165,7 +166,7 @@ class Lecteur:
         for mode in ("gray", "inv"):
             words = ocr(prep(band, scale, mode), 11)
             q = find_quarter(words)
-            k = find_clock(words, q[1] if q else None)
+            k = find_clock(words, q[1] if q else None, dixiemes=False)
             if k:
                 b = [v / scale for v in (k[3]["x0"], k[3]["y0"], k[3]["x1"], k[3]["y1"])]
                 return self._caler(b, q and [v / scale for v in (q[1]["x0"], q[1]["y0"], q[1]["x1"], q[1]["y1"])])
@@ -174,7 +175,7 @@ class Lecteur:
         strip = band.crop((0, y0, W, H))
         for mode in ("inv", "gray"):
             words = ocr(prep(strip, 3, mode), 11)
-            k = find_clock(words, None)
+            k = find_clock(words, None, dixiemes=False)
             if k:
                 b = [k[3]["x0"] / 3, k[3]["y0"] / 3 + y0, k[3]["x1"] / 3, k[3]["y1"] / 3 + y0]
                 return self._caler(b, None)

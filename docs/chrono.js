@@ -76,7 +76,7 @@ const Chrono = (() => {
     let hs = 0, as = 0, last = [];
     const pl = id => P[id] || (P[id] = { pts: 0, reb: 0, ast: 0, fg: 0, fga: 0 });
     for (const p of D.plays) {
-      if (p.per > per || (p.per === per && p.sec < sec)) break;
+      if (p.per > per || (p.per === per && p.sec <= sec)) break; // strictement avant le moment affiché : jamais en avance
       hs = p.hs; as = p.as;
       const t = T[p.tid];
       if (!t) continue;

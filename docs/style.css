@@ -1000,3 +1000,31 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 /* titre de colonne : le mois sur sa propre ligne (la colonne est étroite), à côté sur téléphone */
 .tvday em{display:block;font-style:normal}
 @media (max-width:900px){ .tvday em{display:inline} }
+
+/* ---- Programme v2 (retour de Kiki) : un match = une ligne (sigles), l'heure en bandeau sur toute la largeur de la colonne ---- */
+.tvslot{display:flex;flex-direction:column;gap:4px}
+.tvslot .led.time{align-self:stretch;width:100%;min-width:0;height:30px;padding:0;font-size:19px}
+.tvgs{gap:3px}
+.tvg{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;column-gap:8px;
+  height:40px;padding:0 10px;flex-direction:initial}
+.tvg .tvt{display:flex;align-items:center;gap:7px;min-width:0}
+.tvg .tvt.a{justify-content:flex-end}
+.tvg .tvt .lg{width:24px;height:24px;flex:none}
+.tvg .tvt b{font:800 17px var(--disp);letter-spacing:.04em;white-space:nowrap}
+.tvg .tvat{padding:0;font-size:11px}
+.tvmk{font-style:normal;font-size:11px;line-height:1;color:var(--amber)}
+.tvg .tvmk{position:absolute;top:4px;right:6px}
+.tvg.hype .tvmk,.tvmk.h{color:var(--moon)}
+.tvg.fav .tvt b{color:var(--amber)}
+.tvleg{display:flex;flex-wrap:wrap;gap:6px 18px;margin:6px 0 0;color:var(--ink3);font-size:12.5px}
+.tvleg span{display:flex;align-items:center;gap:6px;white-space:nowrap}
+@media (max-width:1080px){ .tvg{column-gap:6px;padding:0 8px} .tvg .tvt{gap:5px} }
+/* téléphone : bandeau de l'heure sur toute la largeur, puis les matchs deux par ligne */
+@media (max-width:900px){
+  .tvslot{display:flex;grid-template-columns:none}
+  .tvslot .led.time{width:100%;height:34px;font-size:20px}
+  .tvgs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+  .tvg{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);min-height:0;height:44px;padding:0 8px}
+  .tvg .tvt:last-child{flex-direction:row;text-align:left}
+  .tvg .tvt b{font-size:17px}
+}

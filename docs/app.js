@@ -1147,7 +1147,7 @@ async function renderProgramme() {
   try { nights = await Promise.all(keys.map(k => scoreboard(k).catch(() => []))); }
   catch (e) { if (tok === state.tok) main.innerHTML = `<p class="loadmsg">Impossible de joindre ESPN.</p>`; return; }
   if (tok !== state.tok) return;
-  let n = 0;
+  let n = 0, hasFav = false, hasHype = false;
   const cols = keys.map((k, i) => {
     const games = nights[i].filter(g => g.state === "pre").sort((a, b) => a.date - b.date);
     if (!games.length) return "";
@@ -1164,16 +1164,19 @@ async function renderProgramme() {
           const a = g.teams.away, h = g.teams.home;
           const fav = settings.fav && (a.id === settings.fav || h.id === settings.fav);
           const hype = winpct(a.record) > .6 && winpct(h.record) > .6;
-          const side = t => `<span class="tvt">${logoHTML(t)}<b>${t.name}</b>${t.record ? `<small>${t.record}</small>` : ""}</span>`;
-          return `<div class="tvg ${fav ? "fav" : ""} ${hype ? "hype" : ""}" style="animation-delay:${Math.min(n++ * 30, 600)}ms">
-            ${fav ? `<span class="tvtag">★ Mon équipe</span>` : hype ? `<span class="tvtag">L'affiche</span>` : ""}
-            ${side(a)}<span class="tvat">@</span>${side(h)}</div>`;
+          if (fav) hasFav = true; else if (hype) hasHype = true;
+          // une seule ligne par match : logo + sigle, @ au centre (le nom complet au survol)
+          return `<div class="tvg ${fav ? "fav" : ""} ${hype ? "hype" : ""}" style="animation-delay:${Math.min(n++ * 30, 600)}ms"
+              title="${a.name} @ ${h.name}${a.record ? ` (${a.record} · ${h.record})` : ""}${fav ? " · mon équipe" : hype ? " · l'affiche" : ""}">
+            <span class="tvt a">${logoHTML(a)}<b>${a.tri}</b></span><span class="tvat">@</span><span class="tvt h"><b>${h.tri}</b>${logoHTML(h)}</span>
+            ${fav ? `<i class="tvmk">★</i>` : hype ? `<i class="tvmk">◆</i>` : ""}</div>`;
         }).join("")}</div></div>`).join("");
     return `<section class="tvcol">
       <button class="tvday" data-prog-night="${k}" title="Voir cette nuit"><span>${l1}</span><span>${l2}</span>
         <small>${plural(games.length, "match")}</small></button>${body}</section>`;
   }).join("");
-  main.innerHTML = head + (cols ? `<div class="tvgrid">${cols}</div>` : `<p class="loadmsg">Aucun match programmé sur les 7 prochaines nuits.</p>`);
+  const legend = hasFav || hasHype ? `<p class="tvleg">${hasFav ? `<span><i class="tvmk">★</i>mon équipe</span>` : ""}${hasHype ? `<span><i class="tvmk h">◆</i>l'affiche (deux équipes qui gagnent)</span>` : ""}</p>` : "";
+  main.innerHTML = head + legend + (cols ? `<div class="tvgrid">${cols}</div>` : `<p class="loadmsg">Aucun match programmé sur les 7 prochaines nuits.</p>`);
 }
 
 /* ---------- classement (sans spoil : la dernière nuit est retirée tant qu'on ne l'inclut pas) ---------- */

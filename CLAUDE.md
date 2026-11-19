@@ -60,7 +60,10 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   connexion de particulier : pas de blocage YouTube), en lit le chrono 1 image / 2 s (`chrono_video.py` : même lecture en 2 temps
   que le site, puis plus longue suite chronologique) et publie `v2/chrono/<id>.json` (`pts` = [seconde vidéo, quart, secondes
   restantes]) + `v2/chrono/index.json` sur la branche data (clé de déploiement « Téléphone serveur Nocturne », écriture).
-  ~10-15 min par résumé. Format : 720p OBLIGATOIRE (en 480p le bandeau est illisible), H.264 puis VP9 (l'AV1 fait planter le
+  **Tri (19/11, choix de Kiki)** : seuls les matchs à **3 barres ou plus** sont analysés (`note` = watchLevel du site porté en
+  Python sur le scoreboard ESPN, `match_de` relie le résumé au match), un seul résumé par match (GameTime, sinon NBA), meilleurs
+  d'abord : 1 à 4 matchs par nuit. **1 image par seconde** (`PAS = 1`).
+  ~10-15 min par résumé à 2 s (environ le double à 1 s). Format : 720p OBLIGATOIRE (en 480p le bandeau est illisible), H.264 puis VP9 (l'AV1 fait planter le
   décodeur du téléphone). Bandeaux testés : NBC (chrono au-dessus de « 1ST ») et ESPN (tout sur une ligne, chrono sur fond blanc,
   « 2ND » illisible → quart-temps déduit de la chronologie dans `nettoyer`, le plus tôt en cas de doute). Garde-fou : publiée
   seulement si ≥ 40 points et jusqu'au 4e quart-temps. yt-dlp utilise Node.js

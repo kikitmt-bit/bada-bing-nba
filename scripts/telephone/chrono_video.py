@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Nocturne : lire le chrono du match dans un résumé vidéo, image par image.
 
-Tourne sur le téléphone-serveur (Termux). Pour une vidéo : une image toutes les 2 s
+Tourne sur le téléphone-serveur (Termux). Pour une vidéo : une image par seconde
 (bas de l'écran seulement), lecture du bandeau du match (quart-temps + chrono) avec
 tesseract, nettoyage (le match avance toujours dans un résumé), puis une table
 « seconde de la vidéo -> moment du match » que le site suit en direct.
@@ -19,7 +19,7 @@ import time
 
 from PIL import Image, ImageOps
 
-PAS = 2            # une image toutes les 2 s
+PAS = 1            # une image par seconde (choix de Kiki, 19/11)
 BANDE = 0.30       # on ne garde que le bas de l'image (le bandeau du match)
 
 # ---------- lecture du texte ----------

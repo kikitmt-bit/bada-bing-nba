@@ -10,6 +10,7 @@ data du dépôt (v2/chrono/<id>.json + v2/chrono/index.json), que le site lit di
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -45,6 +46,86 @@ def charger(path, defaut):
         return defaut
 
 
+# ---------- la note « à voir » : même formule que le site (watchLevel dans docs/app.js) ----------
+SEUIL = 3          # on n'analyse que les matchs à 3 barres ou plus (choix de Kiki)
+ESPN = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates="
+_SB = {}
+
+
+def scoreboard(jour):
+    if jour not in _SB:
+        with urllib.request.urlopen(ESPN + jour, timeout=30) as r:
+            _SB[jour] = json.load(r).get("events", [])
+    return _SB[jour]
+
+
+def winpct(rec):
+    m = re.match(r"^(\d+)-(\d+)", rec or "")
+    if not m:
+        return .5
+    w, l = int(m.group(1)), int(m.group(2))
+    return w / (w + l) if w + l else .5
+
+
+def jitter(gid):
+    x = 0
+    for c in str(gid):
+        x = (x * 31 + ord(c)) % 997
+    return (x / 997 - .5) * .7
+
+
+def note(ev):
+    """0 à 5 barres, comme sur le site (match terminé)."""
+    comp = ev["competitions"][0]
+    sides, top = {}, 0
+    for c in comp.get("competitors", []):
+        rec = next((r.get("summary", "") for r in c.get("records", []) if r.get("type") == "total" or r.get("name") == "overall"), "")
+        sides[c.get("homeAway")] = (int(c.get("score") or 0), rec)
+        for L in c.get("leaders", []):
+            if L.get("name") == "pointsLeader" or L.get("abbreviation") == "PTS":
+                for l in L.get("leaders", []):
+                    top = max(top, float(l.get("value") or 0))
+    (hs, hr), (as_, ar) = sides.get("home", (0, "")), sides.get("away", (0, ""))
+    st = comp.get("status") or ev.get("status") or {}
+    ot = (st.get("type", {}).get("state") == "post") and (st.get("period") or 0) > 4
+    marge = abs(hs - as_)
+    n = 3 if marge <= 3 else 2.2 if marge <= 6 else 1.4 if marge <= 10 else .7 if marge <= 15 else 0
+    if marge >= 25:
+        n -= 1
+    if ot:
+        n += 1.4
+    n += 1.2 if top >= 45 else .7 if top >= 38 else .3 if top >= 32 else 0
+    if hs + as_ >= 245:
+        n += .4
+    n += (winpct(ar) + winpct(hr) - 1) * 1.2
+    n += jitter(ev["id"])
+    return max(0, min(5, int(n * 5 / 4.6 + .5)))
+
+
+def surnoms(c):
+    n = (c.get("team", {}).get("name") or "").lower()
+    return {"76ers": ["76ers", "sixers"], "trail blazers": ["trail blazers", "blazers"]}.get(n, [n])
+
+
+def match_de(v):
+    """Le match ESPN d'un résumé : les deux surnoms dans le titre, joué la veille ou le jour de la publication (heure de New York)."""
+    t = (v.get("t") or "").lower()
+    try:
+        pub = datetime.fromisoformat(v["p"].replace("Z", "+00:00"))
+    except Exception:
+        return None
+    for d in (1, 0, 2):
+        jour = (pub - timedelta(hours=5) - timedelta(days=d)).strftime("%Y%m%d")
+        for ev in scoreboard(jour):
+            comp = ev["competitions"][0]
+            if (comp.get("status") or ev.get("status") or {}).get("type", {}).get("state") != "post":
+                continue
+            cs = comp.get("competitors", [])
+            if len(cs) == 2 and all(any(n and n in t for n in surnoms(c)) for c in cs):
+                return ev
+    return None
+
+
 def resumes():
     """Les résumés de match récents, GameTime d'abord (c'est celui que le site ouvre en premier)."""
     with urllib.request.urlopen(LISTE + "?t=%d" % time.time(), timeout=30) as r:
@@ -69,7 +150,22 @@ def resumes():
         out.append(v)
     out.sort(key=lambda v: v.get("p", ""), reverse=True)   # les plus récents d'abord
     out.sort(key=lambda v: v.get("c") != "gt")             # GameTime avant NBA (tri stable)
-    return out
+    # un seul résumé par match (celui que le site ouvre : GameTime, sinon NBA), et seulement les matchs à SEUIL barres ou plus
+    gardes, vus = [], set()
+    for v in out:
+        try:
+            ev = match_de(v)
+        except Exception as e:
+            log("ESPN illisible :", e)
+            continue
+        if not ev or ev["id"] in vus:
+            continue
+        vus.add(ev["id"])
+        v["note"] = note(ev)
+        if v["note"] >= SEUIL:
+            gardes.append(v)
+    gardes.sort(key=lambda v: -v["note"])                  # les meilleurs matchs d'abord
+    return gardes
 
 
 def depot_pret():

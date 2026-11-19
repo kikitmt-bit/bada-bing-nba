@@ -386,7 +386,7 @@ const Chrono = (() => {
   /* ---------- le fil du match jusqu'au moment affiché : courbe + quart-temps (sous la vidéo), tendances (à droite) ---------- */
   const elapsed = (per, sec) => per <= 4 ? (per - 1) * 720 + 720 - sec : 2880 + (per - 5) * 300 + 300 - sec;
   function flow(D, at) {
-    const pts = [[0, 0]], qEnd = {}, mins = [0]; // mins : l'écart minute par minute, calculé comme la courbe de la fiche
+    const pts = [[0, 0]], qEnd = {}; // pts : l'écart après chaque panier (secondes de jeu, + = domicile devant)
     let hs = 0, as = 0, maxH = 0, maxA = 0, leads = 0, lastLead = 0, runT = 0, runP = 0, bestT = 0, bestP = 0;
     let lastX = 0, leadH = 0, leadA = 0; // temps passé en tête (en secondes de jeu)
     for (const p of D.plays) {
@@ -406,24 +406,19 @@ const Chrono = (() => {
         pts.push([elapsed(p.per, p.sec), d]);
       }
       qEnd[p.per] = [as, hs];
-      mins[Math.round(elapsed(p.per, p.sec) / 60)] = p.hs - p.as;
     }
     const now = elapsed(at.per, at.sec);
     pts.push([now, hs - as]);
-    // la même courbe que la fiche (un point par minute de jeu, la dernière valeur connue sinon) jusqu'au moment affiché
-    const ser = []; let lastD = 0;
-    for (let i = 0; i <= Math.floor(now / 60); i++) { if (mins[i] !== undefined) lastD = mins[i]; ser.push([i * 60, lastD]); }
-    if (!ser.length || ser[ser.length - 1][0] < now) ser.push([now, hs - as]);
     if (hs > as) leadH += now - lastX; else if (as > hs) leadA += now - lastX;
-    return { pts, ser, qEnd, hs, as, maxH, maxA, leads, runT, runP, bestT, bestP, leadH, leadA, now };
+    return { pts, qEnd, hs, as, maxH, maxA, leads, runT, runP, bestT, bestP, leadH, leadA, now };
   }
   function curveHTML(D, at, F) {
     const h = team(D.home), a = team(D.away);
     // l'axe couvre le temps réglementaire ; une prolongation n'apparaît qu'une fois atteinte (sans spoil)
     const nq = Math.max(4, at.per), span = 2880 + (nq - 4) * 300, W = 1000, H = 200, mid = 100;
-    const amp = Math.max(8, ...F.ser.map(p => Math.abs(p[1]))) * 1.12;
+    const amp = Math.max(8, ...F.pts.map(p => Math.abs(p[1]))) * 1.12;
     const X = x => (x / span * W).toFixed(1), Y = d => (mid - d / amp * (mid - 6)).toFixed(1);
-    const line = F.ser.map((p, i) => (i ? "L" : "M") + X(p[0]) + " " + Y(p[1])).join(" ");
+    const line = F.pts.map((p, i) => (i ? "L" : "M") + X(p[0]) + " " + Y(p[1])).join(" ");
     const area = line + ` L${X(F.now)} ${mid} L0 ${mid} Z`;
     const grid = Array.from({ length: nq - 1 }, (_, i) => i < 3 ? (i + 1) * 720 : 2880 + (i - 3) * 300)
       .map(x => `<line x1="${X(x)}" x2="${X(x)}" y1="0" y2="${H}" class="g"/>`).join("");
@@ -647,5 +642,13 @@ const Chrono = (() => {
   const hasMap = vid => !!(vid && MAPS && MAPS.has(vid));
   const indexReady = loadIndex();
   indexReady.then(() => loadVideos()).then(() => refreshReplays()).catch(() => {}); // « Replay + » dès que l'index est là
-  return { CAN, attach, close, onResumeClick, wantsFull, hasMap, indexReady, testFrames, _flow: flow, _reindex() { MAPS = null; return loadIndex(); }, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
+  function film(j) { // [[secondes de jeu, écart]] après chaque panier, + la fin du dernier quart-temps joué
+    const D = parsePlays(j); if (D.plays.length < 10) return null;
+    const lastPer = Math.max(4, ...D.plays.map(p => p.per));
+    const F = flow(D, { per: lastPer, sec: -1 }); // tout le match
+    const end = elapsed(lastPer, 0), pts = F.pts.filter(q => q[0] <= end);
+    pts[pts.length - 1][0] < end ? pts.push([end, F.hs - F.as]) : 0;
+    return { pts, span: end, nq: lastPer };
+  }
+  return { CAN, attach, film, close, onResumeClick, wantsFull, hasMap, indexReady, testFrames, _flow: flow, _reindex() { MAPS = null; return loadIndex(); }, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
 })();

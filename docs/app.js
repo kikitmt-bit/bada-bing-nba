@@ -169,28 +169,10 @@ function normSummary(j) {
     out.quarters = { home: { id: +home.team.id, q: ls(home), tot: +home.score }, away: { id: +away.team.id, q: ls(away), tot: +away.score } };
     out.ot = ls(home).length > 4;
   } catch (e) { /* pas encore de feuille */ }
-  // film du match (écart minute par minute, + = domicile devant)
+  // film du match : l'écart après chaque panier (+ = domicile devant), le même calcul que le Replay +
   try {
-    const plays = j.plays || [];
-    if (plays.length > 10) {
-      const maxMin = 48 + Math.max(0, ((out.quarters ? out.quarters.home.q.length : 4) - 4)) * 5;
-      const arr = new Array(maxMin + 1).fill(null); arr[0] = 0;
-      let lastEl = 0;
-      for (const p of plays) {
-        if (p.homeScore === undefined) continue;
-        const per = p.period ? p.period.number : 1;
-        let mm = 0, ss = 0;
-        const cv = p.clock ? p.clock.displayValue : "", m = /^(\d+):(\d+)/.exec(cv);
-        if (m) { mm = +m[1]; ss = +m[2]; } else if (/^\d+(\.\d)?$/.test(cv)) ss = +cv; // dernière minute : « 45.3 »
-        const len = per <= 4 ? 12 : 5;
-        const start = per <= 4 ? (per - 1) * 12 : 48 + (per - 5) * 5;
-        const el = Math.min(maxMin, Math.round(start + (len - mm - ss / 60)));
-        arr[el] = p.homeScore - p.awayScore;
-        if (el > lastEl) lastEl = el;
-      }
-      let last = 0;
-      out.series = arr.slice(0, Math.max(lastEl + 1, 13)).map(v => (v === null ? last : (last = v)));
-    }
+    const f = typeof Chrono !== "undefined" ? Chrono.film(j) : null;
+    if (f) { out.series = f.pts; out.span = f.span; }
   } catch (e) { /* tant pis pour la courbe */ }
   // feuille de match complète (tous les joueurs, toutes les colonnes utiles)
   try {
@@ -770,9 +752,10 @@ function nightFacts(posts, sums) {
       F.push({ ...base, p: 7 + (winpct(rl) - winpct(rw)) * 6, k: "surprise", tag: "La surprise", t: `Exploit ${du(W)} face ${au(L)}`, x: `Bilans avant le match : ${W.tri} ${rw} · ${L.tri} ${rl}` });
     if (s.ot) F.push({ ...base, p: 9, k: "fin", tag: "Prolongation", t: `${A.name} – ${H.name} en prolongation`, x: `Il a fallu jouer ${s.quarters ? s.quarters.home.q.length - 4 : 1} prolongation${s.quarters && s.quarters.home.q.length > 5 ? "s" : ""}` });
     else if (m <= 3) F.push({ ...base, p: 8, k: "fin", tag: "Le thriller", t: `Décidé à ${plural(m, "point")}`, x: `${A.name} – ${H.name}, jusqu'au bout` });
-    // la remontée : le vainqueur a été mené de 15 points ou plus (écart minute par minute, + = domicile devant)
+    // la remontée : le vainqueur a été mené de 15 points ou plus (écart après chaque panier, + = domicile devant)
     if (s.series && s.series.length) {
-      const deficit = aw ? Math.max(...s.series) : -Math.min(...s.series);
+      const dv = s.series.map(p => Array.isArray(p) ? p[1] : p);
+      const deficit = aw ? Math.max(...dv) : -Math.min(...dv);
       if (deficit >= 15) F.push({ ...base, p: 7 + deficit / 10, k: "remontee", tag: "La remontée", t: `Remontée de ${deficit} points pour ${le(W)}`, x: `${deficit} points de retard au pire moment` });
     }
     if (m >= 25) F.push({ ...base, p: 4 + m / 20, k: "raclee", tag: "La démonstration", t: `Victoire ${du(W)} avec ${m} points d'écart`, x: `${cap1(le(L))} jamais dans le match` });
@@ -964,7 +947,7 @@ async function openFiche(id) {
   catch (e) { sheet.querySelector(".fbody").innerHTML = `<p class="loadmsg">Impossible de charger les détails. Réessaie dans un instant.</p>`; return; }
   const body = sheet.querySelector(".fbody");
   body.innerHTML = `
-    ${s.series ? `<div class="fsect"><h3><span class="tag">Le film du match</span><i></i></h3>${chartHTML(g, s.series)}</div>` : ""}
+    ${s.series ? `<div class="fsect"><h3><span class="tag">Le film du match</span><i></i></h3>${chartHTML(g, s.series, s.span)}</div>` : ""}
     ${s.quarters ? `<div class="fsect"><h3><span class="tag">Par quart-temps</span><i></i></h3>${quartersHTML(g, s)}</div>` : ""}
     ${s.players.length ? `<div class="fsect"><h3><span class="tag">Les patrons du match</span><i></i></h3>${prosHTML(s.players.slice(0, 6))}</div>` : ""}
     ${s.players.length ? `<div class="fsect"><h3><span class="tag">La feuille de match</span><i></i></h3>
@@ -983,50 +966,59 @@ async function openFiche(id) {
       requestAnimationFrame(() => line.style.strokeDashoffset = 0);
     }
   });
-  hookChart(g, s.series);
+  hookChart(g, s.series, s.span);
 }
 function closeFiche() { ovl.classList.remove("open"); document.body.style.overflow = ""; scheduleRefresh(); }
 
-function chartHTML(g, pts) {
+function filmPts(pts, span) { // [[secondes, écart]] ; l'ancien format (un écart par minute, mode démo) est converti
+  const P = typeof pts[0] === "number" ? pts.map((v, i) => [i * 60, v]) : pts;
+  return { P, span: span || P[P.length - 1][0] || 2880 };
+}
+function chartHTML(g, pts, span0) {
   const W = 720, H = 230, P = { l: 34, r: 14, t: 18, b: 26 };
-  const N = pts.length - 1;
-  const mx = Math.max(4, ...pts.map(Math.abs));
-  const X = i => P.l + i * (W - P.l - P.r) / N, Y = v => P.t + (1 - (v + mx) / (2 * mx)) * (H - P.t - P.b);
-  let dL = "", dP = `M${X(0)},${Y(0)}`, dN = `M${X(0)},${Y(0)}`;
-  pts.forEach((v, i) => { dL += (i ? "L" : "M") + `${X(i)},${Y(v)}`; dP += `L${X(i)},${Y(Math.max(0, v))}`; dN += `L${X(i)},${Y(Math.min(0, v))}`; });
-  dP += `L${X(N)},${Y(0)}Z`; dN += `L${X(N)},${Y(0)}Z`;
-  const marks = []; for (let q = 12; q <= N; q += (q < 48 ? 12 : 5)) marks.push(q);
-  const qs = marks.map(q => `<line x1="${X(q)}" y1="${P.t}" x2="${X(q)}" y2="${H - P.b}" stroke="rgba(255,255,255,.06)"/>
-    <text x="${X(q) - 4}" y="${H - 8}" fill="#62667f" font-size="11" text-anchor="end">${q === N ? "Fin" : q <= 48 ? "Q" + Math.ceil(q / 12) : "P" + Math.ceil((q - 48) / 5)}</text>`).join("");
+  const { P: pp, span } = filmPts(pts, span0);
+  const vals = pp.map(q => q[1]);
+  const mx = Math.max(4, ...vals.map(Math.abs));
+  const X = t => P.l + t * (W - P.l - P.r) / span, Y = v => P.t + (1 - (v + mx) / (2 * mx)) * (H - P.t - P.b);
+  // une ligne qui change à chaque panier : les allers-retours dessinent des dents
+  const dL = pp.map((q, i) => (i ? "L" : "M") + `${X(q[0]).toFixed(1)},${Y(q[1]).toFixed(1)}`).join("");
+  const area = dL + `L${X(span).toFixed(1)},${Y(0).toFixed(1)}L${X(0).toFixed(1)},${Y(0).toFixed(1)}Z`;
+  const marks = []; for (let t = 720; t <= span; t += (t < 2880 ? 720 : 300)) marks.push(t);
+  const qs = marks.map(t => `<line x1="${X(t)}" y1="${P.t}" x2="${X(t)}" y2="${H - P.b}" stroke="rgba(255,255,255,.06)"/>
+    <text x="${X(t) - 4}" y="${H - 8}" fill="#62667f" font-size="11" text-anchor="end">${t === span ? "Fin" : t <= 2880 ? "Q" + Math.round(t / 720) : "P" + Math.round((t - 2880) / 300)}</text>`).join("");
   const a = g.teams.away, h = g.teams.home;
-  const mxi = pts.indexOf(Math.max(...pts)), mni = pts.indexOf(Math.min(...pts));
-  const ann = (i, v, c, tri) => v === 0 ? "" : `<circle cx="${X(i)}" cy="${Y(v)}" r="3.5" fill="${c}" stroke="#0d0e18" stroke-width="2"/>
-    <text x="${X(i)}" y="${Y(v) + (v > 0 ? -9 : 16)}" fill="#f2f3f8" font-size="12" font-weight="700" text-anchor="middle" font-family="Barlow Condensed">+${Math.abs(v)} ${tri}</text>`;
+  const mxi = vals.indexOf(Math.max(...vals)), mni = vals.indexOf(Math.min(...vals));
+  const ann = (i, c, tri) => { const v = vals[i]; return v === 0 ? "" : `<circle cx="${X(pp[i][0])}" cy="${Y(v)}" r="3.5" fill="${c}" stroke="#0d0e18" stroke-width="2"/>
+    <text x="${X(pp[i][0])}" y="${Y(v) + (v > 0 ? -9 : 16)}" fill="#f2f3f8" font-size="12" font-weight="700" text-anchor="middle" font-family="Barlow Condensed">+${Math.abs(v)} ${tri}</text>`; };
+  const cid = "fc" + g.id;
   return `<div class="chartbox">
   <svg class="chart" viewBox="0 0 ${W} ${H}">
-    <path d="${dP}" fill="${h.color}" opacity=".3"/><path d="${dN}" fill="${a.color}" opacity=".3"/>${qs}
+    <defs><clipPath id="${cid}u"><rect x="0" y="0" width="${W}" height="${Y(0)}"/></clipPath><clipPath id="${cid}d"><rect x="0" y="${Y(0)}" width="${W}" height="${H}"/></clipPath></defs>
+    <path d="${area}" fill="${h.color}" opacity=".3" clip-path="url(#${cid}u)"/><path d="${area}" fill="${a.color}" opacity=".3" clip-path="url(#${cid}d)"/>${qs}
     <line x1="${P.l}" y1="${Y(0)}" x2="${W - P.r}" y2="${Y(0)}" stroke="rgba(255,255,255,.3)"/>
     <text x="${P.l}" y="${P.t + 2}" fill="#a8acc4" font-size="11">${h.name} devant</text>
     <text x="${P.l}" y="${H - P.b - 6}" fill="#a8acc4" font-size="11">${a.name} devant</text>
-    <path d="${dL}" fill="none" stroke="#f2f3f8" stroke-width="2" stroke-linejoin="round" class="filmline"/>
-    ${ann(mxi, pts[mxi], h.color, h.tri)}${ann(mni, pts[mni], a.color, a.tri)}
+    <path d="${dL}" fill="none" stroke="#f2f3f8" stroke-width="1.6" stroke-linejoin="round" class="filmline"/>
+    ${ann(mxi, h.color, h.tri)}${ann(mni, a.color, a.tri)}
     <line class="cross" x1="0" y1="${P.t}" x2="0" y2="${H - P.b}" stroke="rgba(255,255,255,.35)" stroke-dasharray="3 3" visibility="hidden"/>
   </svg><div class="ttip"></div>
   <div class="clegend"><span><i style="background:${a.color}"></i>${a.name}</span><span><i style="background:${h.color}"></i>${h.name}</span></div></div>`;
 }
-function hookChart(g, pts) {
+function hookChart(g, pts, span0) {
   if (!pts) return;
   const svg = sheet.querySelector(".chart"), tip = sheet.querySelector(".ttip"), cross = svg && svg.querySelector(".cross");
   if (!svg) return;
-  const W = 720, P = { l: 34, r: 14 }, N = pts.length - 1;
+  const { P: pp, span } = filmPts(pts, span0);
+  const W = 720, P = { l: 34, r: 14 };
   svg.addEventListener("pointermove", e => {
     const r = svg.getBoundingClientRect();
     const fx = (e.clientX - r.left) / r.width * W;
-    const i = Math.max(0, Math.min(N, Math.round((fx - P.l) / (W - P.l - P.r) * N)));
-    const v = pts[i], X = P.l + i * (W - P.l - P.r) / N;
+    const t = Math.max(0, Math.min(span, (fx - P.l) / (W - P.l - P.r) * span));
+    let v = 0; for (const q of pp) { if (q[0] > t) break; v = q[1]; } // l'écart à cet instant (dernier panier passé)
+    const X = P.l + t * (W - P.l - P.r) / span;
     cross.setAttribute("x1", X); cross.setAttribute("x2", X); cross.setAttribute("visibility", "visible");
     tip.style.display = "block"; tip.style.left = (X / W * 100) + "%"; tip.style.top = "14px";
-    const when = i === 0 ? "Début" : i >= N ? "Fin" : i <= 48 ? `Q${Math.min(4, Math.ceil(i / 12))} · ${i}ᵉ min` : `Prolongation`;
+    const when = t <= 0 ? "Début" : t >= span ? "Fin" : t <= 2880 ? `Q${Math.min(4, Math.floor(t / 720) + 1)} · ${Math.floor(t / 60) + 1}ᵉ min` : "Prolongation";
     tip.innerHTML = `${when} — <b>${v === 0 ? "égalité" : v > 0 ? g.teams.home.name + " +" + v : g.teams.away.name + " +" + (-v)}</b>`;
   });
   svg.addEventListener("pointerleave", () => { tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); });

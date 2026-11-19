@@ -651,7 +651,7 @@ function skyHTML(games, hero, scored) {
       ${started || nr || jr ? `<div class="actions">
       ${started ? `<button class="btn amber big" id="revall" ${left ? "" : "disabled"}>${left ? "🎬 Révéler la nuit" : "✓ Nuit révélée"}</button>` : ""}
       ${nr ? `<button class="btn" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
-      ${jr ? `<button class="btn extra" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin">NBA Extra · le journal</button>` : ""}
+      ${jr ? `<button class="btn" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin"><span class="pl">▶</span>NBA Extra · le journal</button>` : ""}
       </div>` : ""}
     </div>
   </section>`;
@@ -1247,7 +1247,8 @@ function renderChips() {
   // seulement 3 nuits : celle d'avant, celle affichée, celle d'après ; le calendrier pour aller plus loin
   const keys = [addDays(state.night, -1), state.night, addDays(state.night, 1)];
   const live = state.games.some(g => g.state === "live");
-  el.innerHTML = keys.map(k => {
+  const cal = `<button class="chip calchip" title="Choisir une autre nuit"><small>Autre nuit</small><b><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></b><input type="date" id="dpick" value="${state.night.slice(0, 4)}-${state.night.slice(4, 6)}-${state.night.slice(6, 8)}"></button>`;
+  el.innerHTML = cal + keys.map(k => {
     const c = chipText(k);
     const cur = k === state.night;
     let dot = "";
@@ -1255,8 +1256,7 @@ function renderChips() {
     else if (k < tonight && !seen.has(k)) dot = `<span class="dot gold"></span>`;
     const lab = k === tonight ? (EURO ? "Cette nuit" : "Ce soir") : k === addDays(tonight, -1) ? (EURO ? "Nuit dernière" : "Hier") : k === addDays(tonight, 1) ? "Demain" : c.s;
     return `<button class="chip ${cur ? "on" : ""}" data-night="${k}">${cur ? `<em>${el.dataset.ctx || ""}</em>` : ""}<small>${lab}</small><b>${c.b}</b>${dot}</button>`;
-  }).join("") + `<span class="nnav">
-      <button class="narrow cal" title="Choisir une date"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><input type="date" id="dpick" value="${state.night.slice(0, 4)}-${state.night.slice(4, 6)}-${state.night.slice(6, 8)}"></button></span>`;
+  }).join("");
   const dp = $("#dpick");
   if (dp) dp.addEventListener("change", () => { if (dp.value) { state.night = dp.value.replaceAll("-", ""); state.revealed.clear(); renderNight(); } });
 }

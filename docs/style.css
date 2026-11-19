@@ -881,3 +881,41 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .ess-top,.ess .ess-h{padding-left:16px;padding-right:16px}
   .essn.pad{padding:0 16px}
 }
+
+/* ---- une seule ligne d'alignement pour toute la page (20/11) : le cadre de « L'essentiel » déborde un peu,
+   son contenu s'aligne sur les tuiles des matchs ---- */
+.stage{margin-left:-20px;margin-right:-20px;padding:0 20px}
+.stage .teaser{padding:26px 0}
+.ess-top,.ess .ess-h,.facts,.frg,.essrow,.essn.pad{padding-left:0;padding-right:0}
+.frg{max-width:calc(var(--n) * 370px)}
+.mvpw{padding-right:0}
+.mvpw .mvp{padding-left:0;padding-right:0}
+.mvpw .perfs{padding-left:0;padding-right:0}
+@media (max-width:900px){
+  .stage{margin-left:-12px;margin-right:-12px;padding:0 12px}
+  .ess-top,.ess .ess-h,.facts,.frg,.essrow,.essn.pad{padding-left:0;padding-right:0}
+  .mvpw .perfs{padding:0 0 20px}
+}
+/* photos des Français : centrées dans le carré (une ancienne règle les décalait vers la gauche) */
+.frt .frp img{margin:0}
+/* le calendrier : première case de la frise, son icône sur la même ligne que les dates */
+.sky.one .calchip{position:relative;padding-right:22px;margin-right:6px}
+.sky.one .calchip::before{content:"";position:absolute;right:0;top:12px;bottom:14px;width:1px;background:var(--line)}
+.sky.one .calchip b{display:flex;justify-content:center;height:1.05em;align-items:center}
+.sky.one .calchip svg{width:24px;height:24px;fill:none;stroke:var(--ink2);stroke-width:1.7}
+.sky.one .calchip:hover svg{stroke:var(--amber)}
+.sky.one .calchip input[type=date]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.sky.one .calchip::after{display:none}
+@media (max-width:900px){ .sky.one .calchip{padding-right:10px;margin-right:2px} .sky.one .calchip small{display:none} .sky.one .calchip svg{width:20px;height:20px} }
+/* même marge intérieure que les tuiles des matchs (14 px) : textes et boutons alignés d'une tuile à l'autre */
+.fact{padding-left:14px;padding-right:14px}
+.fact.has-ph{padding-right:96px}
+/* grand écran : la frise et les boutons restent sur UNE ligne (les boutons se partagent la place restante) */
+@media (min-width:1101px){
+  .sky.one .skyrow{flex-wrap:nowrap}
+  .sky.one .nights{flex:0 0 auto}
+  .sky.one .actions{flex:1 1 0;min-width:0;flex-wrap:nowrap}
+  .sky.one .actions .btn{flex:1 1 0;min-width:0}
+  .sky.one .actions .btn.big{flex-grow:1.35}
+}
+@media (min-width:901px) and (max-width:1400px){ .sky.one .chip{padding-left:14px;padding-right:14px} .sky.one .calchip{padding-right:18px} }

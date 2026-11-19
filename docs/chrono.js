@@ -69,6 +69,10 @@ const Chrono = (() => {
     return { names, plays, home, away };
   }
 
+  const DEBUG = QS.has("debug");
+  function playIndex(D, at) { // nombre d'actions déjà passées : les stats ne changent qu'avec lui
+    let n = 0; for (const p of D.plays) { if (p.per > at.per || (p.per === at.per && p.sec <= at.sec)) break; n++; } return n;
+  }
   /* ---------- les stats jusqu'au moment affiché ---------- */
   function statsAt(D, per, sec) {
     const T = {}; const P = {};
@@ -325,13 +329,13 @@ const Chrono = (() => {
   const STXT = { load: "Préparation…", seek: "Recherche du bandeau…", ok: "● Synchro", lost: "Bandeau caché", pause: "En pause", prep: "● Synchro" };
   function render(force) {
     const el = S && S.el; if (!el) return;
-    const key = [S.on, S.status, S.at && S.at.per, S.at && S.at.sec, S.diag && S.reads].join("|");
+    const key = [S.on, S.status, S.at && S.at.per, S.at && (S.map && !DEBUG ? playIndex(S.D, S.at) : S.at.sec), S.diag && S.reads].join("|");
     if (!force && key === S.key) return;
     S.key = key;
     if (!S.on) { el.innerHTML = panelIdle(); return; }
     const st = S.status;
     const diag = S.diag ? `<div class="lv-diag">${S.diagImg ? `<img src="${S.diagImg}" alt="">` : ""}<code>${S.lock ? "verrou" : "recherche"} · lectures ${S.reads} · ${SURF} · vidéo ${S.ytT !== undefined ? Math.round(S.ytT) + "/" + Math.round(S.ytDur || 0) + " s" : "?"} · lu : ${(S.diagTxt || "—").replace(/</g, "&lt;").slice(0, 120)}</code></div>` : "";
-    const head = `<div class="lv-head"><span class="led lv-clock">${S.at ? clockTxt(S.at.per, S.at.sec) : "--:--"}</span>
+    const head = `<div class="lv-head">${DEBUG || !S.map ? `<span class="led lv-clock">${S.at ? clockTxt(S.at.per, S.at.sec) : "--:--"}</span>` : `<span class="lv-kick sm">Stats en direct</span>`}
       <span class="lv-st ${S.at && st === "ok" ? "ok" : ""}">${STXT[st] || ""}</span>
       ${S.map ? "" : `<button class="lv-ico" data-live-diag title="Diagnostic">🔧</button><button class="lv-ico" data-live-stop title="Arrêter le partage">■</button>`}</div>
       ${DEMO ? `<input class="lv-demo" type="range" min="0" max="${S.D.plays.length - 1}" value="${S.demoI || 0}" aria-label="Simuler le moment du match">` : ""}${diag}`;
@@ -339,11 +343,11 @@ const Chrono = (() => {
     const D = S.D, A = statsAt(D, S.at.per, S.at.sec), h = team(D.home), a = team(D.away), th = A.T[D.home], ta = A.T[D.away];
     const pc = (m, n) => n ? Math.round(100 * m / n) + " %" : "–";
     const row = (lab, va, vh, sa, sh) => { const tot = (sa + sh) || 1;
-      return `<div class="lv-row"><b>${va}</b><span>${lab}</span><b>${vh}</b><i style="--a:${a.color};--h:${h.color};--p:${(sa / tot * 100).toFixed(1)}%"></i></div>`; };
+      return `<div class="lv-row"><b data-k="${lab}a">${va}</b><span>${lab}</span><b data-k="${lab}h">${vh}</b><i style="--a:${a.color};--h:${h.color};--p:${(sa / tot * 100).toFixed(1)}%"></i></div>`; };
     const top = t => Object.entries(A.P).filter(([id]) => D.names[id] && D.names[id].t === t).sort((x, y) => y[1].pts - x[1].pts).slice(0, 4)
-      .map(([id, p]) => `<li><span>${D.names[id].n}</span><b>${p.pts}</b><small>pts</small><b>${p.reb}</b><small>reb</small><b>${p.ast}</b><small>pd</small></li>`).join("");
-    el.innerHTML = head + `
-      <div class="lv-score"><span class="lv-t" style="--mc:${a.color}">${a.tri}</span><span class="led">${A.as}</span><span class="lv-dash">–</span><span class="led">${A.hs}</span><span class="lv-t" style="--mc:${h.color}">${h.tri}</span></div>
+      .map(([id, p]) => `<li><span>${D.names[id].n}</span><b data-k="p${id}">${p.pts}</b><small>pts</small><b data-k="r${id}">${p.reb}</b><small>reb</small><b data-k="a${id}">${p.ast}</b><small>pd</small></li>`).join("");
+    el.innerHTML = head + (DEBUG || !S.map ? `
+      <div class="lv-score"><span class="lv-t" style="--mc:${a.color}">${a.tri}</span><span class="led">${A.as}</span><span class="lv-dash">–</span><span class="led">${A.hs}</span><span class="lv-t" style="--mc:${h.color}">${h.tri}</span></div>` : "") + `
       <div class="lv-rows">
         ${row("Tirs", `${ta.fg}/${ta.fga}`, `${th.fg}/${th.fga}`, ta.fg, th.fg)}
         ${row("Réussite", pc(ta.fg, ta.fga), pc(th.fg, th.fga), ta.fga ? ta.fg / ta.fga : 0, th.fga ? th.fg / th.fga : 0)}
@@ -356,6 +360,12 @@ const Chrono = (() => {
       <div class="lv-pl"><div><h4 style="--mc:${a.color}">${a.name}</h4><ol>${top(D.away) || "<li class=e>—</li>"}</ol></div>
         <div><h4 style="--mc:${h.color}">${h.name}</h4><ol>${top(D.home) || "<li class=e>—</li>"}</ol></div></div>
       <div class="lv-last"><h4>Dernières actions</h4>${A.last.map(p => `<p><time>${p.clk}</time>${fr(p.tx)}</p>`).join("") || "<p>—</p>"}</div>`;
+    const prev = S.vals || {}, vals = {};
+    for (const n of el.querySelectorAll("[data-k]")) {
+      const k = n.dataset.k, v = n.textContent; vals[k] = v;
+      if (S.vals && prev[k] !== undefined && prev[k] !== v) n.classList.add("up");
+    }
+    S.vals = vals;
   }
 
   /* ---------- boucle de lecture ---------- */
@@ -419,18 +429,31 @@ const Chrono = (() => {
     return MAPS;
   }
   loadIndex();
+  // Le moment du match à la seconde t de la vidéo. Les points sont espacés de 2 s : à l'intérieur d'une même action
+  // (même quart, chrono qui descend au rythme de la vidéo), on fait couler le chrono entre deux points ; sinon (changement
+  // d'action, chrono arrêté, saut), on reste sur le dernier point passé. Jamais au-delà du point suivant : jamais en avance.
+  function momentAt(map, t) {
+    let lo = 0, hi = map.length - 1, i = -1;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (map[m][0] <= t) { i = m; lo = m + 1; } else hi = m - 1; }
+    if (i < 0) return null;
+    const p = map[i], q = map[i + 1];
+    let sec = p[2];
+    if (q && q[1] === p[1]) {
+      const dt = q[0] - p[0], ds = p[2] - q[2];
+      if (dt > 0 && dt <= 4.5 && ds > 0 && ds <= dt * 1.3 + .5) sec = p[2] - Math.min(ds, (t - p[0]) * ds / dt);
+    }
+    return { per: p[1], sec };
+  }
   async function prepLoop(my) {
     let n = 0;
     while (S === my) {
       if (n++ % 6 === 0) listenYT();
       // entre deux messages du lecteur, on avance au plus de 1,5 s (pub, vidéo bloquée : on s'arrête au lieu de courir devant)
       const t = my.ytT === undefined ? null : my.ytT + (my.ytState === 1 ? Math.min(1.5, (performance.now() - my.ytAt) / 1000) : 0);
-      let at = null;
-      if (t !== null) for (const p of my.map) { if (p[0] <= t + .3) at = p; else break; } // le dernier point déjà passé : jamais en avance
-      my.at = at ? { per: at[1], sec: at[2] } : null;
+      my.at = t === null ? null : momentAt(my.map, t);
       my.status = my.ytState === 2 ? "pause" : "prep";
       render();
-      await wait(300);
+      await wait(150);
     }
   }
 

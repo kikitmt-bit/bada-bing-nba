@@ -516,6 +516,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .lv-small{font-size:12px;color:var(--ink3)!important}
 .lv-head{display:flex;align-items:center;gap:10px;padding-right:40px;margin-bottom:10px}
 .lv-clock{font-size:22px;white-space:nowrap;cursor:default}
+.lv-kick.sm{font-size:16px;white-space:nowrap}
+.lv b.up{animation:lvup 1.2s ease-out}
+@keyframes lvup{0%{color:#1a1003;background:var(--amber);box-shadow:0 0 14px var(--amber)}100%{background:transparent;box-shadow:none}}
 .lv-st{font:700 11px var(--disp);letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .lv-st.ok{color:#47d17a}
 .lv-ico{flex:0 0 auto;width:28px;height:28px;border:0;background:var(--panel2);color:var(--ink2);cursor:pointer;font-size:12px}

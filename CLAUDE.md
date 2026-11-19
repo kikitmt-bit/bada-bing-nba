@@ -65,7 +65,12 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   « 2ND » illisible → quart-temps déduit de la chronologie dans `nettoyer`, le plus tôt en cas de doute). Garde-fou : publiée
   seulement si ≥ 40 points et jusqu'au 4e quart-temps. yt-dlp utilise Node.js
   (`~/.config/yt-dlp/config` = `--js-runtimes node`, sinon téléchargement bridé). Journal : `~/nocturne/boucle.log`, état : `etat.json`. Le site (`attach` → `prepLoop`) suit la position du lecteur YouTube (postMessage) et affiche le dernier point
-  déjà passé (jamais en avance) : aucun partage d'écran, marche aussi sur téléphone. Sans table : mode direct ci-dessous (PC),
+  déjà passé (jamais en avance) : aucun partage d'écran, marche aussi sur téléphone. Le lecteur envoie sa position toutes les
+  ~0,27 s ; `momentAt` fait couler le chrono entre deux points d'une même action (sinon reste sur le dernier point).
+  Panneau = **stats seules** (choix de Kiki : le chrono et le score affichés rendaient visibles les petits décalages) ; les chiffres
+  qui changent s'allument (`.up`) ; `?debug=1` réaffiche chrono + score pour contrôler. **MODE ESSAI (19/11)** : boucle du téléphone
+  coupée (ligne commentée dans demarrage.sh) ; à la remise en route, `depuis.txt` limite aux nouvelles soirées (pas l'historique).
+  Tables d'essai publiées : Lakers-Hornets, Celtics-Nuggets, Suns-Kings (17-18/11). Sans table : mode direct ci-dessous (PC),
   sinon pas de panneau sur téléphone.
 - **Stats en direct sur le résumé (19/11, `docs/chrono.js`, secours sans table)** : sur ordinateur, panneau à droite du lecteur (`playVideo(vid, label, gid)`).
   Partage de l'onglet (`getDisplayMedia`, seule façon de voir l'image d'un lecteur YouTube) **une fois par visite** : le flux est gardé

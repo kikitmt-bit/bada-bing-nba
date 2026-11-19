@@ -25,6 +25,7 @@ ETAT = os.path.join(ICI, "etat.json")       # vidéos déjà traitées (ou raté
 LISTE = "https://raw.githubusercontent.com/kikitmt-bit/bada-bing-nba/data/v2/videos.json"
 REMOTE = "git@github.com:kikitmt-bit/bada-bing-nba.git"
 JOURS = 3          # on ne regarde que les résumés des 3 derniers jours
+DEPUIS = os.path.join(ICI, "depuis.txt")  # date ISO : rien avant (créée au 1er lancement : seulement les nouvelles soirées)
 ESSAIS = 3         # au-delà, on abandonne une vidéo
 
 
@@ -49,6 +50,10 @@ def resumes():
     with urllib.request.urlopen(LISTE + "?t=%d" % time.time(), timeout=30) as r:
         vids = json.load(r).get("videos", [])
     lim = datetime.now(timezone.utc) - timedelta(days=JOURS)
+    if not os.path.exists(DEPUIS):
+        with open(DEPUIS, "w") as f:
+            f.write(datetime.now(timezone.utc).isoformat())
+    lim = max(lim, datetime.fromisoformat(open(DEPUIS).read().strip()))
     out = []
     for v in vids:
         t = (v.get("t") or "").lower()

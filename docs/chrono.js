@@ -96,6 +96,7 @@ const Chrono = (() => {
     return tx.replace(/\bmakes\b/g, "réussit").replace(/\bmisses\b/g, "rate")
       .replace(/three point (jumper|jump shot|shot|pullup jump shot|step back jump shot)/gi, "un tir à 3 pts")
       .replace(/free throw (\d) of (\d)/gi, "le lancer franc $1/$2").replace(/\b(\d+)-foot\b/g, "à $1 pieds,")
+      .replace(/driving floating (jump shot|jumper|bank jump shot)/gi, "un floater en pénétration").replace(/running (jump shot|jumper|pullup jump shot)/gi, "un tir en course")
       .replace(/driving (layup|dunk)/gi, "$1 en pénétration").replace(/\blayup\b/gi, "un lay-up").replace(/\bdunk\b/gi, "un dunk")
       .replace(/(pullup |step back |turnaround |fadeaway )?jump(er| shot)/gi, "un tir").replace(/defensive rebound/gi, "rebond défensif")
       .replace(/offensive rebound/gi, "rebond offensif").replace(/\((.+?) assists\)/g, "(passe de $1)").replace(/bad pass/gi, "mauvaise passe")
@@ -321,7 +322,7 @@ const Chrono = (() => {
       <p class="lv-small">Le navigateur demande de partager <b>cet onglet</b> (une fois par visite) : c'est la seule façon pour le site de voir le chrono du match.
       L'image reste sur ton ordinateur, rien n'est envoyé.</p>${DEMO ? `<p class="lv-small">Démo : pas de vraie vidéo, un curseur simule le chrono.</p>` : ""}</div>`;
   }
-  const STXT = { load: "Préparation…", seek: "Recherche du bandeau…", ok: "● Synchro", lost: "Bandeau caché", pause: "En pause" };
+  const STXT = { load: "Préparation…", seek: "Recherche du bandeau…", ok: "● Synchro", lost: "Bandeau caché", pause: "En pause", prep: "● Synchro" };
   function render(force) {
     const el = S && S.el; if (!el) return;
     const key = [S.on, S.status, S.at && S.at.per, S.at && S.at.sec, S.diag && S.reads].join("|");
@@ -332,7 +333,7 @@ const Chrono = (() => {
     const diag = S.diag ? `<div class="lv-diag">${S.diagImg ? `<img src="${S.diagImg}" alt="">` : ""}<code>${S.lock ? "verrou" : "recherche"} · lectures ${S.reads} · ${SURF} · vidéo ${S.ytT !== undefined ? Math.round(S.ytT) + "/" + Math.round(S.ytDur || 0) + " s" : "?"} · lu : ${(S.diagTxt || "—").replace(/</g, "&lt;").slice(0, 120)}</code></div>` : "";
     const head = `<div class="lv-head"><span class="led lv-clock">${S.at ? clockTxt(S.at.per, S.at.sec) : "--:--"}</span>
       <span class="lv-st ${S.at && st === "ok" ? "ok" : ""}">${STXT[st] || ""}</span>
-      <button class="lv-ico" data-live-diag title="Diagnostic">🔧</button><button class="lv-ico" data-live-stop title="Arrêter le partage">■</button></div>
+      ${S.map ? "" : `<button class="lv-ico" data-live-diag title="Diagnostic">🔧</button><button class="lv-ico" data-live-stop title="Arrêter le partage">■</button>`}</div>
       ${DEMO ? `<input class="lv-demo" type="range" min="0" max="${S.D.plays.length - 1}" value="${S.demoI || 0}" aria-label="Simuler le moment du match">` : ""}${diag}`;
     if (!S.at) { el.innerHTML = head + `<p class="lv-wait">Lance la vidéo : dès que le bandeau du match est à l'écran, les stats apparaissent.</p>`; return; }
     const D = S.D, A = statsAt(D, S.at.per, S.at.sec), h = team(D.home), a = team(D.away), th = A.T[D.home], ta = A.T[D.away];
@@ -405,24 +406,63 @@ const Chrono = (() => {
     if (S) { S.on = false; S.at = null; S.cand = null; S.lock = null; render(true); }
   }
 
+  /* ---------- mode préparé : le téléphone-serveur a déjà lu le chrono de la vidéo ----------
+     Table « seconde de la vidéo -> moment du match » (branche data, v2/chrono/<vidéo>.json).
+     Le lecteur YouTube donne sa position : on suit, sans partage d'écran, sur tous les appareils. */
+  let MAPS = null;
+  const tick5 = () => Math.floor(Date.now() / 300e3);
+  async function loadIndex() {
+    if (MAPS) return MAPS;
+    if (DEMO) return (MAPS = new Set());
+    try { const j = await fetchJSON(RAWDATA + "chrono/index.json?t=" + tick5()); MAPS = new Set(j.v || []); }
+    catch (e) { MAPS = new Set(); }
+    return MAPS;
+  }
+  loadIndex();
+  async function prepLoop(my) {
+    let n = 0;
+    while (S === my) {
+      if (n++ % 6 === 0) listenYT();
+      const t = my.ytT === undefined ? null : my.ytT + (my.ytState === 1 ? (performance.now() - my.ytAt) / 1000 : 0);
+      let at = null;
+      if (t !== null) for (const p of my.map) { if (p[0] <= t + .3) at = p; else break; } // le dernier point déjà passé : jamais en avance
+      my.at = at ? { per: at[1], sec: at[2] } : null;
+      my.status = my.ytState === 2 ? "pause" : "prep";
+      render();
+      await wait(300);
+    }
+  }
+
   /* ---------- branchement sur le lecteur vidéo ---------- */
-  async function attach(gid, panel, iframe) {
+  async function attach(gid, panel, iframe, vid) {
     if (S) S.on = false;
-    const my = S = { gid, el: panel, iframe, on: false, miss: 0, fails: 0, reads: 0, D: null, polar: false };
+    const my = S = { gid, vid, el: panel, iframe, on: false, miss: 0, fails: 0, reads: 0, D: null, polar: false };
     panel.innerHTML = `<p class="lv-wait">Chargement du déroulé du match…</p>`;
-    if (!DEMO) worker().catch(() => {});
+    const idx = await loadIndex();
+    const prepared = vid && idx.has(vid);
+    if (!DEMO && !prepared && CAN) worker().catch(() => {});
+    let map = null;
     try {
-      if (DEMO) { const g = state.games.find(x => x.id === gid); my.D = demoPlays(await window.DEMO.summary(gid), g); }
-      else my.D = parsePlays(await fetchJSON(API + "summary?event=" + gid));
+      const [sum, m] = await Promise.all([
+        DEMO ? window.DEMO.summary(gid) : fetchJSON(API + "summary?event=" + gid),
+        prepared ? fetchJSON(RAWDATA + "chrono/" + vid + ".json?t=" + tick5()).catch(() => null) : null]);
+      my.D = DEMO ? demoPlays(sum, state.games.find(x => x.id === gid)) : parsePlays(sum);
+      map = m;
     } catch (e) { my.D = null; }
     if (S !== my) return;
-    if (!my.D || my.D.plays.length < 20) { panel.innerHTML = `<p class="lv-wait">Pas de déroulé ESPN pour ce match : pas de stats en direct.</p>`; return; }
+    const hide = () => { panel.remove(); iframe.closest(".vplayer").classList.remove("live"); };
+    if (!my.D || my.D.plays.length < 20) { if (CAN) panel.innerHTML = `<p class="lv-wait">Pas de déroulé ESPN pour ce match : pas de stats en direct.</p>`; else hide(); return; }
+    if (map && map.pts && map.pts.length >= 5) { my.map = map.pts; my.on = true; my.status = "prep"; render(true); prepLoop(my); return; }
+    if (!CAN) { hide(); return; } // téléphone sans table préparée : pas de panneau
     render(true);
     if (STREAM && STREAM.active) start(false); // déjà partagé pendant cette visite : rien à redemander
   }
   function close() { if (S) { S.on = false; S = null; } } // le partage reste ouvert pour le résumé suivant
   // appelé au clic « Résumé » (geste de l'utilisateur, exigé par le navigateur pour demander le partage)
-  function onResumeClick() { if (CAN && !DEMO && store.get("live", true) && store.get("liveused", false)) ensureStream(); }
+  function onResumeClick(vid) {
+    if (vid && MAPS && MAPS.has(vid)) return; // table préparée : pas besoin de partage
+    if (CAN && !DEMO && store.get("live", true) && store.get("liveused", false)) ensureStream();
+  }
   document.addEventListener("click", e => {
     if (e.target.closest("[data-live-start]")) { store.set("liveused", true); start(true); }
     else if (e.target.closest("[data-live-stop]")) stop();
@@ -447,5 +487,5 @@ const Chrono = (() => {
     }
     S = keep; return out;
   }
-  return { CAN, attach, close, onResumeClick, testFrames, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
+  return { CAN, attach, close, onResumeClick, testFrames, _reindex() { MAPS = null; return loadIndex(); }, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
 })();

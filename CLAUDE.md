@@ -54,7 +54,16 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   (« REPLAY - NBA Extra (13/11) » = nuit du 12 au 13, `findJournal`) et « Résumé de la nuit » NBA (`findNightRecap`,
   « nightly recap » + date) en tête de page ; lecteur intégré (`playVideo`), SAUF les vidéos beIN (`c: "bein"`) : beIN bloque
   leur lecture hors de YouTube (« Vidéo non disponible »), donc NBA Extra s'ouvre dans un nouvel onglet YouTube (app sur téléphone).
-- **Stats en direct sur le résumé (19/11, `docs/chrono.js`)** : sur ordinateur, panneau à droite du lecteur (`playVideo(vid, label, gid)`).
+- **Stats synchronisées sur le résumé : MODE PRÉPARÉ (19/11, le principal)** : le **téléphone-serveur** de Kiki (Mi A2 Lite sous Termux,
+  `ssh telephone`, voir `scripts/telephone/`) lit `v2/videos.json` toutes les 20 min (`boucle.py`, lancé au démarrage par
+  `~/.termux/boot/demarrage.sh`), télécharge chaque nouveau résumé de match (GameTime puis NBA, 3 derniers jours, 720p sans son,
+  connexion de particulier : pas de blocage YouTube), en lit le chrono 1 image / 2 s (`chrono_video.py` : même lecture en 2 temps
+  que le site, puis plus longue suite chronologique) et publie `v2/chrono/<id>.json` (`pts` = [seconde vidéo, quart, secondes
+  restantes]) + `v2/chrono/index.json` sur la branche data (clé de déploiement « Téléphone serveur Nocturne », écriture).
+  ~7 min par résumé. Le site (`attach` → `prepLoop`) suit la position du lecteur YouTube (postMessage) et affiche le dernier point
+  déjà passé (jamais en avance) : aucun partage d'écran, marche aussi sur téléphone. Sans table : mode direct ci-dessous (PC),
+  sinon pas de panneau sur téléphone.
+- **Stats en direct sur le résumé (19/11, `docs/chrono.js`, secours sans table)** : sur ordinateur, panneau à droite du lecteur (`playVideo(vid, label, gid)`).
   Partage de l'onglet (`getDisplayMedia`, seule façon de voir l'image d'un lecteur YouTube) **une fois par visite** : le flux est gardé
   d'un résumé à l'autre ; après la 1re activation (`bb2_liveused`), le partage est demandé dès le clic « Résumé » (`onResumeClick`,
   geste exigé par le navigateur ; case « Proposer le partage… » = `bb2_live`). Lecture en 2 temps (tesseract.js, jsdelivr) :

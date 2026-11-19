@@ -344,7 +344,7 @@ function playVideo(vid, label, gid) { // lecteur intégré, sans quitter le site
   if (VIDS && VIDS.some(v => v.id === vid && v.c === "bein")) {
     window.open("https://www.youtube.com/watch?v=" + vid, "_blank", "noopener"); return;
   }
-  const live = gid && typeof Chrono !== "undefined" && Chrono.CAN; // stats en direct à côté du résumé (ordinateur seulement)
+  const live = gid && typeof Chrono !== "undefined"; // stats en direct à côté du résumé (le panneau se retire s'il n'a rien à montrer)
   const frame = vid ? `<iframe src="https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0&hl=fr${live ? "&enablejsapi=1&origin=" + encodeURIComponent(location.origin) : ""}"
       title="${label}" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>`
     : `<div class="vdemo">Démo : la vidéo YouTube serait ici</div>`;
@@ -356,11 +356,11 @@ function playVideo(vid, label, gid) { // lecteur intégré, sans quitter le site
       ${vid ? `<a href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a>` : ""}</div></div>
     ${live ? `<aside class="lv" id="lvpanel"></aside>` : ""}`;
   vidovl.classList.add("open"); document.body.style.overflow = "hidden";
-  if (live) Chrono.attach(gid, $("#lvpanel"), vplayer.querySelector(".vframe"));
+  if (live) Chrono.attach(gid, $("#lvpanel"), vplayer.querySelector(".vframe"), vid);
 }
 async function openResume(id, extra) {
   const g = state.games.find(x => x.id === id); if (!g) return;
-  if (!extra && typeof Chrono !== "undefined") Chrono.onResumeClick(); // partage demandé tout de suite (le navigateur l'exige pendant le clic)
+  if (!extra && typeof Chrono !== "undefined") { const v0 = VIDS ? findVideo(g) : null; Chrono.onResumeClick(v0 && v0.id); } // partage demandé pendant le clic (exigé par le navigateur), sauf si la vidéo est déjà analysée
   if (DEMO) {
     if (extra || !(typeof Chrono !== "undefined" && Chrono.CAN)) { toast("Démo : ici, le vrai résumé vidéo se lancerait dans le site"); return; }
     playVideo(null, `${g.teams.away.name} – ${g.teams.home.name} · démo`, g.id); return;

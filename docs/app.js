@@ -623,7 +623,7 @@ function greeting() {
   const hr = new Date().getHours();
   return hr < 5 ? "Bonne nuit" : hr < 12 ? "Bonjour" : hr < 18 ? "Bon après-midi" : "Bonsoir";
 }
-function skyHTML(games, hero) {
+function skyHTML(games, hero, scored) {
   const d1 = keyDate(state.night), d2 = keyDate(addDays(state.night, 1));
   const cap = s => s[0].toUpperCase() + s.slice(1);
   const big = EURO ? `${d1.getUTCDate()}<em>→</em>${d2.getUTCDate()}` : `${d1.getUTCDate()} ${FR({ month: "short" }).format(d1).replace(".", "")}`;
@@ -643,24 +643,34 @@ function skyHTML(games, hero) {
   const nr = started && !DEMO ? findNightRecap(state.night) : null;
   const jr = started && !DEMO ? findJournal(state.night) : null;
   const left = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).length;
-  const ctr = (n, lab, cls) => `<div class="ctr ${cls || ""}"><span class="led"><span class="v" data-count="${n}">0</span></span><small>${lab}</small></div>`;
-  return `<section class="sky">
+  const right = hero ? heroHTML(hero.g, hero.lvl) : topHTML(scored || [], started);
+  return `<section class="sky ${right ? "two" : ""}">
+    <div class="skyl">
     <p class="greet"><i></i>${greeting()} — ${ctx}</p>
     <div class="ntitle">
       <h1><small>${small}</small><span>${big}</span></h1>
-      ${games.length ? `<div class="counters">
-        ${ctr(games.length, games.length > 1 ? "matchs" : "match")}
-        ${ctr(top, started ? "à voir" : "affiches")}
-        ${nLive ? ctr(nLive, "en direct", "live") : ""}
-      </div>` : ""}
     </div>
     ${started || nr || jr ? `<div class="actions">
       ${started ? `<button class="btn amber big" id="revall" ${left ? "" : "disabled"}>${left ? "🎬 Révéler la nuit" : "✓ Nuit révélée"}</button>` : ""}
       ${nr ? `<button class="btn" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
       ${jr ? `<button class="btn extra" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin">NBA Extra · le journal</button>` : ""}
     </div>` : ""}
+    </div>
+    ${right ? `<div class="skyr">${right}</div>` : ""}
     <div class="nights" id="nights"></div>
   </section>`;
+}
+// quand aucun match ne sort du lot : les 3 meilleurs de la nuit, une ligne chacun (sans spoil)
+function topHTML(scored, started) {
+  if (!scored.length) return "";
+  const row = ({ g, lvl }) => {
+    const a = g.teams.away, h = g.teams.home;
+    const act = g.state === "post" ? `<button class="btn amber" data-resume="${g.id}">${replayLabel(g)}</button>`
+      : g.state === "live" ? `<span class="tl-live">● En direct</span>` : `<span class="tl-time">${hourLocal(g.date)}</span>`;
+    return `<div class="tl r${lvl}">${logoHTML(a)}${logoHTML(h)}<span class="tl-n"><b>${a.name}</b><b>${h.name}</b></span>
+      <span class="tl-h">${heatHTML(lvl)}</span>${act}</div>`;
+  };
+  return `<div class="topn"><span class="tag">${started ? "Le top de la nuit" : "Les affiches de la nuit"}</span>${scored.slice(0, 3).map(row).join("")}</div>`;
 }
 async function renderNight(soft) {
   const tok = ++state.tok;
@@ -687,9 +697,8 @@ async function renderNight(soft) {
     .sort((x, y) => isFav(y) - isFav(x) || watchLevel(y) - watchLevel(x) || x.date - y.date);
   const nPost = games.filter(g => g.state === "post").length;
 
-  main.innerHTML = `${skyHTML(games, hero)}
+  main.innerHTML = `${skyHTML(games, hero, scored)}
     ${!games.length ? `<p class="loadmsg">Pas de match cette nuit-là. Les joueurs dorment aussi. 🌙</p>` : ""}
-    ${hero ? heroHTML(hero.g, hero.lvl) : ""}
     ${rest.length ? `<div class="sect"><h2>${hero ? "Les autres matchs" : "Les matchs de la nuit"}</h2><i></i></div>
     <div class="bugs">${rest.map((g, i) => cardHTML(g, i)).join("")}</div>` : ""}
     ${nPost >= 2 ? `<section class="stage" id="stage">

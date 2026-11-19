@@ -468,11 +468,10 @@ const Chrono = (() => {
     }
     const ring = last ? `<circle cx="${last.X.toFixed(1)}" cy="${last.Y.toFixed(1)}" r="1.4" stroke="${last.col}" class="ring" key="${dots.length}"/>` : "";
     const z = (t, i) => `${Z[t][i][0]}/${Z[t][i][1]}`;
-    return `<div class="lv-shots"><h4>Les tirs</h4>
+    return `<div class="lv-shots"><div class="lv-courth"><h4>Les tirs</h4><span style="--mc:${a.color}">◀ ${a.tri}</span><span style="--mc:${h.color}">${h.tri} ▶</span></div>
       <svg class="lv-court" viewBox="-1 -1 96 52" role="img" aria-label="Les tirs des deux équipes jusqu'ici">
         <g class="ln"><rect x="0" y="0" width="94" height="50"/><path d="M47 0V50"/><circle cx="47" cy="25" r="6"/>
         ${HALF}<g transform="matrix(-1 0 0 1 94 0)">${HALF}</g></g>
-        <text x="1.5" y="4.6" class="tt" fill="${a.color}">${a.tri}</text><text x="92.5" y="4.6" class="tt" text-anchor="end" fill="${h.color}">${h.tri}</text>
         ${dots.join("")}${ring}</svg>
       <div class="lv-zones"><span></span><b>Raquette</b><b>Mi-distance</b><b>3 points</b>
         <span style="--mc:${a.color}">${a.tri}</span><i>${z(D.away, 0)}</i><i>${z(D.away, 1)}</i><i>${z(D.away, 2)}</i>
@@ -640,5 +639,8 @@ const Chrono = (() => {
     }
     S = keep; return out;
   }
-  return { CAN, attach, close, onResumeClick, wantsFull, testFrames, _reindex() { MAPS = null; return loadIndex(); }, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
+  const hasMap = vid => !!(vid && MAPS && MAPS.has(vid));
+  const indexReady = loadIndex();
+  indexReady.then(() => loadVideos()).then(() => refreshReplays()).catch(() => {}); // « Replay + » dès que l'index est là
+  return { CAN, attach, close, onResumeClick, wantsFull, hasMap, indexReady, testFrames, _reindex() { MAPS = null; return loadIndex(); }, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
 })();

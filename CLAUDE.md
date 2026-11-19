@@ -50,6 +50,11 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   les deux scores s'affrontent quart-temps par quart-temps (`linescores` du scoreboard, ~0,5 s par quart), le leader
   s'illumine (`.lead`/`.trail`), étiquette Q1→Q4/Prolongation, verdict final + particules selon la rareté.
   « Tout révéler » = cérémonie du moins bon au meilleur, le match de la nuit en dernier (800 ms d'écart).
+- **Boutons (20/11, demande de Kiki)** : « ▶ Replay » (le résumé vidéo du match) et « ▶ Replay + » quand la vidéo a sa table de
+  stats (`hasPlus` → `Chrono.hasMap`, boutons mis à jour par `refreshReplays` quand l'index arrive) ; le NBA Extra d'un match =
+  « Replay FR » (pas de « FR + » possible : beIN interdit la lecture intégrée, donc pas de position de lecture à suivre). Le journal
+  du matin garde « NBA Extra · le journal ». Drapeau : 3 bandes parallèles au bord incliné du bouton (SVG en fond). Le match de la
+  nuit affiche la jauge 5 barres + le commentaire (plus « À voir · 02h00 »).
 - **NBA Extra de retour** : bouton par match (titre beIN « Résumé : X @ Y », `findExtra`), journal du matin
   (« REPLAY - NBA Extra (13/11) » = nuit du 12 au 13, `findJournal`) et « Résumé de la nuit » NBA (`findNightRecap`,
   « nightly recap » + date) en tête de page ; lecteur intégré (`playVideo`), SAUF les vidéos beIN (`c: "bein"`) : beIN bloque

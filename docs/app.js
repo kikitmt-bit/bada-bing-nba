@@ -370,7 +370,7 @@ async function openResume(id, extra) {
   await loadVideos();
   const v = extra ? findExtra(g) : findVideo(g);
   if (!v) { window.open(ytURL(g), "_blank", "noopener"); return; }
-  playVideo(v.id, `${g.teams.away.name} – ${g.teams.home.name} · ${extra ? "NBA Extra" : v.c === "gt" ? "résumé GameTime" : "résumé NBA"}`, extra ? null : g.id);
+  playVideo(v.id, `${g.teams.away.name} – ${g.teams.home.name} · ${extra ? "Replay FR (NBA Extra)" : v.c === "gt" ? "replay GameTime" : "replay NBA"}`, extra ? null : g.id);
 }
 function closeResume() {
   if (typeof Chrono !== "undefined") Chrono.close();
@@ -418,17 +418,26 @@ function heroHTML(g, lvl) {
     <div class="jumbo-in">
       <div class="beam l"></div><div class="beam r"></div>
       <div class="jtop"><span class="tag">${pre ? "L'affiche de la nuit" : "Le match de la nuit"}</span>
-        <span class="when">${pre ? "Affiche" : RARL[lvl]} · ${hourLocal(g.date)}</span></div>
+        <span class="when r${lvl}">${pre ? `Affiche · ${hourLocal(g.date)}` : `${heatHTML(lvl)}<span>${RARL[lvl]}</span>`}</span></div>
       <div class="jmid">${side(a, "away")}${mid}${side(h, "home")}</div>
       ${foot ? `<div class="jfoot">${foot}</div>` : ""}
     </div>
     <div class="pz"></div>
   </section>`;
 }
+// « Replay » = le résumé vidéo ; « Replay + » = le résumé avec les stats qui suivent la vidéo (analysé par le téléphone-serveur)
+function hasPlus(g) { const v = VIDS ? findVideo(g) : null; return !!(v && typeof Chrono !== "undefined" && Chrono.hasMap(v.id)); }
+function replayLabel(g) { return `<span class="pl">▶</span>Replay${hasPlus(g) ? `<b class="plus">+</b>` : ""}`; }
+function refreshReplays() { // l'index des vidéos analysées arrive parfois après l'affichage : on met les boutons à jour
+  for (const b of document.querySelectorAll("[data-resume]")) {
+    const g = state.games.find(x => x.id === b.dataset.resume);
+    if (g) { const html = replayLabel(g); if (b.innerHTML !== html) b.innerHTML = html; }
+  }
+}
 function btnsHTML(g) {
   if (g.state === "pre") return "";
-  const r = g.state === "post" ? `<button class="btn amber" data-resume="${g.id}"><span class="pl">▶</span>Résumé</button>` : "";
-  const x = g.state === "post" && findExtra(g) ? `<button class="btn extra" data-extra="${g.id}">NBA Extra</button>` : "";
+  const r = g.state === "post" ? `<button class="btn amber" data-resume="${g.id}">${replayLabel(g)}</button>` : "";
+  const x = g.state === "post" && findExtra(g) ? `<button class="btn extra" data-extra="${g.id}">Replay FR</button>` : "";
   return `${r}${x}<button class="btn" data-fiche="${g.id}">Stats</button>`;
 }
 function cardHTML(g, i) {
@@ -733,7 +742,7 @@ async function openFiche(id) {
     ${s.players.length ? `<div class="fsect"><h3><span class="tag">La feuille de match</span><i></i></h3>
       <p class="bx-hint">Touche un joueur pour voir tous ses tirs sur le terrain 🎯</p>
       ${boxHTML(g, s, "away")}${boxHTML(g, s, "home")}</div>` : ""}
-    <div class="fbtns">${g.state === "post" ? `<button class="btn amber big" data-resume="${g.id}"><span class="pl">▶</span>Résumé vidéo</button>` : ""}</div>
+    <div class="fbtns">${g.state === "post" ? `<button class="btn amber big" data-resume="${g.id}">${replayLabel(g)}</button>` : ""}</div>
     <div class="next-note">Bientôt dans la fiche : face-à-face des deux équipes, avant-match détaillé, absents.</div>`;
   state.fiche = s; // pour la carte de tirs
   requestAnimationFrame(() => {

@@ -71,8 +71,8 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   déjà passé (jamais en avance) : aucun partage d'écran, marche aussi sur téléphone. Le lecteur envoie sa position toutes les
   ~0,27 s ; `momentAt` fait couler le chrono entre deux points d'une même action (sinon reste sur le dernier point).
   Panneau = **stats seules** (choix de Kiki : le chrono et le score affichés rendaient visibles les petits décalages) ; les chiffres
-  qui changent s'allument (`.up`) ; `?debug=1` réaffiche chrono + score pour contrôler. **MODE ESSAI (19/11)** : boucle du téléphone
-  coupée (ligne commentée dans demarrage.sh) ; à la remise en route, `depuis.txt` limite aux nouvelles soirées (pas l'historique).
+  qui changent s'allument (`.up`) ; `?debug=1` réaffiche chrono + score pour contrôler. Boucle du téléphone **rallumée le 19/11 à
+  15h08** (après un mode essai) : `depuis.txt` = cette date, donc seulement les nouvelles soirées, jamais l'historique.
   Tables d'essai publiées : Lakers-Hornets, Celtics-Nuggets, Suns-Kings (17-18/11).
   **Plein écran (19/11, demande de Kiki)** : avec stats possibles (`Chrono.wantsFull`), le lecteur s'ouvre en plein écran
   (`requestFullscreen` pendant le clic, classes `.full`), **sans défilement sur PC** (vidéo dimensionnée pour laisser ~250 px

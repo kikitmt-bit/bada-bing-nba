@@ -70,7 +70,12 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   Panneau = **stats seules** (choix de Kiki : le chrono et le score affichés rendaient visibles les petits décalages) ; les chiffres
   qui changent s'allument (`.up`) ; `?debug=1` réaffiche chrono + score pour contrôler. **MODE ESSAI (19/11)** : boucle du téléphone
   coupée (ligne commentée dans demarrage.sh) ; à la remise en route, `depuis.txt` limite aux nouvelles soirées (pas l'historique).
-  Tables d'essai publiées : Lakers-Hornets, Celtics-Nuggets, Suns-Kings (17-18/11). Sans table : mode direct ci-dessous (PC),
+  Tables d'essai publiées : Lakers-Hornets, Celtics-Nuggets, Suns-Kings (17-18/11).
+  **Plein écran (19/11, demande de Kiki)** : avec stats possibles (`Chrono.wantsFull`), le lecteur s'ouvre en plein écran
+  (`requestFullscreen` pendant le clic, classes `.full`) : vidéo + stats à droite (collantes), et dessous (`belowHTML`, `#lvbelow`)
+  le film du match en direct (axe = temps réglementaire, prolongations ajoutées seulement une fois atteintes), les quart-temps
+  TERMINÉS (le quart en cours = « … ») et 4 tendances (plus grosse avance, changements de leader, série en cours, écart).
+  « Dernières actions » retirées (illisibles sur un résumé). Téléphone : vidéo, stats, puis le dessous, en une colonne. Sans table : mode direct ci-dessous (PC),
   sinon pas de panneau sur téléphone.
 - **Stats en direct sur le résumé (19/11, `docs/chrono.js`, secours sans table)** : sur ordinateur, panneau à droite du lecteur (`playVideo(vid, label, gid)`).
   Partage de l'onglet (`getDisplayMedia`, seule façon de voir l'image d'un lecteur YouTube) **une fois par visite** : le flux est gardé

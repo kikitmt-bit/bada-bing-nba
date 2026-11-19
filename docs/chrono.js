@@ -339,7 +339,7 @@ const Chrono = (() => {
       <span class="lv-st ${S.at && st === "ok" ? "ok" : ""}">${STXT[st] || ""}</span>
       ${S.map ? "" : `<button class="lv-ico" data-live-diag title="Diagnostic">🔧</button><button class="lv-ico" data-live-stop title="Arrêter le partage">■</button>`}</div>
       ${DEMO ? `<input class="lv-demo" type="range" min="0" max="${S.D.plays.length - 1}" value="${S.demoI || 0}" aria-label="Simuler le moment du match">` : ""}${diag}`;
-    if (!S.at) { el.innerHTML = head + `<p class="lv-wait">Lance la vidéo : dès que le bandeau du match est à l'écran, les stats apparaissent.</p>`; return; }
+    if (!S.at) { el.innerHTML = head + `<p class="lv-wait">Lance la vidéo : dès que le bandeau du match est à l'écran, les stats apparaissent.</p>`; if (S.below) S.below.innerHTML = ""; return; }
     const D = S.D, A = statsAt(D, S.at.per, S.at.sec), h = team(D.home), a = team(D.away), th = A.T[D.home], ta = A.T[D.away];
     const pc = (m, n) => n ? Math.round(100 * m / n) + " %" : "–";
     const row = (lab, va, vh, sa, sh) => { const tot = (sa + sh) || 1;
@@ -358,14 +358,73 @@ const Chrono = (() => {
         ${row("Balles perdues", ta.to, th.to, ta.to, th.to)}
       </div>
       <div class="lv-pl"><div><h4 style="--mc:${a.color}">${a.name}</h4><ol>${top(D.away) || "<li class=e>—</li>"}</ol></div>
-        <div><h4 style="--mc:${h.color}">${h.name}</h4><ol>${top(D.home) || "<li class=e>—</li>"}</ol></div></div>
-      <div class="lv-last"><h4>Dernières actions</h4>${A.last.map(p => `<p><time>${p.clk}</time>${fr(p.tx)}</p>`).join("") || "<p>—</p>"}</div>`;
+        <div><h4 style="--mc:${h.color}">${h.name}</h4><ol>${top(D.home) || "<li class=e>—</li>"}</ol></div></div>`;
+    if (S.below) S.below.innerHTML = belowHTML(D, S.at);
     const prev = S.vals || {}, vals = {};
     for (const n of el.querySelectorAll("[data-k]")) {
       const k = n.dataset.k, v = n.textContent; vals[k] = v;
       if (S.vals && prev[k] !== undefined && prev[k] !== v) n.classList.add("up");
     }
     S.vals = vals;
+  }
+
+  /* ---------- sous la vidéo : la courbe, les quart-temps terminés, les tendances (jusqu'au moment affiché) ---------- */
+  const elapsed = (per, sec) => per <= 4 ? (per - 1) * 720 + 720 - sec : 2880 + (per - 5) * 300 + 300 - sec;
+  function belowHTML(D, at) {
+    const h = team(D.home), a = team(D.away);
+    const pts = [[0, 0]], qEnd = {};
+    let hs = 0, as = 0, maxH = 0, maxA = 0, leads = 0, lastLead = 0, runT = 0, runP = 0;
+    for (const p of D.plays) {
+      if (p.per > at.per || (p.per === at.per && p.sec <= at.sec)) break;
+      if (p.hs !== hs || p.as !== as) {
+        const d = p.hs - p.as, gain = (p.hs - hs) + (p.as - as), who = p.hs > hs ? D.home : D.away;
+        if (gain > 0) { if (who === runT) runP += gain; else { runT = who; runP = gain; } }
+        const sg = Math.sign(d);
+        if (sg && lastLead && sg !== lastLead) leads++;
+        if (sg) lastLead = sg;
+        maxH = Math.max(maxH, d); maxA = Math.max(maxA, -d);
+        hs = p.hs; as = p.as;
+        pts.push([elapsed(p.per, p.sec), d]);
+      }
+      qEnd[p.per] = [as, hs];
+    }
+    const now = elapsed(at.per, at.sec), dNow = hs - as;
+    pts.push([now, dNow]);
+    // l'axe couvre le match réglementaire, et les prolongations seulement une fois atteintes (sans spoil)
+    const span = 2880 + Math.max(0, at.per - 4) * 300, W = 1000, H = 190, mid = 95;
+    const amp = Math.max(8, ...pts.map(p => Math.abs(p[1]))) * 1.15;
+    const X = x => (x / span * W).toFixed(1), Y = d => (mid - d / amp * (mid - 12)).toFixed(1);
+    const line = pts.map((p, i) => (i ? "L" : "M") + X(p[0]) + " " + Y(i ? pts[i - 1][1] : 0) + " L" + X(p[0]) + " " + Y(p[1])).join(" ");
+    const area = line + ` L${X(now)} ${mid} L0 ${mid} Z`;
+    const grid = [720, 1440, 2160, 2880, 3180, 3480].filter(x => x < span).map(x => `<line x1="${X(x)}" x2="${X(x)}" y1="4" y2="${H - 4}" class="g"/>`).join("");
+    const labs = Array.from({ length: Math.max(4, at.per) }, (_, i) => {
+      const x0 = i < 4 ? i * 720 : 2880 + (i - 4) * 300, w = i < 4 ? 720 : 300;
+      return `<text x="${X(x0 + w / 2)}" y="${H - 8}" class="q">${i < 4 ? "Q" + (i + 1) : "Prol." + (i > 4 ? i - 3 : "")}</text>`;
+    }).join("");
+    const lead = dNow ? `+${Math.abs(dNow)} ${(dNow > 0 ? h : a).tri}` : "Égalité";
+    const svg = `<svg class="lv-curve" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Écart au score jusqu'ici">
+      <defs><clipPath id="lvU"><rect x="0" y="0" width="${W}" height="${mid}"/></clipPath><clipPath id="lvD"><rect x="0" y="${mid}" width="${W}" height="${mid}"/></clipPath></defs>
+      ${grid}<line x1="0" x2="${W}" y1="${mid}" y2="${mid}" class="z"/>
+      <path d="${area}" fill="${h.color}" opacity=".45" clip-path="url(#lvU)"/><path d="${area}" fill="${a.color}" opacity=".45" clip-path="url(#lvD)"/>
+      <path d="${line}" class="l"/><circle cx="${X(now)}" cy="${Y(dNow)}" r="5" class="dot"/>${labs}</svg>`;
+    // les quart-temps terminés seulement (celui en cours suit la vidéo)
+    const nq = Math.max(4, at.per), cols = Array.from({ length: nq }, (_, i) => i + 1);
+    const cell = (q, side) => {
+      if (q >= at.per || !qEnd[q]) return q === at.per ? `<td class="cur">…</td>` : `<td class="no">–</td>`;
+      const prev = q > 1 && qEnd[q - 1] ? qEnd[q - 1] : [0, 0];
+      return `<td>${qEnd[q][side] - prev[side]}</td>`;
+    };
+    const qt = `<table class="lv-qt"><thead><tr><th></th>${cols.map(q => `<th>${q <= 4 ? "Q" + q : "P" + (q - 4)}</th>`).join("")}</tr></thead><tbody>
+      <tr><th style="--mc:${a.color}">${a.name}</th>${cols.map(q => cell(q, 0)).join("")}</tr>
+      <tr><th style="--mc:${h.color}">${h.name}</th>${cols.map(q => cell(q, 1)).join("")}</tr></tbody></table>`;
+    const tile = (lab, val, sub) => `<div class="lv-tile"><span>${lab}</span><b>${val}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+    const tiles = `<div class="lv-tiles">
+      ${tile("Plus grosse avance", `${a.tri} +${maxA} · ${h.tri} +${maxH}`)}
+      ${tile("Changements de leader", leads)}
+      ${tile("Série en cours", runP >= 4 ? `${runP}-0 ${team(runT).tri}` : "—", runP >= 4 ? "points d'affilée" : "aucune")}
+      ${tile("Écart", lead)}</div>`;
+    return `<div class="lv-sec"><h4>Le film du match</h4>${svg}<div class="lv-leg"><i style="--mc:${h.color}"></i>${h.name} devant<i style="--mc:${a.color}"></i>${a.name} devant</div></div>
+      <div class="lv-two"><div class="lv-sec"><h4>Par quart-temps</h4>${qt}</div><div class="lv-sec"><h4>Les tendances</h4>${tiles}</div></div>`;
   }
 
   /* ---------- boucle de lecture ---------- */
@@ -458,9 +517,9 @@ const Chrono = (() => {
   }
 
   /* ---------- branchement sur le lecteur vidéo ---------- */
-  async function attach(gid, panel, iframe, vid) {
+  async function attach(gid, panel, iframe, vid, below) {
     if (S) S.on = false;
-    const my = S = { gid, vid, el: panel, iframe, on: false, miss: 0, fails: 0, reads: 0, D: null, polar: false };
+    const my = S = { gid, vid, el: panel, below, iframe, on: false, miss: 0, fails: 0, reads: 0, D: null, polar: false };
     panel.innerHTML = `<p class="lv-wait">Chargement du déroulé du match…</p>`;
     const idx = await loadIndex();
     const prepared = vid && idx.has(vid);
@@ -474,14 +533,20 @@ const Chrono = (() => {
       map = m;
     } catch (e) { my.D = null; }
     if (S !== my) return;
-    const hide = () => { panel.remove(); iframe.closest(".vplayer").classList.remove("live"); };
+    const hide = () => {
+      panel.remove(); if (below) below.remove();
+      iframe.closest(".vplayer").classList.remove("live", "full"); vidovl.classList.remove("full");
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    };
     if (!my.D || my.D.plays.length < 20) { if (CAN) panel.innerHTML = `<p class="lv-wait">Pas de déroulé ESPN pour ce match : pas de stats en direct.</p>`; else hide(); return; }
     if (map && map.pts && map.pts.length >= 5) { my.map = map.pts; my.on = true; my.status = "prep"; render(true); prepLoop(my); return; }
     if (!CAN) { hide(); return; } // téléphone sans table préparée : pas de panneau
     render(true);
     if (STREAM && STREAM.active) start(false); // déjà partagé pendant cette visite : rien à redemander
   }
-  function close() { if (S) { S.on = false; S = null; } } // le partage reste ouvert pour le résumé suivant
+  function close() { if (S) { S.on = false; S = null; } }
+  // plein écran d'office quand il y aura des stats : vidéo analysée, ou ordinateur (mode direct)
+  function wantsFull(vid) { return DEMO ? CAN : !!((vid && MAPS && MAPS.has(vid)) || CAN); } // le partage reste ouvert pour le résumé suivant
   // appelé au clic « Résumé » (geste de l'utilisateur, exigé par le navigateur pour demander le partage)
   function onResumeClick(vid) {
     if (vid && MAPS && MAPS.has(vid)) return; // table préparée : pas besoin de partage
@@ -511,5 +576,5 @@ const Chrono = (() => {
     }
     S = keep; return out;
   }
-  return { CAN, attach, close, onResumeClick, testFrames, _reindex() { MAPS = null; return loadIndex(); }, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
+  return { CAN, attach, close, onResumeClick, wantsFull, testFrames, _reindex() { MAPS = null; return loadIndex(); }, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
 })();

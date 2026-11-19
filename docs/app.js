@@ -348,15 +348,17 @@ function playVideo(vid, label, gid) { // lecteur intégré, sans quitter le site
   const frame = vid ? `<iframe src="https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0&hl=fr${live ? "&enablejsapi=1&origin=" + encodeURIComponent(location.origin) : ""}"
       title="${label}" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>`
     : `<div class="vdemo">Démo : la vidéo YouTube serait ici</div>`;
-  vplayer.classList.toggle("live", !!live);
+  const full = live && Chrono.wantsFull(vid); // plein écran d'office quand il y aura des stats (plus immersif, place dessous)
+  vplayer.classList.toggle("live", !!live); vplayer.classList.toggle("full", !!full); vidovl.classList.toggle("full", !!full);
   vplayer.innerHTML = `
     <button class="x" aria-label="Fermer">✕</button>
     <div class="vmain"><div class="vframe">${frame}</div>
     <div class="vfoot"><span>${label}</span>
       ${vid ? `<a href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a>` : ""}</div></div>
-    ${live ? `<aside class="lv" id="lvpanel"></aside>` : ""}`;
+    ${live ? `<aside class="lv" id="lvpanel"></aside><section class="lv-below" id="lvbelow"></section>` : ""}`;
   vidovl.classList.add("open"); document.body.style.overflow = "hidden";
-  if (live) Chrono.attach(gid, $("#lvpanel"), vplayer.querySelector(".vframe"), vid);
+  if (full && vidovl.requestFullscreen && !document.fullscreenElement) vidovl.requestFullscreen().catch(() => {}); // pendant le clic : le navigateur l'exige
+  if (live) Chrono.attach(gid, $("#lvpanel"), vplayer.querySelector(".vframe"), vid, $("#lvbelow"));
 }
 async function openResume(id, extra) {
   const g = state.games.find(x => x.id === id); if (!g) return;
@@ -370,7 +372,11 @@ async function openResume(id, extra) {
   if (!v) { window.open(ytURL(g), "_blank", "noopener"); return; }
   playVideo(v.id, `${g.teams.away.name} – ${g.teams.home.name} · ${extra ? "NBA Extra" : v.c === "gt" ? "résumé GameTime" : "résumé NBA"}`, extra ? null : g.id);
 }
-function closeResume() { if (typeof Chrono !== "undefined") Chrono.close(); vplayer.innerHTML = ""; vidovl.classList.remove("open"); document.body.style.overflow = ""; }
+function closeResume() {
+  if (typeof Chrono !== "undefined") Chrono.close();
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  vplayer.innerHTML = ""; vplayer.classList.remove("full"); vidovl.classList.remove("open", "full"); document.body.style.overflow = "";
+}
 
 /* ---------- briques d'affichage ---------- */
 const RARL = ["À fuir", "Bof", "Sans plus", "Sympa", "À voir", "Immanquable"];

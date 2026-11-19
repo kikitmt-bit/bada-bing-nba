@@ -919,3 +919,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .sky.one .actions .btn.big{flex-grow:1.35}
 }
 @media (min-width:901px) and (max-width:1400px){ .sky.one .chip{padding-left:14px;padding-right:14px} .sky.one .calchip{padding-right:18px} }
+
+/* « L'essentiel de la nuit » : l'ambre des LED du site (plus le jaune pâle), et le bouton près du titre */
+.teaser .q em,.ess-top .q em{color:var(--amber);text-shadow:0 0 18px rgba(255,176,46,.35)}
+.teaser{justify-content:flex-start;gap:20px 40px}
+.teaser .btn{margin-left:0}

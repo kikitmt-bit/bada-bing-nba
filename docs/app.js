@@ -839,7 +839,7 @@ async function loadMVP(btn) {
   const nameHTML = cut > 0 ? `<span>${full.slice(0, cut)}</span><span>${full.slice(cut + 1)}</span>` : `<span>${full}</span>`;
   const mvpBlock = `<div class="mvpw"><div class="mvp">
       <div class="card" style="--tc:${t.color}">${photo}${logoHTML(t)}</div>
-      <div style="min-width:0"><span class="tag">MVP de la nuit</span>
+      <div style="min-width:0">
         <h3>${nameHTML}</h3>
         <div class="sub">${t.city} ${t.name} · contre ${le(opp)}</div>
         <div class="row">${stat(mvp.pts, "points")}${stat(mvp.reb, "rebonds")}${stat(mvp.ast, "passes")}</div>
@@ -1255,7 +1255,9 @@ function renderChips() {
     if (k === tonight && k === state.night && live) dot = `<span class="dot red"></span>`;
     else if (k < tonight && !seen.has(k)) dot = `<span class="dot gold"></span>`;
     const lab = k === tonight ? (EURO ? "Cette nuit" : "Ce soir") : k === addDays(tonight, -1) ? (EURO ? "Nuit dernière" : "Hier") : k === addDays(tonight, 1) ? "Demain" : c.s;
-    return `<button class="chip ${cur ? "on" : ""}" data-night="${k}">${cur ? `<em>${el.dataset.ctx || ""}</em>` : ""}<small>${lab}</small><b>${c.b}</b>${dot}</button>`;
+    // le contexte (« Retour sur la nuit »…) seulement quand l'étiquette ne dit pas déjà « Nuit dernière », « Cette nuit » ou « Demain »
+    const ctxOn = cur && lab === c.s && el.dataset.ctx;
+    return `<button class="chip ${cur ? "on" : ""}" data-night="${k}">${ctxOn ? `<em>${el.dataset.ctx}</em>` : ""}<small>${lab}</small><b>${c.b}</b>${dot}</button>`;
   }).join("");
   const dp = $("#dpick");
   if (dp) dp.addEventListener("change", () => { if (dp.value) { state.night = dp.value.replaceAll("-", ""); state.revealed.clear(); renderNight(); } });

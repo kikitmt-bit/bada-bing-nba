@@ -120,7 +120,8 @@ def passage():
         try:
             if os.path.exists(video):
                 os.remove(video)
-            sh("yt-dlp", "-q", "--no-warnings", "-f", "bv*[height<=720][ext=mp4]/bv*[height<=720]",
+            # H.264 d'abord : l'AV1 de certains résumés fait planter le décodeur du téléphone (et se décode plus lentement)
+            sh("yt-dlp", "-q", "--no-warnings", "-f", "bv*[height<=720][vcodec^=avc1][fps<=30]/bv*[height<=720][vcodec^=avc1]/bv*[height<=720][ext=mp4]/bv*[height<=720]",
                "-o", video, "https://www.youtube.com/watch?v=" + vid)
             res = chrono_video.analyse(video, os.path.join(TRAVAIL, vid + ".json"), vid)
             res["t"] = v.get("t", "")
@@ -129,8 +130,8 @@ def passage():
                 log("publié :", v.get("t", vid))
             else:
                 log("trop peu de points lus :", v.get("t", vid), len(res["pts"]))
-                if len(res["pts"]) < 5:
-                    e["essais"] = ESSAIS  # bandeau illisible : inutile de réessayer
+                if len(res["pts"]) < 5 and res["n"] > 120:
+                    e["essais"] = ESSAIS  # vidéo entière lue mais bandeau illisible : inutile de réessayer
         except Exception as ex:
             log("échec", vid, (getattr(ex, "stderr", "") or str(ex))[-300:])
         finally:

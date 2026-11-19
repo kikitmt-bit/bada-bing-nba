@@ -179,8 +179,8 @@ function normSummary(j) {
         if (p.homeScore === undefined) continue;
         const per = p.period ? p.period.number : 1;
         let mm = 0, ss = 0;
-        const m = /^(\d+):(\d+)/.exec(p.clock ? p.clock.displayValue : "");
-        if (m) { mm = +m[1]; ss = +m[2]; }
+        const cv = p.clock ? p.clock.displayValue : "", m = /^(\d+):(\d+)/.exec(cv);
+        if (m) { mm = +m[1]; ss = +m[2]; } else if (/^\d+(\.\d)?$/.test(cv)) ss = +cv; // dernière minute : « 45.3 »
         const len = per <= 4 ? 12 : 5;
         const start = per <= 4 ? (per - 1) * 12 : 48 + (per - 5) * 5;
         const el = Math.min(maxMin, Math.round(start + (len - mm - ss / 60)));

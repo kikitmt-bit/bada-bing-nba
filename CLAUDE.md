@@ -105,7 +105,7 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   ✕ raté à la couleur de l'équipe, anneau sur le dernier tir, tirs ESPN `coordinate` gardés dans `parsePlays` sx/sy, lancers exclus)
   + tableau Raquette / Mi-distance / 3 points. Écran < 900 px de haut : version resserrée ; < 740 px : terrain masqué (zones gardées) ; sous la vidéo (`curveHTML`, `#lvbelow`) le film du match en ligne continue FUSIONNÉ avec les scores
   par quart-temps, alignés sous chaque quart (quarts TERMINÉS seulement, le quart en cours = « en cours » ; prolongation ajoutée
-  à l'axe seulement une fois atteinte). Calculs communs : `flow(D, at)`.
+  à l'axe seulement une fois atteinte). Calculs communs : `flow(D, at)`. La courbe est le VRAI fil du match minute par minute (`ser`, même calcul que la courbe de la fiche `normSummary().series`, chrono en dixièmes « 45.3 » compris) : elle se découvre par à-coups au fil des sauts du résumé et finit identique à celle de la fiche (vérifié : 0 minute différente sur 5 matchs du 17/11).
   « Dernières actions » retirées (illisibles sur un résumé). Téléphone : vidéo, stats, puis le dessous, en une colonne. Sans table : mode direct ci-dessous (PC),
   sinon pas de panneau sur téléphone.
 - **Stats en direct sur le résumé (19/11, `docs/chrono.js`, secours sans table)** : sur ordinateur, panneau à droite du lecteur (`playVideo(vid, label, gid)`).

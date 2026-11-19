@@ -623,6 +623,20 @@ function greeting() {
   const hr = new Date().getHours();
   return hr < 5 ? "Bonne nuit" : hr < 12 ? "Bonjour" : hr < 18 ? "Bon après-midi" : "Bonsoir";
 }
+const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
+function cdText(t) { // « 02:14:33 », ou « 1 j 03 h » au-delà d'un jour
+  let d = Math.max(0, Math.round((t - Date.now()) / 1000));
+  if (d <= 0) return "Imminent";
+  const j = Math.floor(d / 86400), h = Math.floor(d % 86400 / 3600), m = Math.floor(d % 3600 / 60), sec = d % 60;
+  const p2 = n => String(n).padStart(2, "0");
+  return j ? `${j} j ${p2(h)} h` : `${p2(h)}:${p2(m)}:${p2(sec)}`;
+}
+let CDT = null;
+function startCountdown() { // une seule horloge à la fois, arrêtée quand l'afficheur disparaît
+  clearInterval(CDT);
+  const el = $("#cdown"); if (!el) return;
+  CDT = setInterval(() => { const e = $("#cdown"); if (!e) { clearInterval(CDT); return; } e.textContent = cdText(+e.dataset.t); }, 1000);
+}
 function skyHTML(games, hero, scored) {
   const d1 = keyDate(state.night), d2 = keyDate(addDays(state.night, 1));
   const cap = s => s[0].toUpperCase() + s.slice(1);
@@ -645,9 +659,18 @@ function skyHTML(games, hero, scored) {
   const left = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).length;
   // en-tête sur UNE ligne (20/11, carte blanche de Kiki) : la nuit d'avant, celle affichée, celle d'après, le calendrier,
   // puis les boutons. Le contexte (« Retour sur la nuit »…) passe en petite étiquette au-dessus de la nuit affichée.
+  // l'afficheur de droite, selon le moment de la nuit : compte à rebours avant, matchs en direct pendant (puis les boutons)
+  const nPre = games.filter(g => g.state === "pre").length;
+  const first = games.filter(g => g.state === "pre").sort((x, y) => x.date - y.date)[0];
+  const board = !games.length ? "" : !started && first
+    ? `<div class="board"><span class="btxt"><span class="blab">Coup d'envoi dans</span><small>${plural(games.length, "match")} cette nuit · premier à ${hourLocal(first.date)}</small></span>
+        <span class="led bcd" id="cdown" data-t="${first.date.getTime()}">${cdText(first.date.getTime())}</span></div>`
+    : nLive ? `<div class="board live"><span class="btxt"><span class="blab">La nuit est en cours</span><small>${nFin ? plural(nFin, "terminé") : "aucun terminé"}${nPre ? ` · ${nPre} à venir` : ""}</small></span>
+        <span class="blive"><i></i>${nLive} en direct</span></div>` : "";
   return `<section class="sky one">
     <div class="skyrow">
       <div class="nights" id="nights" data-ctx="${ctx}"></div>
+      ${board}
       ${started || nr || jr ? `<div class="actions">
       ${started ? `<button class="btn amber big" id="revall" ${left ? "" : "disabled"}>${left ? "🎬 Révéler la nuit" : "✓ Nuit révélée"}</button>` : ""}
       ${nr ? `<button class="btn" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
@@ -695,6 +718,7 @@ async function renderNight(soft) {
 
   for (const id of state.revealed) reveal(id, true);
   for (const v of $$("[data-count]")) countUp(v, +v.dataset.count, 900);
+  startCountdown();
   const all = $("#revall");
   if (all) all.addEventListener("click", () => {
     // la cérémonie : du moins bon au meilleur, le match de la nuit en dernier
@@ -726,7 +750,7 @@ async function cachedSummary(id) {
 const gscore = p => p.pts + 1.2 * p.reb + 1.5 * p.ast;
 /* ---------- L'essentiel de la nuit (20/11) : faits marquants, MVP et grosses perfs, Français, classement, sortis blessés ----------
    Tout est caché derrière le bouton : c'est la seule rubrique qui assume les résultats. */
-const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
+
 // le Jazz, le Magic, le Heat, le Thunder (singulier) ; les Lakers… (pluriel)
 const SING = new Set(["Jazz", "Magic", "Heat", "Thunder"]);
 const le = t => (SING.has(t.name) ? "le " : "les ") + t.name;

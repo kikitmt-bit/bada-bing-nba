@@ -924,3 +924,28 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .teaser .q em,.ess-top .q em{color:var(--amber);text-shadow:0 0 18px rgba(255,176,46,.35)}
 .teaser{justify-content:flex-start;gap:20px 40px}
 .teaser .btn{margin-left:0}
+
+/* l'afficheur de droite (compte à rebours / direct), sur la ligne des dates */
+.board{display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:auto;min-width:0}
+.board .blab{font:700 12px var(--disp);letter-spacing:.24em;text-transform:uppercase;color:var(--ink2)}
+.board .led.bcd{height:54px;min-width:0;padding:0 16px;font-size:38px;cursor:default}
+.board small{color:var(--ink3);font-size:12.5px;white-space:nowrap}
+.board.live .blive{display:flex;align-items:center;gap:10px;font:900 30px var(--disp);text-transform:uppercase;letter-spacing:.04em;color:var(--live);
+  text-shadow:0 0 14px rgba(255,59,78,.5)}
+.board.live .blive i{width:12px;height:12px;border-radius:50%;background:var(--live);box-shadow:0 0 10px var(--live);animation:blink 1.2s infinite}
+@media (min-width:901px){
+  .sky.one .board{align-self:flex-end;margin-bottom:2px}
+  .sky.one .board + .actions{margin-left:28px}
+}
+@media (min-width:1101px){ .sky.one .board + .actions{flex:0 1 auto} .sky.one .board + .actions .btn{flex:0 1 auto} }
+@media (max-width:900px){
+  .board{width:100%;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-left:0}
+  .board .led.bcd{height:42px;font-size:28px}
+  .board.live .blive{font-size:22px}
+}
+
+/* afficheur : le texte à gauche, l'afficheur à droite, centré sur la ligne des dates */
+.board{flex-direction:row;align-items:center;gap:16px}
+.board .btxt{display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:0}
+@media (min-width:901px){ .sky.one .board{margin-bottom:3px} }
+@media (max-width:900px){ .board .btxt{align-items:flex-start} }

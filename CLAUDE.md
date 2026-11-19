@@ -29,7 +29,10 @@ liseré de côté ») — à respecter dans toute nouvelle page** : l'habillage 
   s'élargissent pour remplir la place (`flex:1`, plus de trou au milieu) ; resserré entre 900 et 1400 px de large (validé par Kiki).
   Le calendrier est la 1re case de la frise (`.calchip`, « Autre nuit » + icône sur la ligne des dates, trait de séparation) ;
   journal NBA Extra = bouton ▶ simple (plus de drapeau). Le contexte (« Retour sur la nuit »…) n'apparaît que si l'étiquette n'est
-  pas déjà « Nuit dernière » / « Cette nuit » / « Demain ». « L'essentiel de la nuit » : « de la nuit » en ambre (`--amber`, plus le
+  pas déjà « Nuit dernière » / « Cette nuit » / « Demain ». **Afficheur de droite (`.board`, 21/11)** selon le moment : avant
+  les matchs, compte à rebours LED « Coup d'envoi dans 03:55:58 » + « 9 matchs cette nuit · premier à 02h00 » (`cdText`,
+  `startCountdown`, une seule horloge, « 1 j 03 h » au-delà d'un jour) ; pendant, « ● 3 en direct » rouge + terminés / à venir
+  (+ les boutons) ; après, seulement les boutons. Centré sur la ligne des dates. « L'essentiel de la nuit » : « de la nuit » en ambre (`--amber`, plus le
   jaune pâle `--moon`), bouton juste à côté du titre ; plus d'étiquette « MVP de la nuit » au-dessus du nom (MVP déjà dit 2 fois). **Une seule ligne d'alignement pour la page** : le cadre de
   « L'essentiel » (`.stage`) déborde de 20 px (12 sur téléphone) et son contenu n'a plus de marge latérale ; cartes des faits
   à 14 px de marge intérieure comme les tuiles des matchs.

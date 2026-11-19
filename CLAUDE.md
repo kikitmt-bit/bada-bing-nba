@@ -72,9 +72,11 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   coupée (ligne commentée dans demarrage.sh) ; à la remise en route, `depuis.txt` limite aux nouvelles soirées (pas l'historique).
   Tables d'essai publiées : Lakers-Hornets, Celtics-Nuggets, Suns-Kings (17-18/11).
   **Plein écran (19/11, demande de Kiki)** : avec stats possibles (`Chrono.wantsFull`), le lecteur s'ouvre en plein écran
-  (`requestFullscreen` pendant le clic, classes `.full`) : vidéo + stats à droite (collantes), et dessous (`belowHTML`, `#lvbelow`)
-  le film du match en direct (axe = temps réglementaire, prolongations ajoutées seulement une fois atteintes), les quart-temps
-  TERMINÉS (le quart en cours = « … ») et 4 tendances (plus grosse avance, changements de leader, série en cours, écart).
+  (`requestFullscreen` pendant le clic, classes `.full`), **sans défilement sur PC** (vidéo dimensionnée pour laisser ~250 px
+  dessous) : stats à droite + **tendances** en tuiles sous les joueurs (`trendsHTML` : écart, série en cours, plus grosse avance,
+  changements de leader) ; sous la vidéo (`curveHTML`, `#lvbelow`) le film du match en ligne continue FUSIONNÉ avec les scores
+  par quart-temps, alignés sous chaque quart (quarts TERMINÉS seulement, le quart en cours = « en cours » ; prolongation ajoutée
+  à l'axe seulement une fois atteinte). Calculs communs : `flow(D, at)`.
   « Dernières actions » retirées (illisibles sur un résumé). Téléphone : vidéo, stats, puis le dessous, en une colonne. Sans table : mode direct ci-dessous (PC),
   sinon pas de panneau sur téléphone.
 - **Stats en direct sur le résumé (19/11, `docs/chrono.js`, secours sans table)** : sur ordinateur, panneau à droite du lecteur (`playVideo(vid, label, gid)`).

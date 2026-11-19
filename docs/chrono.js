@@ -359,7 +359,9 @@ const Chrono = (() => {
       </div>
       <div class="lv-pl"><div><h4 style="--mc:${a.color}">${a.name}</h4><ol>${top(D.away) || "<li class=e>—</li>"}</ol></div>
         <div><h4 style="--mc:${h.color}">${h.name}</h4><ol>${top(D.home) || "<li class=e>—</li>"}</ol></div></div>`;
-    if (S.below) S.below.innerHTML = belowHTML(D, S.at);
+    const F = flow(D, S.at);
+    el.insertAdjacentHTML("beforeend", trendsHTML(D, F));
+    if (S.below) S.below.innerHTML = curveHTML(D, S.at, F);
     const prev = S.vals || {}, vals = {};
     for (const n of el.querySelectorAll("[data-k]")) {
       const k = n.dataset.k, v = n.textContent; vals[k] = v;
@@ -368,10 +370,9 @@ const Chrono = (() => {
     S.vals = vals;
   }
 
-  /* ---------- sous la vidéo : la courbe, les quart-temps terminés, les tendances (jusqu'au moment affiché) ---------- */
+  /* ---------- le fil du match jusqu'au moment affiché : courbe + quart-temps (sous la vidéo), tendances (à droite) ---------- */
   const elapsed = (per, sec) => per <= 4 ? (per - 1) * 720 + 720 - sec : 2880 + (per - 5) * 300 + 300 - sec;
-  function belowHTML(D, at) {
-    const h = team(D.home), a = team(D.away);
+  function flow(D, at) {
     const pts = [[0, 0]], qEnd = {};
     let hs = 0, as = 0, maxH = 0, maxA = 0, leads = 0, lastLead = 0, runT = 0, runP = 0;
     for (const p of D.plays) {
@@ -388,43 +389,52 @@ const Chrono = (() => {
       }
       qEnd[p.per] = [as, hs];
     }
-    const now = elapsed(at.per, at.sec), dNow = hs - as;
-    pts.push([now, dNow]);
-    // l'axe couvre le match réglementaire, et les prolongations seulement une fois atteintes (sans spoil)
-    const span = 2880 + Math.max(0, at.per - 4) * 300, W = 1000, H = 190, mid = 95;
-    const amp = Math.max(8, ...pts.map(p => Math.abs(p[1]))) * 1.15;
-    const X = x => (x / span * W).toFixed(1), Y = d => (mid - d / amp * (mid - 12)).toFixed(1);
-    const line = pts.map((p, i) => (i ? "L" : "M") + X(p[0]) + " " + Y(i ? pts[i - 1][1] : 0) + " L" + X(p[0]) + " " + Y(p[1])).join(" ");
-    const area = line + ` L${X(now)} ${mid} L0 ${mid} Z`;
-    const grid = [720, 1440, 2160, 2880, 3180, 3480].filter(x => x < span).map(x => `<line x1="${X(x)}" x2="${X(x)}" y1="4" y2="${H - 4}" class="g"/>`).join("");
-    const labs = Array.from({ length: Math.max(4, at.per) }, (_, i) => {
-      const x0 = i < 4 ? i * 720 : 2880 + (i - 4) * 300, w = i < 4 ? 720 : 300;
-      return `<text x="${X(x0 + w / 2)}" y="${H - 8}" class="q">${i < 4 ? "Q" + (i + 1) : "Prol." + (i > 4 ? i - 3 : "")}</text>`;
-    }).join("");
-    const lead = dNow ? `+${Math.abs(dNow)} ${(dNow > 0 ? h : a).tri}` : "Égalité";
+    const now = elapsed(at.per, at.sec);
+    pts.push([now, hs - as]);
+    return { pts, qEnd, hs, as, maxH, maxA, leads, runT, runP, now };
+  }
+  function curveHTML(D, at, F) {
+    const h = team(D.home), a = team(D.away);
+    // l'axe couvre le temps réglementaire ; une prolongation n'apparaît qu'une fois atteinte (sans spoil)
+    const nq = Math.max(4, at.per), span = 2880 + (nq - 4) * 300, W = 1000, H = 200, mid = 100;
+    const amp = Math.max(8, ...F.pts.map(p => Math.abs(p[1]))) * 1.12;
+    const X = x => (x / span * W).toFixed(1), Y = d => (mid - d / amp * (mid - 6)).toFixed(1);
+    const line = F.pts.map((p, i) => (i ? "L" : "M") + X(p[0]) + " " + Y(p[1])).join(" ");
+    const area = line + ` L${X(F.now)} ${mid} L0 ${mid} Z`;
+    const grid = Array.from({ length: nq - 1 }, (_, i) => i < 3 ? (i + 1) * 720 : 2880 + (i - 3) * 300)
+      .map(x => `<line x1="${X(x)}" x2="${X(x)}" y1="0" y2="${H}" class="g"/>`).join("");
+    const dNow = F.hs - F.as;
     const svg = `<svg class="lv-curve" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Écart au score jusqu'ici">
       <defs><clipPath id="lvU"><rect x="0" y="0" width="${W}" height="${mid}"/></clipPath><clipPath id="lvD"><rect x="0" y="${mid}" width="${W}" height="${mid}"/></clipPath></defs>
       ${grid}<line x1="0" x2="${W}" y1="${mid}" y2="${mid}" class="z"/>
-      <path d="${area}" fill="${h.color}" opacity=".45" clip-path="url(#lvU)"/><path d="${area}" fill="${a.color}" opacity=".45" clip-path="url(#lvD)"/>
-      <path d="${line}" class="l"/><circle cx="${X(now)}" cy="${Y(dNow)}" r="5" class="dot"/>${labs}</svg>`;
-    // les quart-temps terminés seulement (celui en cours suit la vidéo)
-    const nq = Math.max(4, at.per), cols = Array.from({ length: nq }, (_, i) => i + 1);
-    const cell = (q, side) => {
-      if (q >= at.per || !qEnd[q]) return q === at.per ? `<td class="cur">…</td>` : `<td class="no">–</td>`;
-      const prev = q > 1 && qEnd[q - 1] ? qEnd[q - 1] : [0, 0];
-      return `<td>${qEnd[q][side] - prev[side]}</td>`;
+      <path d="${area}" fill="${h.color}" opacity=".5" clip-path="url(#lvU)"/><path d="${area}" fill="${a.color}" opacity=".5" clip-path="url(#lvD)"/>
+      <path d="${line}" class="l"/></svg>`;
+    // le point du moment, en HTML pour rester rond malgré l'étirement du graphique
+    const dot = `<i class="lv-dot" style="left:${(F.now / span * 100).toFixed(2)}%;top:${(Y(dNow) / H * 100).toFixed(2)}%"></i>`;
+    // les quart-temps, alignés sous la courbe : le score des quarts TERMINÉS (celui en cours suit la vidéo)
+    const cols = Array.from({ length: nq }, (_, i) => i + 1);
+    const qcell = q => {
+      const lab = q <= 4 ? "Q" + q : "Prol." + (q > 5 ? q - 4 : "");
+      if (q < at.per && F.qEnd[q]) {
+        const pr = q > 1 && F.qEnd[q - 1] ? F.qEnd[q - 1] : [0, 0], va = F.qEnd[q][0] - pr[0], vh = F.qEnd[q][1] - pr[1];
+        return `<div class="lv-q"><span>${lab}</span><b class="${va > vh ? "w" : ""}" style="--mc:${a.color}">${va}</b><b class="${vh > va ? "w" : ""}" style="--mc:${h.color}">${vh}</b></div>`;
+      }
+      return `<div class="lv-q ${q === at.per ? "cur" : "no"}"><span>${lab}</span><em>${q === at.per ? "en cours" : ""}</em></div>`;
     };
-    const qt = `<table class="lv-qt"><thead><tr><th></th>${cols.map(q => `<th>${q <= 4 ? "Q" + q : "P" + (q - 4)}</th>`).join("")}</tr></thead><tbody>
-      <tr><th style="--mc:${a.color}">${a.name}</th>${cols.map(q => cell(q, 0)).join("")}</tr>
-      <tr><th style="--mc:${h.color}">${h.name}</th>${cols.map(q => cell(q, 1)).join("")}</tr></tbody></table>`;
-    const tile = (lab, val, sub) => `<div class="lv-tile"><span>${lab}</span><b>${val}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
-    const tiles = `<div class="lv-tiles">
-      ${tile("Plus grosse avance", `${a.tri} +${maxA} · ${h.tri} +${maxH}`)}
-      ${tile("Changements de leader", leads)}
-      ${tile("Série en cours", runP >= 4 ? `${runP}-0 ${team(runT).tri}` : "—", runP >= 4 ? "points d'affilée" : "aucune")}
-      ${tile("Écart", lead)}</div>`;
-    return `<div class="lv-sec"><h4>Le film du match</h4>${svg}<div class="lv-leg"><i style="--mc:${h.color}"></i>${h.name} devant<i style="--mc:${a.color}"></i>${a.name} devant</div></div>
-      <div class="lv-two"><div class="lv-sec"><h4>Par quart-temps</h4>${qt}</div><div class="lv-sec"><h4>Les tendances</h4>${tiles}</div></div>`;
+    const tmpl = cols.map(q => (q <= 4 ? 720 : 300) + "fr").join(" ");
+    return `<div class="lv-sec lv-film">
+      <div class="lv-filmh"><h4>Le film du match</h4><div class="lv-leg"><i style="--mc:${a.color}"></i>${a.name}<i style="--mc:${h.color}"></i>${h.name}</div></div>
+      <div class="lv-plot">${svg}${dot}</div>
+      <div class="lv-qs" style="grid-template-columns:${tmpl}">${cols.map(qcell).join("")}</div></div>`;
+  }
+  function trendsHTML(D, F) {
+    const h = team(D.home), a = team(D.away), dNow = F.hs - F.as;
+    const tile = (lab, val, sub) => `<div class="lv-tile"><span>${lab}</span><b>${val}</b><small>${sub || "&nbsp;"}</small></div>`;
+    return `<div class="lv-trends"><h4>Les tendances</h4><div class="lv-tiles">
+      ${tile("Écart", dNow ? `+${Math.abs(dNow)} ${(dNow > 0 ? h : a).tri}` : "Égalité", dNow ? "en tête" : "")}
+      ${tile("Série en cours", F.runP >= 4 ? `${F.runP}-0 ${team(F.runT).tri}` : "—", F.runP >= 4 ? "points d'affilée" : "aucune")}
+      ${tile("Plus grosse avance", `${a.tri} +${F.maxA} · ${h.tri} +${F.maxH}`)}
+      ${tile("Changements de leader", F.leads, F.leads > 1 ? "fois" : "")}</div></div>`;
   }
 
   /* ---------- boucle de lecture ---------- */

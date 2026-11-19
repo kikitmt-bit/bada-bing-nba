@@ -552,47 +552,55 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .lv-pl li b{font:700 15px var(--disp);color:var(--amber)}
 .lv-pl li small{color:var(--ink3);font-size:11px}
 .lv-pl li.e{color:var(--ink3)}
-/* plein écran : vidéo + stats à droite, film du match dessous */
+/* plein écran : vidéo + stats à droite, film du match dessous ; tout tient sans défiler (PC) */
 .ovl.vid.full{padding:0;align-items:stretch}
-.vplayer.full{width:100vw;max-width:none;height:100vh;overflow-y:auto;clip-path:none;animation:none;background:var(--night);
-  grid-template-columns:minmax(0,1fr) 360px;grid-template-areas:"main lv" "below lv";grid-template-rows:auto 1fr}
+.vplayer.full{width:100vw;max-width:none;height:100vh;overflow:hidden;clip-path:none;animation:none;background:var(--night);
+  grid-template-columns:minmax(0,1fr) 360px;grid-template-areas:"main lv" "below lv";grid-template-rows:auto minmax(0,1fr)}
 .vplayer.full .x{position:fixed}
 .vplayer.full .vmain{grid-area:main;background:#000}
-.vplayer.full .vframe{width:min(100%,calc((100vh - 150px) * 16 / 9));margin:0 auto}
-.vplayer.full .lv{grid-area:lv;position:sticky;top:0;align-self:start;height:100vh;max-height:none}
-.lv-below{grid-area:below;min-width:0;padding:18px 24px 30px;display:grid;gap:18px;align-content:start}
+.vplayer.full .vframe{width:min(100%,calc((100vh - 44px - 250px) * 16 / 9));margin:0 auto}
+.vplayer.full .vfoot{padding:8px 18px}
+.vplayer.full .lv{grid-area:lv;height:100vh;max-height:none}
+.lv-below{grid-area:below;min-width:0;min-height:0;padding:10px 18px 14px;display:flex;flex-direction:column}
 .lv-below:empty{display:none}
-.lv-sec{min-width:0;background:var(--panel);padding:14px 16px;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%)}
-.lv-curve{display:block;width:100%;height:170px}
-.lv-curve .g{stroke:var(--line)}
-.lv-curve .z{stroke:rgba(255,255,255,.25)}
-.lv-curve .l{fill:none;stroke:#fff;stroke-width:2.2;vector-effect:non-scaling-stroke}
-.lv-curve .dot{fill:var(--amber)}
-.lv-curve .q{fill:var(--ink3);font:700 13px var(--disp);text-anchor:middle}
-.lv-leg{display:flex;gap:8px;align-items:center;margin-top:8px;color:var(--ink2);font-size:12px;flex-wrap:wrap}
+.lv-sec{min-width:0;background:var(--panel);padding:12px 16px;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%)}
+.lv-film{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px}
+.lv-filmh{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.lv-filmh h4{margin:0}
+.lv-plot{position:relative;flex:1;min-height:70px}
+.lv-curve{position:absolute;inset:0;width:100%;height:100%;display:block}
+.lv-curve .g{stroke:rgba(255,255,255,.08);vector-effect:non-scaling-stroke}
+.lv-curve .z{stroke:rgba(255,255,255,.3);vector-effect:non-scaling-stroke}
+.lv-curve .l{fill:none;stroke:#fff;stroke-width:2;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.lv-dot{position:absolute;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--amber);box-shadow:0 0 10px var(--amber)}
+.lv-leg{display:flex;gap:6px;align-items:center;color:var(--ink2);font-size:12px;flex-wrap:wrap}
 .lv-leg i{width:14px;height:10px;background:var(--mc);margin-left:8px}
 .lv-leg i:first-child{margin-left:0}
-.lv-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
-.lv-qt{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-.lv-qt th,.lv-qt td{padding:8px 6px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
-.lv-qt thead th{font:700 11px var(--disp);letter-spacing:.14em;color:var(--ink3)}
-.lv-qt tbody th{text-align:left;font:900 15px var(--disp);text-transform:uppercase;border-left:3px solid var(--mc);padding-left:8px;max-width:120px;overflow:hidden;text-overflow:ellipsis}
-.lv-qt td{font:700 20px var(--disp)}
-.lv-qt td.no{color:var(--ink3)}
-.lv-qt td.cur{color:var(--amber)}
-.lv-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.lv-tile{min-width:0;background:var(--panel2);padding:10px 12px}
-.lv-tile span{display:block;font:700 11px var(--disp);letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);line-height:1.25}
+.lv-qs{display:grid;border-top:1px solid var(--line)}
+.lv-q{min-width:0;display:flex;align-items:baseline;justify-content:center;gap:8px;padding:6px 4px 0;border-left:1px solid rgba(255,255,255,.08);white-space:nowrap}
+.lv-q:first-child{border-left:0}
+.lv-q span{font:700 11px var(--disp);letter-spacing:.14em;color:var(--ink3)}
+.lv-q b{font:700 18px var(--disp);color:var(--ink2);border-bottom:2px solid var(--mc);line-height:1.1;font-variant-numeric:tabular-nums}
+.lv-q b.w{color:#fff}
+.lv-q em{font:italic 600 12px var(--body);color:var(--amber)}
+.lv-q.no em{color:var(--ink3)}
+.lv-trends{padding-top:12px;margin-top:6px;border-top:1px solid var(--line)}
+.lv-tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.lv-tile{min-width:0;background:var(--panel2);padding:9px 11px;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%)}
+.lv-tile span{display:block;font:700 10px var(--disp);letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);line-height:1.25}
 .lv-tile b{display:block;font:900 19px var(--disp);color:var(--amber);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lv-tile small{color:var(--ink3);font-size:11px}
 @media (max-width:900px){
   .vplayer.live{grid-template-columns:1fr;max-height:calc(100vh - 32px);overflow-y:auto}
   .lv{border-left:0;border-top:1px solid var(--line);max-height:none}
-  .vplayer.full{grid-template-columns:1fr;grid-template-areas:"main" "lv" "below";grid-template-rows:auto;max-height:none}
+  .vplayer.full{grid-template-columns:1fr;grid-template-areas:"main" "lv" "below";grid-template-rows:auto;max-height:none;overflow-y:auto}
   .vplayer.full .vframe{width:100%}
   .vplayer.full .lv{position:static;height:auto;overflow:visible}
-  .lv-below{padding:14px 12px 24px}
-  .lv-two{grid-template-columns:1fr}
+  .lv-below{padding:12px 12px 24px;min-height:auto}
+  .lv-film{flex:none}
+  .lv-plot{flex:none;height:150px}
+  .lv-q{gap:4px;flex-wrap:wrap}
+  .lv-q b{font-size:16px}
 }
 
 /* pied, toast, barre du bas */

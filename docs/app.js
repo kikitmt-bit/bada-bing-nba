@@ -1123,6 +1123,54 @@ function openShots(key) {
 }
 function closeShots() { clearInterval(shotTimer); shotovl.classList.remove("open"); }
 
+/* ---------- l'affiche : un vrai match à enjeu (choix de Kiki : équipes bien classées, superstars, séries, rivalités…) ---------- */
+let RANKS = null; // id -> { conf, rank, streak (+5 = 5 victoires de suite, -3 = 3 défaites), gp }
+async function loadRanks() {
+  if (RANKS) return RANKS;
+  const m = new Map();
+  try {
+    const data = DEMO ? await window.DEMO.standings() : await fetchJSON("https://site.api.espn.com/apis/v2/sports/basketball/nba/standings");
+    for (const ch of data.children || []) {
+      const rows = ((ch.standings && ch.standings.entries) || []).map(en => {
+        const f = n => (en.stats || []).find(x => x.name === n || x.type === n);
+        const w = f("wins") ? +f("wins").value : 0, l = f("losses") ? +f("losses").value : 0;
+        const sv = f("streak"); let st = 0;
+        if (sv) { const mm = /^([WL])(\d+)/i.exec(sv.displayValue || ""); st = mm ? (mm[1].toUpperCase() === "W" ? +mm[2] : -mm[2]) : +sv.value || 0; }
+        return { id: +en.team.id, w, l, st };
+      }).sort((x, y) => (y.w / Math.max(1, y.w + y.l)) - (x.w / Math.max(1, x.w + x.l)) || y.w - x.w);
+      rows.forEach((r, i) => m.set(r.id, { conf: ch.name, rank: i + 1, streak: r.st, gp: r.w + r.l }));
+    }
+  } catch (e) { /* sans classement : l'affiche se contente des bilans et des stars */ }
+  return (RANKS = m);
+}
+const RIVAL = new Set(["BOS-LAL", "LAC-LAL", "BOS-NYK", "GSW-LAL", "BOS-PHI", "CHI-DET", "MIA-NYK", "DAL-SAS", "CLE-GSW", "BKN-NYK", "DEN-LAL", "BOS-MIA", "LAL-PHX", "GSW-HOU", "LAL-SAS", "CHI-NYK", "PHI-NYK", "MEM-OKC"]);
+function afficheOf(g) { // { s: note, why: [raisons] } : une affiche = note ≥ 3,5 (et 2 par nuit au plus, voir markAffiches)
+  const A = g.teams.away, H = g.teams.home, R = RANKS || new Map();
+  const ra = R.get(A.id), rh = R.get(H.id);
+  const gp = Math.min(ra ? ra.gp : 0, rh ? rh.gp : 0), sure = Math.min(1, gp / 10); // début de saison : on se méfie des bilans
+  let s = 0; const why = [];
+  const lvl = r => !r ? 0 : r.rank <= 2 ? 1.6 : r.rank <= 4 ? 1.2 : r.rank <= 6 ? .8 : r.rank <= 8 ? .3 : 0;
+  const top = (lvl(ra) + lvl(rh)) * sure; s += top;
+  if (ra && rh && ra.rank <= 3 && rh.rank <= 3) { s += 1.2 * sure; why.push(ra.conf === rh.conf ? "choc au sommet" : "les leaders des deux conférences"); }
+  else if (top >= 1.6) why.push("deux équipes du haut de tableau");
+  if (ra && rh && ra.conf === rh.conf && ra.rank <= 10 && rh.rank <= 10 && Math.abs(ra.rank - rh.rank) <= 2) { s += .6 * sure; if (!why.length) why.push("duel direct au classement"); }
+  const star = t => !t.top ? 0 : t.top.ppg >= 30 ? 1.4 : t.top.ppg >= 27 ? 1 : t.top.ppg >= 25 ? .5 : 0;
+  const sa = star(A), sh = star(H); s += sa + sh;
+  if (sa >= 1 && sh >= 1) { s += .6; why.push(`duel de stars : ${A.top.n} – ${H.top.n}`); }
+  else if (sa >= 1 || sh >= 1) { const t = sa >= sh ? A : H; why.push(`${t.top.n} (${t.top.ppg.toFixed(1)} pts/m)`); }
+  const hot = r => !r ? 0 : r.streak >= 8 ? 1.4 : r.streak >= 5 ? 1 : r.streak >= 4 ? .5 : 0;
+  for (const [r, t] of [[ra, A], [rh, H]]) { const v = hot(r); s += v; if (v >= 1) why.push(`${t.name} : ${r.streak} victoires de suite`); }
+  const pa = winpct(A.record), ph = winpct(H.record);
+  if (pa >= .65 && ph >= .65) s += .6 * sure;
+  const key = [A.tri, H.tri].sort().join("-");
+  if (RIVAL.has(key)) { s += .9; why.push("une rivalité historique"); }
+  return { s, why };
+}
+function markAffiches(games) { // au plus 2 affiches par nuit, les meilleures, et seulement si la note est franche
+  const sc = games.map(g => ({ g, ...afficheOf(g) })).filter(x => x.s >= 3.5).sort((x, y) => y.s - x.s).slice(0, 2);
+  return new Map(sc.map(x => [x.g.id, x.why]));
+}
+
 /* ---------- vue « Programme » : la grille télé (une colonne par nuit, les matchs sous leur heure) ---------- */
 function tzName() { // « heure de Paris », « heure de Montréal »…
   const c = (TZ.split("/").pop() || "").replace(/_/g, " ");
@@ -1144,13 +1192,14 @@ async function renderProgramme() {
   const tonight = defaultNight();
   const keys = [...Array(7)].map((_, i) => addDays(tonight, i));
   let nights;
-  try { nights = await Promise.all(keys.map(k => scoreboard(k).catch(() => []))); }
+  try { [nights] = await Promise.all([Promise.all(keys.map(k => scoreboard(k).catch(() => []))), loadRanks()]); }
   catch (e) { if (tok === state.tok) main.innerHTML = `<p class="loadmsg">Impossible de joindre ESPN.</p>`; return; }
   if (tok !== state.tok) return;
   let n = 0, hasFav = false, hasHype = false;
   const cols = keys.map((k, i) => {
     const games = nights[i].filter(g => g.state === "pre").sort((a, b) => a.date - b.date);
     if (!games.length) return "";
+    const AFF = markAffiches(games);
     const slots = []; // les matchs groupés par heure de début
     for (const g of games) {
       const h = hourLocal(g.date);
@@ -1163,19 +1212,19 @@ async function renderProgramme() {
         <div class="tvgs">${sl.gs.map(g => {
           const a = g.teams.away, h = g.teams.home;
           const fav = settings.fav && (a.id === settings.fav || h.id === settings.fav);
-          const hype = winpct(a.record) > .6 && winpct(h.record) > .6;
-          if (fav) hasFav = true; else if (hype) hasHype = true;
+          const hype = AFF.has(g.id), why = hype ? AFF.get(g.id) : [];
+          if (fav) hasFav = true; if (hype) hasHype = true;
           // une seule ligne par match : logo + sigle, @ au centre (le nom complet au survol)
           return `<div class="tvg ${fav ? "fav" : ""} ${hype ? "hype" : ""}" style="animation-delay:${Math.min(n++ * 30, 600)}ms"
-              title="${a.name} @ ${h.name}${a.record ? ` (${a.record} · ${h.record})` : ""}${fav ? " · mon équipe" : hype ? " · l'affiche" : ""}">
+              title="${a.name} @ ${h.name}${a.record ? ` (${a.record} · ${h.record})` : ""}${fav ? " · mon équipe" : ""}${hype ? ` · l'affiche${why.length ? " : " + why.join(", ") : ""}` : ""}">
             <span class="tvt a">${logoHTML(a)}<b>${a.tri}</b></span><span class="tvat">@</span><span class="tvt h"><b>${h.tri}</b>${logoHTML(h)}</span>
-            ${fav ? `<i class="tvmk">★</i>` : hype ? `<i class="tvmk">◆</i>` : ""}</div>`;
+            ${hype ? `<i class="tvmk">◆</i>` : fav ? `<i class="tvmk">★</i>` : ""}</div>`;
         }).join("")}</div></div>`).join("");
     return `<section class="tvcol">
       <button class="tvday" data-prog-night="${k}" title="Voir cette nuit"><span>${l1}</span><span>${l2}</span>
         <small>${plural(games.length, "match")}</small></button>${body}</section>`;
   }).join("");
-  const legend = hasFav || hasHype ? `<p class="tvleg">${hasFav ? `<span><i class="tvmk">★</i>mon équipe</span>` : ""}${hasHype ? `<span><i class="tvmk h">◆</i>l'affiche (deux équipes qui gagnent)</span>` : ""}</p>` : "";
+  const legend = hasFav || hasHype ? `<p class="tvleg">${hasFav ? `<span><i class="tvmk">★</i>mon équipe</span>` : ""}${hasHype ? `<span><i class="tvmk h">◆</i>l'affiche : match à enjeu (haut de tableau, superstars, séries, rivalité) · détails au survol</span>` : ""}</p>` : "";
   main.innerHTML = head + legend + (cols ? `<div class="tvgrid">${cols}</div>` : `<p class="loadmsg">Aucun match programmé sur les 7 prochaines nuits.</p>`);
 }
 

@@ -8,7 +8,9 @@
    Rien ne sort du navigateur. Sans spoil : jamais au-delà de l'écran.
    ============================================================ */
 const Chrono = (() => {
-  const CAN = (DEMO && QS.has("live")) || !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent); // les téléphones ne savent pas partager un onglet
+  // le mode direct (partage de l'onglet + lecture du chrono) n'est plus proposé (pas assez fiable, choix de Kiki) : seulement avec ?live=1 pour les essais.
+  // Sans table préparée, le Replay est la vidéo seule ; « Replay + » = table préparée par le téléphone-serveur.
+  const CAN = QS.has("live") && (DEMO || !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent));
   const TESS = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
   let S = null; // session en cours (un match, un lecteur)
 
@@ -341,7 +343,7 @@ const Chrono = (() => {
     if (!S.on) { el.innerHTML = panelIdle(); return; }
     const st = S.status;
     const diag = S.diag ? `<div class="lv-diag">${S.diagImg ? `<img src="${S.diagImg}" alt="">` : ""}<code>${S.lock ? "verrou" : "recherche"} · lectures ${S.reads} · ${SURF} · vidéo ${S.ytT !== undefined ? Math.round(S.ytT) + "/" + Math.round(S.ytDur || 0) + " s" : "?"} · lu : ${(S.diagTxt || "—").replace(/</g, "&lt;").slice(0, 120)}</code></div>` : "";
-    const head = `<div class="lv-head">${DEBUG || !S.map ? `<span class="led lv-clock"><span class="v">${String(S.at ? clockTxt(S.at.per, S.at.sec) : "--:--").replace(/:/g, '<i class="cl">:</i>')}</span></span>` : `<span class="lv-kick sm">Stats en direct</span>`}
+    const head = `<div class="lv-head">${DEBUG || !S.map ? `<span class="led lv-clock"><span class="v">${String(S.at ? clockTxt(S.at.per, S.at.sec) : "--:--").replace(/:/g, '<i class="cl">:</i>')}</span></span>` : `<span class="lv-kick sm">Stats au fil du replay</span>`}
       <span class="lv-st ${S.at && st === "ok" ? "ok" : ""}">${STXT[st] || ""}</span>
       ${S.map ? "" : `<button class="lv-ico" data-live-diag title="Diagnostic">🔧</button><button class="lv-ico" data-live-stop title="Arrêter le partage">■</button>`}</div>
       ${DEMO ? `<input class="lv-demo" type="range" min="0" max="${S.D.plays.length - 1}" value="${S.demoI || 0}" aria-label="Simuler le moment du match">` : ""}${diag}`;

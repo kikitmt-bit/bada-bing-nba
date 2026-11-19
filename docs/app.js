@@ -345,7 +345,7 @@ function playVideo(vid, label, gid) { // lecteur intégré, sans quitter le site
     window.open("https://www.youtube.com/watch?v=" + vid, "_blank", "noopener"); return;
   }
   const live = gid && typeof Chrono !== "undefined" && Chrono.CAN; // stats en direct à côté du résumé (ordinateur seulement)
-  const frame = vid ? `<iframe src="https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0&hl=fr"
+  const frame = vid ? `<iframe src="https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0&hl=fr${live ? "&enablejsapi=1&origin=" + encodeURIComponent(location.origin) : ""}"
       title="${label}" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>`
     : `<div class="vdemo">Démo : la vidéo YouTube serait ici</div>`;
   vplayer.classList.toggle("live", !!live);
@@ -360,6 +360,7 @@ function playVideo(vid, label, gid) { // lecteur intégré, sans quitter le site
 }
 async function openResume(id, extra) {
   const g = state.games.find(x => x.id === id); if (!g) return;
+  if (!extra && typeof Chrono !== "undefined") Chrono.onResumeClick(); // partage demandé tout de suite (le navigateur l'exige pendant le clic)
   if (DEMO) {
     if (extra || !(typeof Chrono !== "undefined" && Chrono.CAN)) { toast("Démo : ici, le vrai résumé vidéo se lancerait dans le site"); return; }
     playVideo(null, `${g.teams.away.name} – ${g.teams.home.name} · démo`, g.id); return;

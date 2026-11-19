@@ -54,15 +54,19 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   (« REPLAY - NBA Extra (13/11) » = nuit du 12 au 13, `findJournal`) et « Résumé de la nuit » NBA (`findNightRecap`,
   « nightly recap » + date) en tête de page ; lecteur intégré (`playVideo`), SAUF les vidéos beIN (`c: "bein"`) : beIN bloque
   leur lecture hors de YouTube (« Vidéo non disponible »), donc NBA Extra s'ouvre dans un nouvel onglet YouTube (app sur téléphone).
-- **Stats en direct sur le résumé (prototype, 19/11, `docs/chrono.js`)** : sur ordinateur, panneau à droite du lecteur
-  (`playVideo(vid, label, gid)`). « 📡 Activer » = partage de l'onglet (`getDisplayMedia`, accord du visiteur, rien n'est envoyé),
-  tesseract.js (jsdelivr) lit le bandeau du match (quart-temps + chrono, `parseWords` : le chrono le plus proche du « 1ST »,
-  pour ignorer le minutage YouTube), fenêtre de lecture calée sur le bandeau trouvé (`S.lock`), filtre de vraisemblance
-  (`accept` : « 1:12 » peut être « 11:12 »), puis stats recalculées depuis `plays` ESPN jusqu'à ce moment (`statsAt`,
-  3 pts = `pointsAttempted`, rebonds d'équipe exclus : identique à la feuille ESPN). Pas sur téléphone (pas de partage d'onglet).
-  Le robot qui préparait le minutage à l'avance est impossible : YouTube bloque le téléchargement depuis GitHub Actions
-  (« not a bot »), et on ne contourne pas. Démo : `?demo=1&live=1` (curseur à la place du chrono). ESPN depuis le navigateur :
-  CORS OK (vérifié le 19/11). Panneau affiché si le navigateur sait partager un écran (`getDisplayMedia`) et n'est pas un téléphone (user agent).
+- **Stats en direct sur le résumé (19/11, `docs/chrono.js`)** : sur ordinateur, panneau à droite du lecteur (`playVideo(vid, label, gid)`).
+  Partage de l'onglet (`getDisplayMedia`, seule façon de voir l'image d'un lecteur YouTube) **une fois par visite** : le flux est gardé
+  d'un résumé à l'autre ; après la 1re activation (`bb2_liveused`), le partage est demandé dès le clic « Résumé » (`onResumeClick`,
+  geste exigé par le navigateur ; case « Proposer le partage… » = `bb2_live`). Lecture en 2 temps (tesseract.js, jsdelivr) :
+  recherche dans le bas 30 % de la vidéo (PSM 11, gris/inversé) du quart-temps « 1ST… » ou du chrono, puis **verrou** sur une petite
+  zone chrono + quart-temps (PSM 6, inversé, ~0,1 s, fiable sur les vraies images). Anti-spoil (`accept`) : « 1:05 » peut être un
+  « 11:05 » mal lu → on prend l'option cohérente avec la lecture d'avant, sinon celle qui colle à la place dans la vidéo (position et
+  durée envoyées par le lecteur YouTube via `enablejsapi` + postMessage « listening »), sinon la plus tôt ; avancer loin dans le match
+  demande 3 lectures concordantes (2 après un saut dans la vidéo). Pause YouTube = lecture en pause. 🔧 = diagnostic (zone lue + texte).
+  Stats depuis `plays` ESPN jusqu'à ce moment (`statsAt` : identique à la feuille ESPN). Testé sur de vraies images du résumé GameTime
+  (bandeau NBC) avec un faux partage (`canvas.captureStream`) : le navigateur intégré refuse le vrai partage. Vidéo < ~600 px de large :
+  illisible. Le robot qui préparerait tout à l'avance est impossible (YouTube bloque GitHub Actions, on ne contourne pas).
+  Démo : `?demo=1&live=1`. ESPN depuis le navigateur : CORS OK (19/11).
 - **Cache** : GitHub Pages garde les fichiers 10 min ; `index.html` appelle `app.js?v=…` etc. : changer ce `v` à chaque modif.
 - Fiche : feuille de match complète (Min/Tirs/3 pts/Reb/Pas/Pts) ; clic sur un joueur = **carte de tirs animée**
   (tirs ESPN `plays[].coordinate`, panier en (25, 5.25) pieds, moitiés de terrain repliées, lancers francs exclus),

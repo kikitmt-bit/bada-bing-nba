@@ -518,7 +518,13 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .lv-clock{font-size:22px;white-space:nowrap;cursor:default}
 .lv-st{font:700 11px var(--disp);letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .lv-st.ok{color:#47d17a}
-.lv-stop{margin-left:auto;flex:0 0 auto;width:28px;height:28px;border:0;background:var(--panel2);color:var(--ink2);cursor:pointer;font-size:12px}
+.lv-ico{flex:0 0 auto;width:28px;height:28px;border:0;background:var(--panel2);color:var(--ink2);cursor:pointer;font-size:12px}
+.lv-head .lv-ico:first-of-type{margin-left:auto}
+.lv-auto{display:flex;gap:8px;align-items:flex-start;margin:14px 0 0;color:var(--ink2);font-size:12px;cursor:pointer}
+.lv-auto input{accent-color:var(--amber);margin-top:2px}
+.lv-diag{margin:0 0 10px;padding:8px;background:#000;font-size:11px;color:var(--ink3)}
+.lv-diag img{display:block;max-width:100%;max-height:90px;margin:0 auto 6px;background:#fff}
+.lv-diag code{display:block;word-break:break-all;white-space:normal}
 .lv-demo{width:100%;margin:0 0 10px;accent-color:var(--amber)}
 .lv-wait{color:var(--ink2);padding:30px 4px}
 .lv-score{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 0 12px;border-bottom:1px solid var(--line)}

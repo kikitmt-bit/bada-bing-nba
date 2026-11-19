@@ -102,116 +102,238 @@ const Chrono = (() => {
       .replace(/\(turnover\)|turnover/gi, "(balle perdue)").replace(/\((.+?) steals\)/g, "(interception de $1)").replace(/blocks/g, "contre");
   }
 
-  /* ---------- lecture du bandeau ---------- */
-  const QRX = /^(?:([1lIi|!])(?:s|S|5)(?:t|T)|(2)(?:n|N)(?:d|D)|(3)(?:r|R)(?:d|D)|(4)(?:t|T)(?:h|H)|(OT|0T)(\d?)|Q([1-4]))/;
+  /* ---------- lecture du bandeau ----------
+     1) Recherche : on lit le bas de la vidéo pour trouver le quart-temps (« 1ST », « 2ND »…).
+     2) Verrou : on ne lit plus qu'une petite zone autour (chrono + quart-temps), inversée,
+        en mode « bloc de texte » de tesseract : ~0,1 s par lecture et fiable. */
+  const QRX = /^(?:([1lIi|!])[sS58][tT7]|(2)[nN][dD0]|(3)[rR][dD0]|(4)[tT][hH]|([0O]T|2[0O]T|3[0O]T))/;
   function readQuarter(s) {
     const m = QRX.exec(s); if (!m) return 0;
-    if (m[1]) return 1; if (m[2]) return 2; if (m[3]) return 3; if (m[4]) return 4; if (m[7]) return +m[7];
-    return 4 + (+m[6] || 1);
+    if (m[1]) return 1; if (m[2]) return 2; if (m[3]) return 3; if (m[4]) return 4;
+    return 4 + (+m[5][0] > 1 ? +m[5][0] : 1);
   }
-  function readClock(s) {
+  function readClock(s) { // renvoie [secondes, variante] ; « 1:05 » peut être un « 11:05 » mal lu
     s = s.replace(/[oO]/g, "0").replace(/[lI|!]/g, "1");
-    let m = /(n|\d{1,2})[:;](\d{2})(?!\d)/.exec(s);
-    if (m) { const mm = m[1] === "n" ? 11 : +m[1], ss = +m[2]; if (mm <= 12 && ss < 60 && mm * 60 + ss <= 720) return mm * 60 + ss; }
+    let m = /(?:^|[^\d])(n|\d{1,2})[:;](\d{2})(?!\d)/.exec(" " + s);
+    if (m) {
+      const mm = m[1] === "n" ? 11 : +m[1], ss = +m[2];
+      if (mm <= 12 && ss < 60 && mm * 60 + ss <= 720) return [mm * 60 + ss, m[1].length === 1 && mm <= 2 ? (mm + 10) * 60 + ss : null];
+    }
     m = /^(\d{1,2})\.(\d)$/.exec(s); // dernière minute : « 45.3 »
-    if (m && +m[1] < 60) return +m[1] + +m[2] / 10;
+    if (m && +m[1] < 60) return [+m[1] + +m[2] / 10, null];
     return null;
   }
-  function parseWords(words) { // quart-temps + chrono le plus proche (évite le minutage YouTube « 0:01 / 9:54 »)
+  const bx = w => w.bbox;
+  function findQuarter(words) {
+    let q = null;
+    for (const w of words) { const per = readQuarter(w.text.trim()); if (per && (!q || w.confidence > q.w.confidence)) q = { per, w }; }
+    return q;
+  }
+  function findClock(words, near) { // le chrono le plus proche du quart-temps (évite le minutage YouTube « 0:01 / 9:54 »)
     let best = null;
-    for (const q of words) {
-      const per = readQuarter(q.text); if (!per) continue;
-      const h = Math.max(8, q.bbox.y1 - q.bbox.y0), cx = (q.bbox.x0 + q.bbox.x1) / 2, cy = (q.bbox.y0 + q.bbox.y1) / 2;
-      for (const c of words) {
-        if (c === q) continue;
-        const sec = readClock(c.text); if (sec === null) continue;
-        const dx = (c.bbox.x0 + c.bbox.x1) / 2 - cx, dy = (c.bbox.y0 + c.bbox.y1) / 2 - cy, d = Math.hypot(dx, dy * 1.5);
-        if (d > h * 9) continue;
-        if (!best || d < best.d) best = { per, sec, alt: (sec < 180 && /^[^.]*:/.test(c.text) && !/^\d\d/.test(c.text.replace(/^n/, "11"))) ? sec + 600 : null, d, box: { x0: Math.min(q.bbox.x0, c.bbox.x0), y0: Math.min(q.bbox.y0, c.bbox.y0), x1: Math.max(q.bbox.x1, c.bbox.x1), y1: Math.max(q.bbox.y1, c.bbox.y1) } };
+    const nb = near && bx(near), h = nb ? Math.max(6, nb.y1 - nb.y0) : 0;
+    for (const w of words) {
+      if (near && w === near) continue;
+      const c = readClock(w.text.trim()); if (!c) continue;
+      let d = 0;
+      if (nb) {
+        const b = bx(w), dx = (b.x0 + b.x1 - nb.x0 - nb.x1) / 2, dy = (b.y0 + b.y1 - nb.y0 - nb.y1) / 2;
+        d = Math.hypot(dx, dy * 1.5); if (d > h * 10) continue;
       }
+      if (!best || d < best.d) best = { sec: c[0], alt: c[1], d, w };
     }
     return best;
   }
 
-  async function loadTess() {
-    if (!window.Tesseract) await new Promise((ok, ko) => { const s = document.createElement("script"); s.src = TESS; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
-    const w = await Tesseract.createWorker("eng");
-    await w.setParameters({ tessedit_pageseg_mode: "11" });
-    return w;
+  let WORKER = null;
+  function worker() {
+    return WORKER || (WORKER = (async () => {
+      if (!window.Tesseract) await new Promise((ok, ko) => { const s = document.createElement("script"); s.src = TESS; s.onload = ok; s.onerror = ko; document.head.appendChild(s); });
+      return Tesseract.createWorker("eng");
+    })().catch(e => { WORKER = null; throw e; }));
   }
-
-  // où est l'iframe dans l'image capturée ?
-  function frameRect(vid, iframe, surface) {
-    const r = iframe.getBoundingClientRect(), W = vid.videoWidth, H = vid.videoHeight;
-    let k, ox = 0, oy = 0;
-    if (surface === "browser") k = W / innerWidth;
-    else { // fenêtre ou écran entier : on devine la place de la page
-      const bx = Math.max(0, (outerWidth - innerWidth) / 2), by = Math.max(0, outerHeight - innerHeight - bx);
-      if (surface === "monitor") { k = W / screen.width; ox = screenX + bx; oy = screenY + by; }
-      else { k = W / outerWidth; ox = bx; oy = by; }
-    }
-    return { x: (r.left + ox) * k, y: (r.top + oy) * k, w: r.width * k, h: r.height * k, H };
+  let PSM = "";
+  async function ocr(canvas, psm) {
+    const w = await worker();
+    if (PSM !== psm) { await w.setParameters({ tessedit_pageseg_mode: psm }); PSM = psm; }
+    const { data } = await w.recognize(canvas);
+    return (data.words || []).filter(x => x.text && x.text.trim());
   }
-  function grab(src, sx, sy, sw, sh, scale, inv) {
-    const c = S.cv || (S.cv = document.createElement("canvas"));
-    c.width = Math.max(1, Math.round(sw * scale)); c.height = Math.max(1, Math.round(sh * scale));
+  let CV = null;
+  function prep(src, sx, sy, sw, sh, scale, mode) { // mode : "inv" (texte clair → noir), "thr", "gray"
+    const c = CV || (CV = document.createElement("canvas"));
+    c.width = Math.max(8, Math.round(sw * scale)); c.height = Math.max(8, Math.round(sh * scale));
     const x = c.getContext("2d", { willReadFrequently: true });
+    x.imageSmoothingQuality = "high";
     x.drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
     const d = x.getImageData(0, 0, c.width, c.height), p = d.data;
-    for (let i = 0; i < p.length; i += 4) { const g = .3 * p[i] + .59 * p[i + 1] + .11 * p[i + 2]; const v = (g > 150) !== inv ? 0 : 255; p[i] = p[i + 1] = p[i + 2] = v; }
+    for (let i = 0; i < p.length; i += 4) {
+      const g = .3 * p[i] + .59 * p[i + 1] + .11 * p[i + 2];
+      const v = mode === "gray" ? g : mode === "inv" ? (g > 150 ? 0 : 255) : (g > 150 ? 255 : 0);
+      p[i] = p[i + 1] = p[i + 2] = v;
+    }
     x.putImageData(d, 0, 0);
     return c;
   }
-  async function readFrame(src, R) { // R : rectangle de la vidéo dans l'image source
-    const lock = S.lock;
-    let sx, sy, sw, sh, scale;
-    if (lock) { sx = R.x + lock.x * R.w; sy = R.y + lock.y * R.h; sw = lock.w * R.w; sh = lock.h * R.h; scale = Math.min(4, 200 / sh); }
-    else { sx = R.x; sy = R.y + R.h * .7; sw = R.w; sh = R.h * .3; scale = Math.max(1, Math.min(2, 2450 / sw)); }
-    sx = Math.max(0, sx); sy = Math.max(0, sy);
-    const inv = !S.polar; // texte clair sur fond sombre (on essaie l'inverse après un échec)
-    const c = grab(src, sx, sy, sw, sh, scale, inv);
-    const { data } = await S.worker.recognize(c);
-    const hit = parseWords(data.words || []);
-    if (!hit) { S.polar = !S.polar; return null; }
-    if (!lock) { // on cale la fenêtre de lecture autour du bandeau trouvé
-      const b = hit.box, bw = (b.x1 - b.x0) / scale, bh = (b.y1 - b.y0) / scale;
-      const lx = sx + b.x0 / scale - bw * .5, ly = sy + b.y0 / scale - bh * .8;
-      S.lock = { x: (lx - R.x) / R.w, y: (ly - R.y) / R.h, w: bw * 2 / R.w, h: bh * 2.6 / R.h };
+  const clip = (r, W, H) => { const x = Math.max(0, r.x), y = Math.max(0, r.y); return { x, y, w: Math.max(4, Math.min(W, r.x + r.w) - x), h: Math.max(4, Math.min(H, r.y + r.h) - y) }; };
+
+  // une lecture ; R = place de la vidéo dans l'image (ou toute l'image en secours)
+  async function readFrame(src, W, H, R) {
+    S.reads++;
+    if (S.lock) {
+      const L = clip(S.lock, W, H), scale = Math.max(1.5, Math.min(4, 210 / L.h));
+      const mode = S.polar ? "thr" : "inv";
+      const c = prep(src, L.x, L.y, L.w, L.h, scale, mode);
+      const words = await ocr(c, "6");
+      S.diagTxt = words.map(w => w.text).join(" "); if (S.diag) S.diagImg = c.toDataURL("image/png");
+      const q = findQuarter(words), k = findClock(words, q && q.w);
+      if (!k) { S.polar = !S.polar; return null; }
+      const per = q ? q.per : S.at ? S.at.per : 0;
+      return per ? { per, sec: k.sec, alt: k.alt, sure: !!q } : null;
     }
-    return hit;
+    // recherche du bandeau (le bas de la vidéo, agrandi)
+    const A = clip({ x: R.x, y: R.y + R.h * .7, w: R.w, h: R.h * .3 }, W, H);
+    const scale = Math.max(.8, Math.min(2.4, 2000 / A.w));
+    const mode = S.polar ? "inv" : "gray";
+    const c = prep(src, A.x, A.y, A.w, A.h, scale, mode);
+    const words = await ocr(c, "11");
+    S.diagTxt = words.map(w => w.text).join(" "); if (S.diag) S.diagImg = c.toDataURL("image/jpeg", .6);
+    const q = findQuarter(words), k = findClock(words, q && q.w);
+    if (!q && !k) { S.polar = !S.polar; return null; }
+    const toF = b => ({ x0: A.x + b.x0 / scale, y0: A.y + b.y0 / scale, x1: A.x + b.x1 / scale, y1: A.y + b.y1 / scale });
+    let L;
+    if (q && k) { // la zone couvre le chrono et le quart-temps, avec un peu de marge
+      const a1 = toF(bx(q.w)), a2 = toF(bx(k.w)), tw = a1.x1 - a1.x0, th = a1.y1 - a1.y0;
+      const x0 = Math.min(a1.x0, a2.x0), y0 = Math.min(a1.y0, a2.y0), x1 = Math.max(a1.x1, a2.x1), y1 = Math.max(a1.y1, a2.y1);
+      const mw = (x1 - x0) * .12 + tw * .25, mh = (y1 - y0) * .1 + th * .3;
+      L = { x: x0 - mw, y: y0 - mh, w: x1 - x0 + 2 * mw, h: y1 - y0 + 2 * mh };
+    } else if (q) { // le quart-temps seul : le chrono est à côté ou au-dessus
+      const a1 = toF(bx(q.w)), tw = a1.x1 - a1.x0, th = a1.y1 - a1.y0;
+      L = { x: a1.x0 - tw * 1.6, y: a1.y0 - th * 2.4, w: tw * 4.2, h: th * 3.8 };
+    } else { // le chrono seul : le quart-temps est dessous ou à côté
+      const a2 = toF(bx(k.w)), cw = a2.x1 - a2.x0, ch = a2.y1 - a2.y0;
+      L = { x: a2.x0 - cw * .7, y: a2.y0 - ch * .4, w: cw * 2.4, h: ch * 2.3 };
+    }
+    S.lock = L; S.polar = false;
+    return q && k ? { per: q.per, sec: k.sec, alt: k.alt, sure: true } : null;
   }
 
   /* ---------- filtre : on n'accepte qu'un chrono plausible ---------- */
-  function accept(hit) { // un « 11:12 » peut être lu « 1:12 » : on garde la lecture qui colle à la précédente
+  // Règle anti-spoil : dans le doute, on choisit le moment le plus TÔT du match, et on n'avance
+  // loin dans le match que si la lecture est confirmée plusieurs fois (ou si on a sauté dans la vidéo).
+  const frac = (per, sec) => per <= 4 ? ((per - 1) * 720 + 720 - sec) / 2880 : 1 + ((per - 5) * 300 + 300 - sec) / 2880;
+  function accept(hit) {
     const nper = Math.max(4, ...S.D.plays.map(p => p.per));
-    const cur = S.at, prev = S.cand;
-    const opts = [hit.sec, hit.alt].filter(x => x !== null && x !== undefined && x <= (hit.per > 4 ? 300 : 720));
+    let opts = [hit.sec, hit.alt].filter(x => x !== null && x !== undefined && x <= (hit.per > 4 ? 300 : 720));
     if (hit.per > nper || !opts.length) return false;
-    const near = (a, sec) => a && a.per === hit.per && a.opts.some(x => Math.abs(x - sec) <= 6);
-    const forward = sec => cur && ((hit.per === cur.per && cur.sec - sec >= -2 && cur.sec - sec <= 75) || (hit.per === cur.per + 1 && sec >= 600));
-    S.cand = { per: hit.per, opts };
-    for (const sec of opts) if (forward(sec) || near(prev, sec)) { S.at = { per: hit.per, sec }; return true; }
-    return false;
+    const cur = S.at;
+    if (opts.length > 1) { // « 1:05 » ou « 11:05 » ?
+      const fwd = cur ? opts.filter(x => hit.per === cur.per && cur.sec - x >= -3 && cur.sec - x <= 90) : [];
+      if (fwd.length === 1) opts = fwd;
+      else if (S.ytT !== undefined && S.ytDur > 60) { // la place dans la vidéo donne une idée de la place dans le match
+        const f = S.ytT / S.ytDur;
+        opts = [opts.reduce((a, b) => Math.abs(frac(hit.per, a) - f) <= Math.abs(frac(hit.per, b) - f) ? a : b)];
+      } else opts = [Math.max(...opts)];
+    }
+    const sec = opts[0], prev = S.cand;
+    S.agree = prev && prev.per === hit.per && Math.abs(prev.sec - sec) <= 8 ? (S.agree || 1) + 1 : 1;
+    S.cand = { per: hit.per, sec };
+    const forward = cur && ((hit.per === cur.per && cur.sec - sec >= -3 && cur.sec - sec <= 90) || (hit.per === cur.per + 1 && sec >= 540));
+    const backward = cur && frac(hit.per, sec) < frac(cur.per, cur.sec); // retour en arrière : sans risque de spoil
+    const farAhead = !cur || (!forward && !backward);
+    const ok = forward || (backward && S.agree >= 2) || (farAhead && (S.agree >= 3 || (S.jump && hit.sure && S.agree >= 2)));
+    if (ok) { S.at = { per: hit.per, sec }; S.jump = false; }
+    return ok;
+  }
+
+  /* ---------- le partage d'écran : un seul par visite ---------- */
+  let STREAM = null, SURF = "browser", GRAB = null, VEL = null;
+  async function ensureStream() {
+    if (STREAM && STREAM.active) return true;
+    let st;
+    try {
+      st = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: "browser", frameRate: 5, width: { ideal: 2560 }, height: { ideal: 1440 } }, audio: false,
+        preferCurrentTab: true, selfBrowserSurface: "include", surfaceSwitching: "exclude", systemAudio: "exclude" });
+    } catch (e) { return false; }
+    STREAM = st;
+    const tr = st.getVideoTracks()[0];
+    SURF = (tr.getSettings && tr.getSettings().displaySurface) || "browser";
+    tr.addEventListener("ended", () => { STREAM = null; GRAB = null; if (S) { S.on = false; S.at = null; render(true); } });
+    GRAB = typeof ImageCapture !== "undefined" ? new ImageCapture(tr) : null;
+    if (!VEL) { VEL = document.createElement("video"); VEL.muted = true; VEL.playsInline = true;
+      VEL.style.cssText = "position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0;pointer-events:none"; document.body.appendChild(VEL); }
+    VEL.srcObject = st; await VEL.play().catch(() => {});
+    return true;
+  }
+  async function frameNow() {
+    if (GRAB) { // ImageCapture peut attendre indéfiniment une image qui ne change pas : 700 ms max
+      try {
+        const b = await Promise.race([GRAB.grabFrame(), new Promise((_, ko) => setTimeout(() => ko(new Error("lent")), 700))]);
+        return { src: b, W: b.width, H: b.height, close: () => b.close() };
+      } catch (e) { /* on passe à la vidéo */ }
+    }
+    if (VEL && VEL.videoWidth) return { src: VEL, W: VEL.videoWidth, H: VEL.videoHeight, close() {} };
+    return null;
+  }
+  function videoRect(W, H) { // où est le lecteur YouTube dans l'image capturée ?
+    const r = S.iframe.getBoundingClientRect();
+    let k, ox = 0, oy = 0;
+    if (SURF === "browser") k = W / innerWidth;
+    else {
+      const bxw = Math.max(0, (outerWidth - innerWidth) / 2), byw = Math.max(0, outerHeight - innerHeight - bxw);
+      if (SURF === "monitor") { k = W / screen.width; ox = screenX + bxw; oy = screenY + byw; }
+      else { k = W / outerWidth; ox = bxw; oy = byw; }
+    }
+    return { x: (r.left + ox) * k, y: (r.top + oy) * k, w: r.width * k, h: r.height * k };
+  }
+
+  /* ---------- le lecteur YouTube nous dit où en est la vidéo (pause, saut en avant/arrière) ---------- */
+  window.addEventListener("message", e => {
+    let host = ""; try { host = new URL(e.origin).hostname; } catch (x) { return; }
+    if (!S || !/(^|\.)youtube(-nocookie)?\.com$/.test(host)) return;
+    let m; try { m = typeof e.data === "string" ? JSON.parse(e.data) : e.data; } catch (x) { return; }
+    const info = m && m.info; if (!info || typeof info !== "object") return;
+    if (typeof info.playerState === "number") S.ytState = info.playerState;
+    if (typeof info.duration === "number") S.ytDur = info.duration;
+    if (typeof info.currentTime === "number") {
+      const now = performance.now(), t = info.currentTime;
+      if (S.ytT !== undefined && S.ytState === 1) {
+        const expect = S.ytT + (now - S.ytAt) / 1000;
+        if (Math.abs(t - expect) > 4) { S.jump = true; S.miss = 0; } // l'utilisateur a sauté dans la vidéo
+      }
+      S.ytT = t; S.ytAt = now;
+    }
+  });
+  function listenYT() { // sans charger l'API YouTube : on demande au lecteur de nous envoyer son état
+    const f = S && S.iframe && S.iframe.querySelector("iframe");
+    if (f && f.contentWindow) f.contentWindow.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), "*");
   }
 
   /* ---------- le panneau ---------- */
   const clockTxt = (per, sec) => `${per > 4 ? "Prol." + (per > 5 ? per - 4 : "") : "Q" + per} · ${sec >= 60 ? Math.floor(sec / 60) + ":" + String(Math.floor(sec % 60)).padStart(2, "0") : sec.toFixed(1)}`;
   function panelIdle() {
+    const auto = store.get("live", true);
     return `<div class="lv-idle">
       <div class="lv-kick">Stats en direct</div>
       <p>Le panneau suit le résumé : à chaque instant, les stats du match <b>jusqu'au moment affiché</b>, pas plus loin.</p>
       <button class="btn amber" data-live-start>📡 Activer</button>
-      <p class="lv-small">Ton navigateur va te demander de partager un onglet : choisis <b>cet onglet</b>. L'image reste sur ton ordinateur, rien n'est envoyé.
-      Marche sur ordinateur (Chrome ou Edge conseillés).</p>${DEMO ? `<p class="lv-small">Démo : pas de vraie vidéo, un curseur simule le chrono.</p>` : ""}</div>`;
+      <label class="lv-auto"><input type="checkbox" data-live-auto ${auto ? "checked" : ""}> Proposer le partage dès que j'ouvre un résumé</label>
+      <p class="lv-small">Le navigateur demande de partager <b>cet onglet</b> (une fois par visite) : c'est la seule façon pour le site de voir le chrono du match.
+      L'image reste sur ton ordinateur, rien n'est envoyé.</p>${DEMO ? `<p class="lv-small">Démo : pas de vraie vidéo, un curseur simule le chrono.</p>` : ""}</div>`;
   }
-  function render() {
+  const STXT = { load: "Préparation…", seek: "Recherche du bandeau…", ok: "● Synchro", lost: "Bandeau caché", pause: "En pause" };
+  function render(force) {
     const el = S && S.el; if (!el) return;
-    const st = S.status;
+    const key = [S.on, S.status, S.at && S.at.per, S.at && S.at.sec, S.diag && S.reads].join("|");
+    if (!force && key === S.key) return;
+    S.key = key;
     if (!S.on) { el.innerHTML = panelIdle(); return; }
+    const st = S.status;
+    const diag = S.diag ? `<div class="lv-diag">${S.diagImg ? `<img src="${S.diagImg}" alt="">` : ""}<code>${S.lock ? "verrou" : "recherche"} · lectures ${S.reads} · ${SURF} · vidéo ${S.ytT !== undefined ? Math.round(S.ytT) + "/" + Math.round(S.ytDur || 0) + " s" : "?"} · lu : ${(S.diagTxt || "—").replace(/</g, "&lt;").slice(0, 120)}</code></div>` : "";
     const head = `<div class="lv-head"><span class="led lv-clock">${S.at ? clockTxt(S.at.per, S.at.sec) : "--:--"}</span>
-      <span class="lv-st ${S.at && st === "ok" ? "ok" : ""}">${st === "load" ? "Préparation…" : st === "ok" ? "● Synchro" : st === "lost" ? "Bandeau introuvable" : "Recherche du chrono…"}</span>
-      <button class="lv-stop" data-live-stop title="Arrêter le partage">■</button></div>
-      ${DEMO ? `<input class="lv-demo" type="range" min="0" max="${S.D.plays.length - 1}" value="${S.demoI || 0}" aria-label="Simuler le moment du match">` : ""}`;
+      <span class="lv-st ${S.at && st === "ok" ? "ok" : ""}">${STXT[st] || ""}</span>
+      <button class="lv-ico" data-live-diag title="Diagnostic">🔧</button><button class="lv-ico" data-live-stop title="Arrêter le partage">■</button></div>
+      ${DEMO ? `<input class="lv-demo" type="range" min="0" max="${S.D.plays.length - 1}" value="${S.demoI || 0}" aria-label="Simuler le moment du match">` : ""}${diag}`;
     if (!S.at) { el.innerHTML = head + `<p class="lv-wait">Lance la vidéo : dès que le bandeau du match est à l'écran, les stats apparaissent.</p>`; return; }
     const D = S.D, A = statsAt(D, S.at.per, S.at.sec), h = team(D.home), a = team(D.away), th = A.T[D.home], ta = A.T[D.away];
     const pc = (m, n) => n ? Math.round(100 * m / n) + " %" : "–";
@@ -236,81 +358,94 @@ const Chrono = (() => {
   }
 
   /* ---------- boucle de lecture ---------- */
+  const wait = ms => new Promise(r => setTimeout(r, ms));
   async function loop(my) {
-    while (S === my && S.on) {
-      const R = frameRect(S.vid, S.iframe, S.surface);
+    if (my.looping) return; my.looping = true;
+    let n = 0;
+    while (S === my && my.on && STREAM && STREAM.active) {
+      if (++n % 5 === 1) listenYT();
+      if (my.ytState === 2) { if (my.status !== "pause") { my.status = "pause"; render(); } await wait(400); continue; }
+      const f = await frameNow();
       let hit = null;
-      if (S.vid.videoWidth && R.w > 50) { try { hit = await readFrame(S.vid, R); } catch (e) { hit = null; } }
+      if (f && f.W > 100) {
+        let R = videoRect(f.W, f.H);
+        if (my.fails >= 4 || R.w < 80) R = { x: 0, y: 0, w: f.W, h: f.H }; // la page n'est pas où on croit : toute l'image
+        try { hit = await readFrame(f.src, f.W, f.H, R); } catch (e) { hit = null; }
+        f.close();
+      }
       if (S !== my) return;
-      if (hit && accept(hit)) { S.miss = 0; S.status = "ok"; render(); }
-      else if (++S.miss >= 8) { S.lock = null; S.status = S.at ? "lost" : "seek"; render(); S.miss = 0; }
-      await new Promise(r => setTimeout(r, S.lock ? 300 : 900));
+      if (hit && accept(hit)) { my.miss = 0; my.fails = 0; my.status = "ok"; }
+      else if (my.lock) { if (++my.miss >= 6) { my.lock = null; my.miss = 0; my.status = my.at ? "lost" : "seek"; } }
+      else { my.fails++; my.status = my.at ? "lost" : "seek"; }
+      render();
+      await wait(my.lock ? (my.status === "ok" ? 650 : 250) : 200);
     }
+    my.looping = false;
   }
-  async function start() {
+  async function start(fromClick) {
     if (!S) return;
     const my = S;
-    if (DEMO) { S.on = true; S.status = "ok"; S.demoI = Math.floor(S.D.plays.length * .3); const p = S.D.plays[S.demoI]; S.at = { per: p.per, sec: p.sec }; render(); return; }
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: "browser", frameRate: 4 }, audio: false,
-        preferCurrentTab: true, selfBrowserSurface: "include", surfaceSwitching: "exclude" });
-    } catch (e) { toast("Partage refusé : pas de stats en direct cette fois"); return; }
-    if (S !== my) { stream.getTracks().forEach(t => t.stop()); return; }
-    const tr = stream.getVideoTracks()[0];
-    S.stream = stream; S.surface = (tr.getSettings && tr.getSettings().displaySurface) || "browser";
-    tr.addEventListener("ended", () => { if (S === my) stop(); });
-    S.vid = document.createElement("video"); S.vid.muted = true; S.vid.playsInline = true; S.vid.srcObject = stream;
-    await S.vid.play().catch(() => {});
-    S.on = true; S.status = "load"; render();
-    try { S.worker = S.worker || await loadTess(); } catch (e) { toast("Impossible de charger le lecteur de chrono"); stop(); return; }
+    if (DEMO) { S.on = true; S.status = "ok"; S.demoI = Math.floor(S.D.plays.length * .3); const p = S.D.plays[S.demoI]; S.at = { per: p.per, sec: p.sec }; render(true); return; }
+    worker().catch(() => {}); // on charge le lecteur de texte pendant que le navigateur demande l'accord
+    if (!(STREAM && STREAM.active)) {
+      if (!fromClick) return;
+      const ok = await ensureStream();
+      if (!ok) { toast("Partage refusé : pas de stats en direct cette fois"); return; }
+    }
     if (S !== my) return;
-    S.status = "seek"; render();
+    my.on = true; my.status = "load"; render(true);
+    try { await worker(); } catch (e) { toast("Impossible de charger le lecteur de chrono"); my.on = false; render(true); return; }
+    if (S !== my) return;
+    my.status = "seek"; render(true);
     loop(my);
   }
   function stop() {
-    if (!S) return;
-    if (S.stream) S.stream.getTracks().forEach(t => t.stop());
-    S.stream = null; S.on = false; S.at = null; S.cand = null; S.lock = null; S.miss = 0;
-    render();
+    if (STREAM) STREAM.getTracks().forEach(t => t.stop());
+    STREAM = null; GRAB = null;
+    if (S) { S.on = false; S.at = null; S.cand = null; S.lock = null; render(true); }
   }
 
   /* ---------- branchement sur le lecteur vidéo ---------- */
   async function attach(gid, panel, iframe) {
-    close();
-    const my = S = { gid, el: panel, iframe, on: false, miss: 0, D: null };
+    if (S) S.on = false;
+    const my = S = { gid, el: panel, iframe, on: false, miss: 0, fails: 0, reads: 0, D: null, polar: false };
     panel.innerHTML = `<p class="lv-wait">Chargement du déroulé du match…</p>`;
+    if (!DEMO) worker().catch(() => {});
     try {
       if (DEMO) { const g = state.games.find(x => x.id === gid); my.D = demoPlays(await window.DEMO.summary(gid), g); }
       else my.D = parsePlays(await fetchJSON(API + "summary?event=" + gid));
     } catch (e) { my.D = null; }
     if (S !== my) return;
     if (!my.D || my.D.plays.length < 20) { panel.innerHTML = `<p class="lv-wait">Pas de déroulé ESPN pour ce match : pas de stats en direct.</p>`; return; }
-    render();
+    render(true);
+    if (STREAM && STREAM.active) start(false); // déjà partagé pendant cette visite : rien à redemander
   }
-  function close() {
-    if (!S) return;
-    const w = S.worker; stop(); S = null;
-    if (w) w.terminate().catch(() => {});
-  }
+  function close() { if (S) { S.on = false; S = null; } } // le partage reste ouvert pour le résumé suivant
+  // appelé au clic « Résumé » (geste de l'utilisateur, exigé par le navigateur pour demander le partage)
+  function onResumeClick() { if (CAN && !DEMO && store.get("live", true) && store.get("liveused", false)) ensureStream(); }
   document.addEventListener("click", e => {
-    if (e.target.closest("[data-live-start]")) start();
+    if (e.target.closest("[data-live-start]")) { store.set("liveused", true); start(true); }
     else if (e.target.closest("[data-live-stop]")) stop();
+    else if (e.target.closest("[data-live-diag]") && S) { S.diag = !S.diag; render(true); }
   });
+  document.addEventListener("change", e => { if (e.target.matches && e.target.matches("[data-live-auto]")) store.set("live", e.target.checked); });
   document.addEventListener("input", e => {
     if (!S || !e.target.classList.contains("lv-demo")) return;
     S.demoI = +e.target.value; const p = S.D.plays[S.demoI]; S.at = { per: p.per, sec: p.sec };
-    const v = e.target.value; render(); const n = S.el.querySelector(".lv-demo"); if (n) { n.value = v; n.focus(); }
+    const v = e.target.value; render(true); const n = S.el.querySelector(".lv-demo"); if (n) { n.value = v; n.focus(); }
   });
 
-  // tests : lire le bandeau d'une image fixe (capture d'écran), rect = place de la vidéo dans l'image
-  async function testImage(url, rect) {
-    const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
-    const keep = S; S = { lock: null, worker: await loadTess() };
-    const out = [];
-    for (let i = 0; i < 4; i++) { const t0 = performance.now(); const h = await readFrame(img, rect); out.push({ ms: Math.round(performance.now() - t0), hit: h && { per: h.per, sec: h.sec }, lock: !!S.lock }); }
-    await S.worker.terminate(); S = keep;
-    return out;
+  // tests : rejouer la lecture sur des images fixes (captures) ; rect = place de la vidéo dans l'image
+  async function testFrames(list, D) {
+    const keep = S; const out = [];
+    S = { lock: null, polar: false, reads: 0, miss: 0, fails: 0, D: D || { plays: [{ per: 4 }] }, at: null, cand: null };
+    for (const it of list) {
+      const t0 = performance.now(); let hit = null, tries = 0;
+      while (!hit && tries++ < 4) hit = await readFrame(it.img, it.img.width, it.img.height, it.rect || { x: 0, y: 0, w: it.img.width, h: it.img.height });
+      const ok = hit && accept(hit);
+      out.push({ ms: Math.round(performance.now() - t0), tries, hit: hit && [hit.per, hit.sec, hit.alt], at: S.at && [S.at.per, S.at.sec], ok: !!ok, lock: !!S.lock, txt: S.diagTxt });
+    }
+    S = keep; return out;
   }
-  return { CAN, attach, close, testImage, _parse: parseWords, _plays: parsePlays, _stats: statsAt };
+  return { CAN, attach, close, onResumeClick, testFrames, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
 })();

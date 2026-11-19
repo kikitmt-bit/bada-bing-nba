@@ -661,3 +661,17 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
 }
+/* écrans peu hauts : le panneau plein écran se resserre pour tout tenir sans défiler */
+@media (min-width:901px) and (max-height:880px){
+  .vplayer.full .lv{padding:10px 14px 10px}
+  .vplayer.full .lv-head{margin-bottom:4px}
+  .vplayer.full .lv-row{padding:2px 0 5px}
+  .vplayer.full .lv-rows{padding:4px 0}
+  .vplayer.full .lv-pl{padding:6px 0;gap:10px}
+  .vplayer.full .lv-pl li{padding:1px 0}
+  .vplayer.full .lv-trends{padding-top:8px;margin-top:2px}
+  .vplayer.full .lv-tiles{gap:6px}
+  .vplayer.full .lv-tile{padding:6px 10px}
+  .vplayer.full .lv-tile b{font-size:16px}
+  .vplayer.full .lv-tile small{display:none}
+}

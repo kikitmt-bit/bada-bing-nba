@@ -76,8 +76,9 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   Tables d'essai publiées : Lakers-Hornets, Celtics-Nuggets, Suns-Kings (17-18/11).
   **Plein écran (19/11, demande de Kiki)** : avec stats possibles (`Chrono.wantsFull`), le lecteur s'ouvre en plein écran
   (`requestFullscreen` pendant le clic, classes `.full`), **sans défilement sur PC** (vidéo dimensionnée pour laisser ~250 px
-  dessous) : stats à droite + **tendances** en tuiles sous les joueurs (`trendsHTML` : écart, série en cours, plus grosse avance,
-  changements de leader) ; sous la vidéo (`curveHTML`, `#lvbelow`) le film du match en ligne continue FUSIONNÉ avec les scores
+  dessous) : stats à droite (5 joueurs par équipe) + **tendances** en 6 tuiles sous les joueurs (`trendsHTML`, rangées par thème :
+  maintenant = écart, série en cours ; moments forts = plus gros run, plus grosse avance ; contrôle = temps en tête, changements
+  de leader ; version resserrée si l'écran fait moins de 880 px de haut) ; sous la vidéo (`curveHTML`, `#lvbelow`) le film du match en ligne continue FUSIONNÉ avec les scores
   par quart-temps, alignés sous chaque quart (quarts TERMINÉS seulement, le quart en cours = « en cours » ; prolongation ajoutée
   à l'axe seulement une fois atteinte). Calculs communs : `flow(D, at)`.
   « Dernières actions » retirées (illisibles sur un résumé). Téléphone : vidéo, stats, puis le dessous, en une colonne. Sans table : mode direct ci-dessous (PC),

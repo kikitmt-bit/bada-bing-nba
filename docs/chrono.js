@@ -344,7 +344,7 @@ const Chrono = (() => {
     const pc = (m, n) => n ? Math.round(100 * m / n) + " %" : "–";
     const row = (lab, va, vh, sa, sh) => { const tot = (sa + sh) || 1;
       return `<div class="lv-row"><b data-k="${lab}a">${va}</b><span>${lab}</span><b data-k="${lab}h">${vh}</b><i style="--a:${a.color};--h:${h.color};--p:${(sa / tot * 100).toFixed(1)}%"></i></div>`; };
-    const top = t => Object.entries(A.P).filter(([id]) => D.names[id] && D.names[id].t === t).sort((x, y) => y[1].pts - x[1].pts).slice(0, 4)
+    const top = t => Object.entries(A.P).filter(([id]) => D.names[id] && D.names[id].t === t).sort((x, y) => y[1].pts - x[1].pts).slice(0, 5)
       .map(([id, p]) => `<li><span>${D.names[id].n}</span><b data-k="p${id}">${p.pts}</b><small>pts</small><b data-k="r${id}">${p.reb}</b><small>reb</small><b data-k="a${id}">${p.ast}</b><small>pd</small></li>`).join("");
     el.innerHTML = head + (DEBUG || !S.map ? `
       <div class="lv-score"><span class="lv-t" style="--mc:${a.color}">${a.tri}</span><span class="led">${A.as}</span><span class="lv-dash">–</span><span class="led">${A.hs}</span><span class="lv-t" style="--mc:${h.color}">${h.tri}</span></div>` : "") + `
@@ -374,12 +374,17 @@ const Chrono = (() => {
   const elapsed = (per, sec) => per <= 4 ? (per - 1) * 720 + 720 - sec : 2880 + (per - 5) * 300 + 300 - sec;
   function flow(D, at) {
     const pts = [[0, 0]], qEnd = {};
-    let hs = 0, as = 0, maxH = 0, maxA = 0, leads = 0, lastLead = 0, runT = 0, runP = 0;
+    let hs = 0, as = 0, maxH = 0, maxA = 0, leads = 0, lastLead = 0, runT = 0, runP = 0, bestT = 0, bestP = 0;
+    let lastX = 0, leadH = 0, leadA = 0; // temps passé en tête (en secondes de jeu)
     for (const p of D.plays) {
       if (p.per > at.per || (p.per === at.per && p.sec <= at.sec)) break;
       if (p.hs !== hs || p.as !== as) {
         const d = p.hs - p.as, gain = (p.hs - hs) + (p.as - as), who = p.hs > hs ? D.home : D.away;
         if (gain > 0) { if (who === runT) runP += gain; else { runT = who; runP = gain; } }
+        if (runP > bestP) { bestP = runP; bestT = runT; }
+        const x = elapsed(p.per, p.sec), d0 = hs - as;
+        if (d0 > 0) leadH += x - lastX; else if (d0 < 0) leadA += x - lastX;
+        lastX = x;
         const sg = Math.sign(d);
         if (sg && lastLead && sg !== lastLead) leads++;
         if (sg) lastLead = sg;
@@ -391,7 +396,8 @@ const Chrono = (() => {
     }
     const now = elapsed(at.per, at.sec);
     pts.push([now, hs - as]);
-    return { pts, qEnd, hs, as, maxH, maxA, leads, runT, runP, now };
+    if (hs > as) leadH += now - lastX; else if (as > hs) leadA += now - lastX;
+    return { pts, qEnd, hs, as, maxH, maxA, leads, runT, runP, bestT, bestP, leadH, leadA, now };
   }
   function curveHTML(D, at, F) {
     const h = team(D.home), a = team(D.away);
@@ -427,13 +433,16 @@ const Chrono = (() => {
       <div class="lv-plot">${svg}${dot}</div>
       <div class="lv-qs" style="grid-template-columns:${tmpl}">${cols.map(qcell).join("")}</div></div>`;
   }
+  const pct = (x, tot) => Math.round(100 * x / tot) + " %";
   function trendsHTML(D, F) {
     const h = team(D.home), a = team(D.away), dNow = F.hs - F.as;
     const tile = (lab, val, sub) => `<div class="lv-tile"><span>${lab}</span><b>${val}</b><small>${sub || "&nbsp;"}</small></div>`;
     return `<div class="lv-trends"><h4>Les tendances</h4><div class="lv-tiles">
       ${tile("Écart", dNow ? `+${Math.abs(dNow)} ${(dNow > 0 ? h : a).tri}` : "Égalité", dNow ? "en tête" : "")}
       ${tile("Série en cours", F.runP >= 4 ? `${F.runP}-0 ${team(F.runT).tri}` : "—", F.runP >= 4 ? "points d'affilée" : "aucune")}
+      ${tile("Plus gros run", F.bestP >= 4 ? `${F.bestP}-0 ${team(F.bestT).tri}` : "—", F.bestP >= 4 ? "depuis le début" : "pas encore")}
       ${tile("Plus grosse avance", `${a.tri} +${F.maxA} · ${h.tri} +${F.maxH}`)}
+      ${tile("Temps en tête", F.now > 0 ? `${a.tri} ${pct(F.leadA, F.now)} · ${h.tri} ${pct(F.leadH, F.now)}` : "—", "du temps joué")}
       ${tile("Changements de leader", F.leads, F.leads > 1 ? "fois" : "")}</div></div>`;
   }
 

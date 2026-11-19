@@ -11,7 +11,8 @@ La v2 est un site statique dans `docs/` (`index.html`, `style.css`, `app.js`, `d
 **DA « broadcast de minuit » (17/11, après le retour Kiki « encore trop Streamlit, pas d'effet waouh, boutons arrondis d'appli IA,
 liseré de côté ») — à respecter dans toute nouvelle page** : l'habillage d'une retransmission NBA vue de nuit.
 - Logo : croissant de lune-ballon (`<symbol id="moonball">` dans index.html, réutilisé par `<use>`), qui remplace le O du mot-symbole
-  N☾CTURNE ; même dessin en favicon. Ciel étoilé en fond (`.stars`).
+  N☾CTURNE ; même dessin en favicon. Coutures redessinées le 20/11 (demande de Kiki : « on ne voyait pas que c'est un ballon ») :
+  les 4 coutures d'un vrai ballon (une qui descend, une qui traverse, deux arcs en C), inclinées de -30°. Ciel étoilé en fond (`.stars`).
 - Navigation : barre du haut (mot-symbole, LE BRIEF · PROGRAMME · CLASSEMENT soulignés ambre, roue) ; barre d'onglets en bas sur téléphone.
 - Plaques biseautées (`clip-path` aux coins coupés), JAMAIS de coins arrondis ni de liseré latéral ; boutons `.btn` en parallélogramme
   (`.amber` = action principale, `.extra` = NBA Extra au liseré tricolore) ; étiquettes `.tag`.

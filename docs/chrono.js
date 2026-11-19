@@ -8,7 +8,7 @@
    Rien ne sort du navigateur. Sans spoil : jamais au-delà de l'écran.
    ============================================================ */
 const Chrono = (() => {
-  const CAN = (DEMO && QS.has("live")) || !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && matchMedia("(any-pointer:fine)").matches; // une souris suffit (PC à écran tactile compris)
+  const CAN = (DEMO && QS.has("live")) || !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent); // les téléphones ne savent pas partager un onglet
   const TESS = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
   let S = null; // session en cours (un match, un lecteur)
 

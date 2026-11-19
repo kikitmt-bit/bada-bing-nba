@@ -120,17 +120,19 @@ def passage():
         try:
             if os.path.exists(video):
                 os.remove(video)
-            # H.264 d'abord : l'AV1 de certains résumés fait planter le décodeur du téléphone (et se décode plus lentement)
-            sh("yt-dlp", "-q", "--no-warnings", "-f", "bv*[height<=720][vcodec^=avc1][fps<=30]/bv*[height<=720][vcodec^=avc1]/bv*[height<=720][ext=mp4]/bv*[height<=720]",
+            # 720p obligatoire (en 480p le bandeau est illisible) ; H.264 puis VP9 avant l'AV1, qui fait planter le décodeur du téléphone
+            sh("yt-dlp", "-q", "--no-warnings", "-f", "bv*[height=720][vcodec^=avc1]/bv*[height=720][vcodec^=vp]/bv*[height=720]/bv*[height<=720]",
                "-o", video, "https://www.youtube.com/watch?v=" + vid)
             res = chrono_video.analyse(video, os.path.join(TRAVAIL, vid + ".json"), vid)
             res["t"] = v.get("t", "")
-            if len(res["pts"]) >= 5 and publier({vid: res}):
+            pts = res["pts"]
+            bon = len(pts) >= 40 and max(p[1] for p in pts) >= 4  # un résumé complet va jusqu'au 4e quart-temps
+            if bon and publier({vid: res}):
                 e["ok"] = True
                 log("publié :", v.get("t", vid))
             else:
-                log("trop peu de points lus :", v.get("t", vid), len(res["pts"]))
-                if len(res["pts"]) < 5 and res["n"] > 120:
+                log("table pas assez sûre, non publiée :", v.get("t", vid), len(pts), "points")
+                if not bon and res["n"] > 120:
                     e["essais"] = ESSAIS  # vidéo entière lue mais bandeau illisible : inutile de réessayer
         except Exception as ex:
             log("échec", vid, (getattr(ex, "stderr", "") or str(ex))[-300:])

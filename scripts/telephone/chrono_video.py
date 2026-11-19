@@ -114,53 +114,97 @@ def find_clock(words, near=None):
 
 
 # ---------- une vidéo ----------
+def quarter_near(words, k):
+    """Quart-temps écrit à côté du chrono : « 2ND », « 1st »… ou, chez ESPN, un gros « 2 » suivi d'un petit « ND »."""
+    q = find_quarter(words)
+    if q:
+        return q[0]
+    if not k:
+        return None
+    cw = k[3]
+    h = max(6, cw["y1"] - cw["y0"])
+    best = None
+    for w in words:
+        t = w["t"].strip("|[](){}.,")
+        if re.match(r"^[1-4][A-Za-z]{0,3}$", t) and abs((w["y0"] + w["y1"]) - (cw["y0"] + cw["y1"])) / 2 < h:
+            gap = cw["x0"] - w["x1"]
+            if -h < gap < h * 3 and (best is None or gap < best[0]):
+                best = (gap, int(t[0]))
+    return best[1] if best else None
+
+
 class Lecteur:
+    """La zone du bandeau, une fois trouvée, est gardée pour toute la vidéo (le bandeau ne bouge pas) ;
+    on ne la recherche qu'après une série d'échecs, sans perdre l'ancienne si la recherche échoue."""
+
+    MODES = (("inv", 6), ("inv", 11), ("thr", 11), ("gray", 11))
+
     def __init__(self):
         self.lock = None   # (x0, y0, x1, y1) dans la bande
-        self.polar = False
         self.miss = 0
+        self.ordre = list(self.MODES)  # le réglage qui a marché passe en tête
 
-    def lire(self, band):
+    def lire_zone(self, band):
         W, H = band.size
-        if self.lock:
-            x0, y0, x1, y1 = [int(v) for v in self.lock]
-            x0, y0, x1, y1 = max(0, x0), max(0, y0), min(W, x1), min(H, y1)
-            crop = band.crop((x0, y0, x1, y1))
-            scale = max(1.5, min(4, 210 / max(1, crop.height)))
-            words = ocr(prep(crop, scale, "thr" if self.polar else "inv"), 6)
+        x0, y0, x1, y1 = [int(v) for v in self.lock]
+        crop = band.crop((max(0, x0), max(0, y0), min(W, x1), min(H, y1)))
+        scale = max(1.5, min(4, 210 / max(1, crop.height)))
+        for i, (mode, psm) in enumerate(self.ordre[:3]):
+            words = ocr(prep(crop, scale, mode), psm)
+            k = find_clock(words, None)
+            if k:
+                if i:
+                    self.ordre.insert(0, self.ordre.pop(i))
+                return quarter_near(words, k), k[0], k[1]
+        return None
+
+    def chercher(self, band):
+        W, H = band.size
+        # 1) toute la bande, agrandie modérément : quart-temps + chrono
+        scale = max(.8, min(2.4, 2000 / W))
+        for mode in ("gray", "inv"):
+            words = ocr(prep(band, scale, mode), 11)
             q = find_quarter(words)
             k = find_clock(words, q[1] if q else None)
-            if not k:
-                self.polar = not self.polar
-                self.miss += 1
-                if self.miss >= 6:
-                    self.lock, self.miss = None, 0
+            if k:
+                b = [v / scale for v in (k[3]["x0"], k[3]["y0"], k[3]["x1"], k[3]["y1"])]
+                return self._caler(b, q and [v / scale for v in (q[1]["x0"], q[1]["y0"], q[1]["x1"], q[1]["y1"])])
+        # 2) la moitié basse de la bande, très agrandie (petits bandeaux, chrono sur fond clair)
+        y0 = int(H * .45)
+        strip = band.crop((0, y0, W, H))
+        for mode in ("inv", "gray"):
+            words = ocr(prep(strip, 3, mode), 11)
+            k = find_clock(words, None)
+            if k:
+                b = [k[3]["x0"] / 3, k[3]["y0"] / 3 + y0, k[3]["x1"] / 3, k[3]["y1"] / 3 + y0]
+                return self._caler(b, None)
+        return False
+
+    def _caler(self, b, qb):
+        cw, ch = b[2] - b[0], b[3] - b[1]
+        x0, y0, x1, y1 = b
+        if qb:  # le quart-temps lu : la zone couvre les deux
+            x0, y0, x1, y1 = min(x0, qb[0]), min(y0, qb[1]), max(x1, qb[2]), max(y1, qb[3])
+            mw, mh = (x1 - x0) * .12 + cw * .1, (y1 - y0) * .1 + ch * .25
+            self.lock = (x0 - mw, y0 - mh, x1 + mw, y1 + mh)
+        else:   # chrono seul : le quart-temps est à gauche (ESPN) ou dessous (NBC, TNT)
+            self.lock = (x0 - cw * 1.6, y0 - ch * .5, x1 + cw * .5, y1 + ch * 1.3)
+        return True
+
+    def lire(self, band):
+        if self.lock is None or self.miss >= 8:
+            old = self.lock
+            if not self.chercher(band):
+                self.lock = old
+                self.miss = 0 if old else self.miss
                 return None
             self.miss = 0
-            return (q[0] if q else None, k[0], k[1])
-        # recherche du bandeau
-        scale = max(.8, min(2.4, 2000 / W))
-        words = ocr(prep(band, scale, "inv" if self.polar else "gray"), 11)
-        q = find_quarter(words)
-        k = find_clock(words, q[1] if q else None)
-        if not q and not k:
-            self.polar = not self.polar
+        r = self.lire_zone(band)
+        if not r:
+            self.miss += 1
             return None
-        f = lambda w: (w["x0"] / scale, w["y0"] / scale, w["x1"] / scale, w["y1"] / scale)
-        if q and k:
-            a, b = f(q[1]), f(k[3])
-            tw, th = a[2] - a[0], a[3] - a[1]
-            x0, y0, x1, y1 = min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])
-            mw, mh = (x1 - x0) * .12 + tw * .25, (y1 - y0) * .1 + th * .3
-            self.lock = (x0 - mw, y0 - mh, x1 + mw, y1 + mh)
-        elif q:
-            a = f(q[1]); tw, th = a[2] - a[0], a[3] - a[1]
-            self.lock = (a[0] - tw * 1.6, a[1] - th * 2.4, a[0] + tw * 2.6, a[1] + th * 1.4)
-        else:
-            b = f(k[3]); cw, ch = b[2] - b[0], b[3] - b[1]
-            self.lock = (b[0] - cw * .7, b[1] - ch * .4, b[0] + cw * 1.7, b[1] + ch * 1.9)
-        self.polar = False
-        return (q[0], k[0], k[1]) if q and k else None
+        self.miss = 0
+        return r
 
 
 def frac(per, sec):
@@ -172,9 +216,11 @@ def nettoyer(lectures):
     Chaque lecture propose 1 ou 2 moments (« 1:05 » / « 11:05 ») : on en garde au plus un."""
     cands = []  # (i, t, per, sec, poids)
     for i, (t, per, sec, alt) in enumerate(lectures):
-        for s, w in ((sec, 1.0), (alt, .9)):
-            if s is not None and s <= (300 if per > 4 else 720):
-                cands.append((i, t, per, s, w))
+        pers = [(per, 1.0)] if per else [(p, .85 - .01 * p) for p in range(1, 6)]  # quart illisible : la chronologie tranche
+        for pp, wp in pers:
+            for s, w in ((sec, 1.0), (alt, .9)):
+                if s is not None and s <= (300 if pp > 4 else 720):
+                    cands.append((i, t, pp, s, w * wp))
     n = len(cands)
     best, prev = [0.0] * n, [-1] * n
     for a in range(n):
@@ -208,17 +254,11 @@ def analyse(video, sortie, vid=""):
                         f"fps=1/{PAS},crop=iw:ih*{BANDE}:0:ih*{1 - BANDE}", os.path.join(tmp, "%05d.png")], check=True)
         frames = sorted(os.listdir(tmp))
         t1 = time.time()
-        lec, brut, per_vu = Lecteur(), [], None
+        lec, brut = Lecteur(), []
         for k, name in enumerate(frames):
             r = lec.lire(Image.open(os.path.join(tmp, name)))
-            if not r:
-                continue
-            per, sec, alt = r
-            per = per or per_vu
-            if not per:
-                continue
-            per_vu = per
-            brut.append((k * PAS, per, sec, alt))
+            if r:
+                brut.append((k * PAS,) + tuple(r))  # (t, quart ou None, secondes, variante)
         pts = nettoyer(brut)
         res = {"v": vid, "pas": PAS, "made": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                "n": len(frames), "lus": len(brut), "pts": pts}

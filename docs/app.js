@@ -1162,6 +1162,7 @@ function afficheOf(g) { // { s: note, why: [raisons] } : une affiche = note ≥ 
   for (const [r, t] of [[ra, A], [rh, H]]) { const v = hot(r); s += v; if (v >= 1) why.push(`${t.name} : ${r.streak} victoires de suite`); }
   const pa = winpct(A.record), ph = winpct(H.record);
   if (pa >= .65 && ph >= .65) s += .6 * sure;
+  if (Math.min(pa, ph) < .4 && gp >= 5) s -= 2.5; // une équipe en pleine galère : pas d'affiche, même face à un cador
   const key = [A.tri, H.tri].sort().join("-");
   if (RIVAL.has(key)) { s += .9; why.push("une rivalité historique"); }
   return { s, why };

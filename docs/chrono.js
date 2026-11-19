@@ -423,7 +423,8 @@ const Chrono = (() => {
     let n = 0;
     while (S === my) {
       if (n++ % 6 === 0) listenYT();
-      const t = my.ytT === undefined ? null : my.ytT + (my.ytState === 1 ? (performance.now() - my.ytAt) / 1000 : 0);
+      // entre deux messages du lecteur, on avance au plus de 1,5 s (pub, vidéo bloquée : on s'arrête au lieu de courir devant)
+      const t = my.ytT === undefined ? null : my.ytT + (my.ytState === 1 ? Math.min(1.5, (performance.now() - my.ytAt) / 1000) : 0);
       let at = null;
       if (t !== null) for (const p of my.map) { if (p[0] <= t + .3) at = p; else break; } // le dernier point déjà passé : jamais en avance
       my.at = at ? { per: at[1], sec: at[2] } : null;

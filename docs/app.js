@@ -79,6 +79,7 @@ function nightTitle(key) {
   const t = FR({ weekday: "long", day: "numeric", month: "long" }).format(d);
   return t[0].toUpperCase() + t.slice(1);
 }
+const ledColon = t => String(t).replace(/:/g, '<i class="cl">:</i>'); // deux-points calés sur la hauteur des chiffres
 function hourLocal(date) {
   return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(date).replace(":", "h");
 }
@@ -482,7 +483,7 @@ function heroHTML(g, lvl) {
       <div class="rec" data-rec="${g.id}:${s}">${recHTML(t, g)}</div></div>`;
   const mid = pre
     ? `<div class="jscore"><span class="st">Coup d'envoi</span>
-         <div class="leds"><span class="led time"><span class="v">${hourLocal(g.date).replace("h", ":")}</span></span></div>
+         <div class="leds"><span class="led time"><span class="v">${ledColon(hourLocal(g.date).replace("h", ":"))}</span></span></div>
          <span class="hint">heure de chez toi</span></div>`
     : `<div class="jscore"><span class="st ${g.state === "live" ? "live" : ""}" data-st="${g.id}">${statusText(g)}</span>
          <div class="leds">${ledHTML(g, "away")}${ledHTML(g, "home")}</div>
@@ -635,7 +636,7 @@ let CDT = null;
 function startCountdown() { // une seule horloge à la fois, arrêtée quand l'afficheur disparaît
   clearInterval(CDT);
   const el = $("#cdown"); if (!el) return;
-  CDT = setInterval(() => { const e = $("#cdown"); if (!e) { clearInterval(CDT); return; } e.textContent = cdText(+e.dataset.t); }, 1000);
+  CDT = setInterval(() => { const e = $("#cdown"); if (!e) { clearInterval(CDT); return; } e.innerHTML = `<span class="v">${ledColon(cdText(+e.dataset.t))}</span>`; }, 1000);
 }
 function skyHTML(games, hero, scored) {
   const d1 = keyDate(state.night), d2 = keyDate(addDays(state.night, 1));
@@ -664,7 +665,7 @@ function skyHTML(games, hero, scored) {
   const first = games.filter(g => g.state === "pre").sort((x, y) => x.date - y.date)[0];
   const board = !games.length ? "" : !started && first
     ? `<div class="board"><span class="btxt"><span class="blab">Coup d'envoi dans</span><small>${plural(games.length, "match")} cette nuit · premier à ${hourLocal(first.date)}</small></span>
-        <span class="led bcd" id="cdown" data-t="${first.date.getTime()}">${cdText(first.date.getTime())}</span></div>`
+        <span class="led bcd" id="cdown" data-t="${first.date.getTime()}"><span class="v">${ledColon(cdText(first.date.getTime()))}</span></span></div>`
     : nLive ? `<div class="board live"><span class="btxt"><span class="blab">La nuit est en cours</span><small>${nFin ? plural(nFin, "terminé") : "aucun terminé"}${nPre ? ` · ${nPre} à venir` : ""}</small></span>
         <span class="blive"><i></i>${nLive} en direct</span></div>` : "";
   return `<section class="sky one">
@@ -1130,13 +1131,24 @@ function openShots(key) {
 }
 function closeShots() { clearInterval(shotTimer); shotovl.classList.remove("open"); }
 
-/* ---------- vue « Programme » ---------- */
+/* ---------- vue « Programme » : la grille télé (une colonne par nuit, les matchs sous leur heure) ---------- */
+function tzName() { // « heure de Paris », « heure de Montréal »…
+  const c = (TZ.split("/").pop() || "").replace(/_/g, " ");
+  const fr = { Paris: "Paris", Montreal: "Montréal", Toronto: "Toronto", Brussels: "Bruxelles", Zurich: "Zurich", London: "Londres", New_York: "New York", "New York": "New York" };
+  return c ? `heure de ${fr[c] || c}` : "heure locale";
+}
+function progNight(key) { // « Nuit du jeudi 19 » / « au vendredi 20 novembre » (2 lignes), ou « Jeudi 19 novembre » au Québec
+  const d = keyDate(key), d2 = keyDate(addDays(key, 1));
+  const long = x => FR({ weekday: "long", day: "numeric" }).format(x), mois = x => FR({ month: "long" }).format(x);
+  if (EURO) return [`Nuit du ${long(d)}${mois(d) === mois(d2) ? "" : " " + mois(d)}`, `au ${long(d2)} <em>${mois(d2)}</em>`];
+  return [long(d)[0].toUpperCase() + long(d).slice(1), `<em>${mois(d)}</em>`];
+}
 async function renderProgramme() {
   const tok = ++state.tok;
   const main = $("#main");
   setURL();
-  main.innerHTML = `<section class="ptitle"><p class="greet"><i></i>Les 7 prochaines nuits</p><h1>Programme</h1></section>
-    <div class="skel"><div class="ph" style="height:120px"></div><div class="ph" style="height:120px"></div></div>`;
+  const head = `<section class="tvhead"><p class="greet"><i></i>Les prochaines nuits · ${tzName()}</p></section>`;
+  main.innerHTML = head + `<div class="skel"><div class="ph" style="height:120px"></div><div class="ph" style="height:120px"></div></div>`;
   const tonight = defaultNight();
   const keys = [...Array(7)].map((_, i) => addDays(tonight, i));
   let nights;
@@ -1144,22 +1156,32 @@ async function renderProgramme() {
   catch (e) { if (tok === state.tok) main.innerHTML = `<p class="loadmsg">Impossible de joindre ESPN.</p>`; return; }
   if (tok !== state.tok) return;
   let n = 0;
-  main.innerHTML = `<section class="ptitle"><p class="greet"><i></i>Les 7 prochaines nuits</p><h1>Programme</h1></section>` + (keys.map((k, i) => {
-    const games = nights[i].filter(g => g.state === "pre");
+  const cols = keys.map((k, i) => {
+    const games = nights[i].filter(g => g.state === "pre").sort((a, b) => a.date - b.date);
     if (!games.length) return "";
-    const rows = games.sort((a, b) => a.date - b.date).map(g => {
-      const a = g.teams.away, h = g.teams.home;
-      const fav = settings.fav && (a.id === settings.fav || h.id === settings.fav);
-      const hype = winpct(a.record) > .6 && winpct(h.record) > .6;
-      return `<div class="prow ${fav ? "fav" : ""}" style="animation-delay:${Math.min(n++ * 35, 700)}ms">
-        <span class="led time"><span class="v">${hourLocal(g.date).replace("h", ":")}</span></span>
-        <span class="pt a"><small>${a.record ? `(${a.record})` : ""}</small><b>${a.name}</b>${logoHTML(a)}</span>
-        <span class="at">@</span>
-        <span class="pt h">${logoHTML(h)}<b>${h.name}</b><small>${h.record ? `(${h.record})` : ""}</small></span>
-        <span class="ptag">${fav ? `<span class="tag">★ Mon équipe</span>` : hype ? `<span class="tag">L'affiche</span>` : ""}</span></div>`;
-    }).join("");
-    return `<section class="pday"><h2>${nightTitle(k)}<small>${games.length} match${games.length > 1 ? "s" : ""}</small></h2>${rows}</section>`;
-  }).join("") || `<p class="loadmsg">Aucun match programmé sur les 7 prochaines nuits.</p>`);
+    const slots = []; // les matchs groupés par heure de début
+    for (const g of games) {
+      const h = hourLocal(g.date);
+      if (!slots.length || slots[slots.length - 1].h !== h) slots.push({ h, gs: [] });
+      slots[slots.length - 1].gs.push(g);
+    }
+    const [l1, l2] = progNight(k);
+    const body = slots.map(sl => `<div class="tvslot">
+        <span class="led time"><span class="v">${ledColon(sl.h.replace("h", ":"))}</span></span>
+        <div class="tvgs">${sl.gs.map(g => {
+          const a = g.teams.away, h = g.teams.home;
+          const fav = settings.fav && (a.id === settings.fav || h.id === settings.fav);
+          const hype = winpct(a.record) > .6 && winpct(h.record) > .6;
+          const side = t => `<span class="tvt">${logoHTML(t)}<b>${t.name}</b>${t.record ? `<small>${t.record}</small>` : ""}</span>`;
+          return `<div class="tvg ${fav ? "fav" : ""} ${hype ? "hype" : ""}" style="animation-delay:${Math.min(n++ * 30, 600)}ms">
+            ${fav ? `<span class="tvtag">★ Mon équipe</span>` : hype ? `<span class="tvtag">L'affiche</span>` : ""}
+            ${side(a)}<span class="tvat">@</span>${side(h)}</div>`;
+        }).join("")}</div></div>`).join("");
+    return `<section class="tvcol">
+      <button class="tvday" data-prog-night="${k}" title="Voir cette nuit"><span>${l1}</span><span>${l2}</span>
+        <small>${plural(games.length, "match")}</small></button>${body}</section>`;
+  }).join("");
+  main.innerHTML = head + (cols ? `<div class="tvgrid">${cols}</div>` : `<p class="loadmsg">Aucun match programmé sur les 7 prochaines nuits.</p>`);
 }
 
 /* ---------- classement (sans spoil : la dernière nuit est retirée tant qu'on ne l'inclut pas) ---------- */
@@ -1326,6 +1348,8 @@ document.addEventListener("click", e => {
   if (e.target.closest("#gear") || e.target.closest("#gear2")) { openSettings(); return; }
   const tab = e.target.closest(".tab[data-vue]");
   if (tab) { go(tab.dataset.vue); return; }
+  const pn = e.target.closest("[data-prog-night]");
+  if (pn) { state.night = pn.dataset.progNight; state.revealed.clear(); go("nuit"); return; }
   const ng = e.target.closest("[data-night-go]");
   if (ng) { state.night = ng.dataset.nightGo; state.revealed.clear(); renderNight(); return; }
   const chip = e.target.closest(".chip[data-night]");

@@ -42,7 +42,8 @@ liseré de côté ») — à respecter dans toute nouvelle page** : l'habillage 
   animés, LED géantes ; MVP « sous les projecteurs » (`loadMVP`, carte photo + stats LED qui comptent) ; la nuit prochaine.
 - Révéler = course des 2 LED quart-temps par quart-temps (`reveal`, « Fin Q1 »…), puis le vainqueur reste allumé, le perdant s'éteint,
   la rangée du vainqueur flashe à sa couleur, étincelles pour 🔥🔥 et plus.
-- Programme en face-à-face (heure en LED), classement en plaques (rang biseauté vert 1-6 / orange 7-10), fiche et carte de tirs en LED
+- **Programme = grille télé (21/11, demande de Kiki)** : une colonne par nuit (titre « Nuit du jeudi 19 / au vendredi 20 / novembre », clic = ouvre la nuit), les matchs groupés sous leur heure de début (LED, fuseau de l'appareil, `tzName`) ; 7 colonnes, 6 sous 1240 px, 5 sous 1080 px ; téléphone : nuits l'une sous l'autre, heure à gauche, un match par ligne. Plus de gros titre « Programme » (déjà dans le menu). Deux-points des LED : `ledColon` (`.cl` remonté de 0,1 em : le « : » de Doto commence un pixel trop bas), texte toujours dans un `.v` (le `.led` est une grille).
+- Ancien programme en face-à-face (heure en LED), classement en plaques (rang biseauté vert 1-6 / orange 7-10), fiche et carte de tirs en LED
   (onde sur chaque panier). Jeton `state.tok` : une page en chargement ne s'affiche que si c'est encore la dernière demandée.
 **Classement** (`renderStandings`, ESPN `apis/v2/.../standings`) : par conférence, coupure sans spoil = résultats de la
 dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit » est éteint (défaut : coupé sauf « toujours montrer »).

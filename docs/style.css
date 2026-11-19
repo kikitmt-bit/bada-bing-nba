@@ -949,3 +949,54 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .board .btxt{display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:0}
 @media (min-width:901px){ .sky.one .board{margin-bottom:3px} }
 @media (max-width:900px){ .board .btxt{align-items:flex-start} }
+
+/* ---- afficheurs LED : les deux-points tiennent exactement dans la hauteur des chiffres (Doto les place 1 pixel trop bas) ---- */
+.led .cl{font-style:normal;position:relative;top:-.1em}
+
+/* ---- Programme : la grille télé, une colonne par nuit, les matchs rangés sous leur heure ---- */
+.tvhead{padding-block:26px 4px}
+.tvgrid{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:8px;margin-top:14px;align-items:start}
+.tvcol{min-width:0;display:flex;flex-direction:column;gap:12px;animation:pagein .45s backwards}
+.tvday{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;padding:12px 12px 11px;border:0;cursor:pointer;text-align:left;
+  color:var(--ink);background:linear-gradient(180deg,rgba(255,176,46,.16),rgba(255,176,46,.04));box-shadow:inset 0 -2px 0 var(--amber);
+  clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);font-family:var(--disp)}
+.tvday span{font:800 16px/1.1 var(--disp);text-transform:uppercase;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.tvday span:first-child{color:var(--amber)}
+.tvday small{margin-top:5px;font:700 11px var(--disp);letter-spacing:.2em;text-transform:uppercase;color:var(--ink3)}
+.tvday:hover{background:linear-gradient(180deg,rgba(255,176,46,.26),rgba(255,176,46,.07))}
+.tvslot{display:flex;flex-direction:column;gap:5px}
+.tvslot .led.time{align-self:flex-start;height:32px;min-width:0;padding:0 10px;font-size:20px}
+.tvgs{display:flex;flex-direction:column;gap:4px}
+.tvg{position:relative;display:flex;flex-direction:column;gap:3px;padding:8px 10px;background:var(--panel);min-width:0;animation:pagein .4s backwards;
+  clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%)}
+.tvg.fav{background:linear-gradient(90deg,rgba(255,176,46,.14),var(--panel) 70%);box-shadow:inset 0 0 0 1px rgba(255,176,46,.45)}
+.tvt{display:flex;align-items:center;gap:7px;min-width:0}
+.tvt .lg{width:22px;height:22px;flex:none}
+.tvt b{font:800 15px var(--disp);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tvt small{margin-left:auto;padding-left:4px;color:var(--ink3);font-size:11px;white-space:nowrap}
+.tvat{font:700 10px var(--disp);letter-spacing:.15em;color:var(--ink3);padding-left:29px;line-height:1}
+.tvtag{align-self:flex-start;font:800 10px var(--disp);letter-spacing:.14em;text-transform:uppercase;color:#05060c;background:var(--amber);padding:2px 7px 1px;margin-bottom:2px;
+  clip-path:polygon(4px 0,100% 0,calc(100% - 4px) 100%,0 100%)}
+.tvg.hype:not(.fav) .tvtag{background:var(--moon)}
+/* trop serré : moins de nuits */
+@media (max-width:1240px){ .tvcol:nth-child(n+7){display:none} }
+@media (max-width:1080px){ .tvcol:nth-child(n+6){display:none} .tvt small{display:none} }
+/* téléphone : les nuits l'une sous l'autre, chaque heure à gauche de ses matchs, un match par ligne */
+@media (max-width:900px){
+  .tvgrid{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:minmax(0,1fr);gap:22px}
+  .tvcol:nth-child(n){display:flex}
+  .tvday{flex-direction:row;flex-wrap:wrap;align-items:baseline;column-gap:6px}
+  .tvday small{margin:0 0 0 auto}
+  .tvslot{display:grid;grid-template-columns:74px minmax(0,1fr);gap:8px;align-items:start}
+  .tvslot .led.time{width:100%;height:42px;font-size:19px;padding:0}
+  .tvg{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;column-gap:6px;min-height:42px;padding:6px 8px}
+  .tvg .tvtag{grid-column:1/-1}
+  .tvg .tvt:last-child{flex-direction:row-reverse;text-align:right}
+  .tvat{padding:0}
+  .tvt small{display:none}
+  .tvt b{font-size:14px}
+}
+
+/* titre de colonne : le mois sur sa propre ligne (la colonne est étroite), à côté sur téléphone */
+.tvday em{display:block;font-style:normal}
+@media (max-width:900px){ .tvday em{display:inline} }

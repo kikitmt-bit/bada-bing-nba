@@ -723,3 +723,19 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .kfs{display:flex;flex-direction:column;gap:5px;min-width:0}
 .jfoot .kfs{flex:1 1 260px}
 .bf .kfs{flex:1 1 100%}
+
+/* infos clés : chaque ligne garde sa hauteur (le bug du match de la nuit : chaque ligne héritait de 260 px) ;
+   toujours la place de 3 lignes, pour que les tuiles restent carrées */
+.kfs .kf{flex:none}
+.bug .kfs,.bf .kfs{min-height:calc(3 * 1.45em + 10px);font-size:13.5px}
+.jfoot .kfs{flex:1 1 380px;gap:4px}
+/* MVP : la carte et ses stats à gauche, les grosses perfs à droite */
+.mvpw{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:10px 24px;align-items:center;padding-right:24px}
+.mvpw .mvp{padding-right:0}
+.mvp h3 span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mvp h3 span:first-child{font-size:.62em;letter-spacing:.04em;color:var(--ink2)}
+.mvpw .perfs{grid-template-columns:1fr 1fr;padding:24px 0;align-content:center}
+.mvpw .perfs .tag{grid-column:1/-1;justify-self:start;margin-bottom:6px}
+.tag.ghost{background:rgba(255,255,255,.08);color:var(--ink2)}
+@media (max-width:1100px){ .mvpw .perfs{grid-template-columns:1fr} }
+@media (max-width:900px){ .mvpw{grid-template-columns:1fr;padding-right:0} .mvpw .perfs{padding:0 16px 20px} }

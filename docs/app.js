@@ -309,33 +309,41 @@ async function loadPrevNight(key) {
 }
 function played(rec) { const m = /^(\d+)-(\d+)/.exec(rec || ""); return m ? +m[1] + +m[2] : 0; }
 function keyFacts(g) {
-  const D = avantMatch(g), a = D.a, h = D.h, F = [];
-  const add = (p, t, x) => F.push({ p, t, x });
+  const D = avantMatch(g), a = D.a, h = D.h, F = [], kinds = new Set();
+  const add = (p, k, t, x) => { if (!kinds.has(k)) { kinds.add(k); F.push({ p, t, x }); } };
   // les absences de marque : la star ou le meilleur marqueur de l'équipe
   for (const t of [a, h]) {
     const vips = [t.star, t.top && t.top.n].filter(Boolean);
     for (const o of t.out || []) {
       if (!vips.includes(o.n)) continue;
       const what = o.ty ? ` · ${blessFr(o.ty)}` : "";
-      if (/^out$/i.test(o.st)) { add(10, "Grosse absence", `${o.n} (${t.tri}) forfait${what}`); break; }
-      if (/day|question|doubt|probable/i.test(o.st)) { add(7, "Incertain", `${o.n} (${t.tri}) incertain${what}`); break; }
+      if (/^out$/i.test(o.st)) { F.push({ p: 10, t: "Grosse absence", x: `${o.n} (${t.tri}) forfait${what}` }); break; }
+      if (/day|question|doubt|probable/i.test(o.st)) { F.push({ p: 7, t: "Incertain", x: `${o.n} (${t.tri}) incertain${what}` }); break; }
     }
   }
   const pa = winpct(a.record), ph = winpct(h.record), n = Math.min(played(a.record), played(h.record));
-  if (n >= 8 && pa >= .65 && ph >= .65) add(9, "Choc au sommet", "Deux des meilleurs bilans de la ligue");
+  if (n >= 8 && pa >= .65 && ph >= .65) add(9, "niveau", "Choc au sommet", "Deux des meilleurs bilans de la ligue");
+  else if (n >= 6 && Math.abs(pa - ph) >= .35) add(6, "niveau", "Grand favori", `Victoire attendue : ${pa > ph ? a.name : h.name}`);
+  else if (n >= 6 && Math.abs(pa - ph) <= .06) add(4, "niveau", "Pile ou face", "Impossibles à départager sur le papier");
   const ta = a.top, th = h.top;
-  if (ta && th && ta.ppg >= 25 && th.ppg >= 25) add(8, "Duel de stars", `${ta.n} ${fr1(ta.ppg)} pts – ${th.n} ${fr1(th.ppg)} pts`);
+  if (ta && th && ta.ppg >= 25 && th.ppg >= 25) add(8, "stars", "Duel de stars", `${ta.n} ${fr1(ta.ppg)} pts – ${th.n} ${fr1(th.ppg)} pts`);
   else { const st = [ta, th].filter(x => x && x.ppg >= 26).sort((x, y) => y.ppg - x.ppg)[0];
-    if (st) add(7, "L'homme en forme", `${st.n} : ${fr1(st.ppg)} pts par match`); }
-  if (n >= 6 && Math.abs(pa - ph) >= .35) add(6, "Grand favori", `Victoire attendue : ${pa > ph ? a.name : h.name}`);
-  else if (n >= 6 && Math.abs(pa - ph) <= .06) add(4, "Pile ou face", "Impossibles à départager sur le papier");
-  if (PREVNIGHT && (PREVNIGHT.has(a.id) || PREVNIGHT.has(h.id))) {
+    if (st) add(7, "stars", "L'homme en forme", `${st.n} : ${fr1(st.ppg)} pts par match`); }
+  if (PREVNIGHT && PREVNIGHT.has(a.id) && PREVNIGHT.has(h.id)) add(5, "fatigue", "Fatigue", "Les deux équipes jouent leur 2e soir de suite");
+  else if (PREVNIGHT && (PREVNIGHT.has(a.id) || PREVNIGHT.has(h.id))) {
     const t = PREVNIGHT.has(a.id) ? a : h;
-    add(5, "Fatigue", `${t.name} : 2e soir de suite${t === a ? ", en déplacement" : ""}`);
+    add(5, "fatigue", "Fatigue", `${t.name} : 2e soir de suite${t === a ? ", en déplacement" : ""}`);
   }
-  if (played(h.recHome) >= 5 && winpct(h.recHome) >= .8) add(5, "Forteresse", `${h.name} : ${h.recHome} à domicile`);
-  if (played(a.recRoad) >= 5 && winpct(a.recRoad) <= .2) add(5, "En galère dehors", `${a.name} : ${a.recRoad} à l'extérieur`);
-  else if (played(a.recRoad) >= 5 && winpct(a.recRoad) >= .8) add(4, "Solides en voyage", `${a.name} : ${a.recRoad} à l'extérieur`);
+  if (played(h.recHome) >= 5 && winpct(h.recHome) >= .8) add(5, "lieux", "Forteresse", `${h.name} : ${h.recHome} à domicile`);
+  else if (played(a.recRoad) >= 5 && winpct(a.recRoad) <= .2) add(5, "lieux", "En galère dehors", `${a.name} : ${a.recRoad} à l'extérieur`);
+  else if (played(a.recRoad) >= 5 && winpct(a.recRoad) >= .8) add(4, "lieux", "Solides en voyage", `${a.name} : ${a.recRoad} à l'extérieur`);
+  else if (played(h.recHome) >= 5 && winpct(h.recHome) <= .25) add(4, "lieux", "Mal chez eux", `${h.name} : ${h.recHome} à domicile`);
+  // infos de secours : il y a toujours quelque chose à dire
+  const outs = t => (t.out || []).filter(o => /^out$/i.test(o.st)).length;
+  if (outs(a) + outs(h) >= 3) add(3, "infirmerie", "Infirmerie", `${outs(a)} absent${outs(a) > 1 ? "s" : ""} côté ${a.name} · ${outs(h)} côté ${h.name}`);
+  if (ta && th) add(2.5, "stars", "Les meneurs", `${ta.n} ${fr1(ta.ppg)} · ${th.n} ${fr1(th.ppg)} pts`);
+  if (a.record && h.record) add(2, "bilans", "Les bilans", `${a.name} ${a.record} · ${h.name} ${h.record}`);
+  if (h.recHome && a.recRoad) add(1.5, "lieux", "Dom. / ext.", `${h.name} ${h.recHome} chez eux · ${a.name} ${a.recRoad} dehors`);
   return F.sort((x, y) => y.p - x.p).slice(0, 3);
 }
 function kfHTML(g) {
@@ -737,17 +745,19 @@ async function loadMVP(btn) {
   const stat = (v, l) => `<div class="stat"><span class="led"><span class="v" data-count="${v}">0</span></span><small>${l}</small></div>`;
   btn.hidden = true;
   const body = $("#mvpbody");
-  body.innerHTML = `<div class="mvp">
+  const full = (mvp.full || mvp.name).trim(), cut = full.indexOf(" ");
+  const nameHTML = cut > 0 ? `<span>${full.slice(0, cut)}</span><span>${full.slice(cut + 1)}</span>` : `<span>${full}</span>`;
+  body.innerHTML = `<div class="mvpw"><div class="mvp">
       <div class="card" style="--tc:${t.color}">${photo}${logoHTML(t)}</div>
       <div style="min-width:0"><span class="tag">MVP de la nuit</span>
-        <h3>${mvp.full || mvp.name}</h3>
+        <h3>${nameHTML}</h3>
         <div class="sub">${t.city} ${t.name} · contre les ${opp.name}</div>
         <div class="row">${stat(mvp.pts, "points")}${stat(mvp.reb, "rebonds")}${stat(mvp.ast, "passes")}</div>
       </div></div>
-    <div class="perfs">${all.slice(1, 7).map((p, i) => {
+    <div class="perfs"><span class="tag ghost">Les grosses perfs</span>${all.slice(1, 7).map((p, i) => {
       const pt = team(p.tid);
       return `<div class="perf" style="--tc:${pt.color};animation-delay:${200 + i * 70}ms"><span class="slab">${logoHTML(pt)}</span><b>${p.full || p.name}</b><small>${p.pts} PTS · ${p.reb} REB · ${p.ast} PAS</small></div>`;
-    }).join("")}</div>`;
+    }).join("")}</div></div>`;
   for (const v of body.querySelectorAll("[data-count]")) countUp(v, +v.dataset.count, 1100);
 }
 

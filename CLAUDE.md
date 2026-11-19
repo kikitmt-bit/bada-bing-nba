@@ -109,9 +109,13 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
 - Fiche : feuille de match complète (Min/Tirs/3 pts/Reb/Pas/Pts) ; clic sur un joueur = **carte de tirs animée**
   (tirs ESPN `plays[].coordinate`, panier en (25, 5.25) pieds, moitiés de terrain repliées, lancers francs exclus),
   replay ~5 s avec compteur en direct (quart-temps, n° de tir, points cumulés) + bouton « ↻ Rejouer ».
-- **Infos clés d'avant-match (20/11, `keyFacts`, jusqu'à 3 par match, par priorité)** : grosse absence / incertain (star ou meilleur
-  marqueur dans ESPN `/injuries`), choc au sommet, duel de stars (2 × ≥ 25 pts) ou homme en forme (≥ 26 pts), grand favori / pile
-  ou face, fatigue (2e soir), forteresse à domicile / en galère ou solides à l'extérieur (bilans home/road). Affichées AUSSI sur les
+- **Infos clés d'avant-match (20/11, `keyFacts`, TOUJOURS 3 par match si possible, place de 3 lignes réservée : tuiles de même
+  hauteur)** : grosse absence / incertain (star ou meilleur marqueur dans ESPN `/injuries`), choc au sommet / grand favori / pile ou
+  face, duel de stars (2 × ≥ 25 pts) ou homme en forme (≥ 26 pts), fatigue (2e soir, ou les deux équipes), forteresse / mal chez eux /
+  en galère ou solides dehors ; infos de secours (une seule par thème, `kinds`) : infirmerie (≥ 3 absents), les meneurs, les bilans,
+  dom./ext. Nuits passées sans photo : souvent 2 infos seulement (pas de leaders ni de blessés). Match de la nuit : pied compact
+  (bug corrigé : chaque ligne héritait de 260 px de haut). MVP : carte + stats à gauche (prénom au-dessus du nom), les 6 grosses
+  perfs à droite en 2 colonnes (`.mvpw`). Affichées AUSSI sur les
   matchs joués, sans spoil : `avantMatch` prend la **photo d'avant-match** publiée par le téléphone (`photo_avant` dans
   boucle.py → `v2/avant/<nuit NY>.json` : bilans, meilleur marqueur `pointsPerGame`, star `rating`, blessés, mise à jour tant
   que le match n'a pas commencé) ; sans photo, bilans recalculés en retirant le résultat (`moins`), sans leaders ni blessés

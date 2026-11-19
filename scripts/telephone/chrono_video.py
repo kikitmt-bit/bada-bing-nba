@@ -150,7 +150,7 @@ class Lecteur:
         x0, y0, x1, y1 = [int(v) for v in self.lock]
         crop = band.crop((max(0, x0), max(0, y0), min(W, x1), min(H, y1)))
         scale = max(1.5, min(4, 210 / max(1, crop.height)))
-        for i, (mode, psm) in enumerate(self.ordre[:3]):
+        for i, (mode, psm) in enumerate(self.ordre):
             words = ocr(prep(crop, scale, mode), psm)
             k = find_clock(words, None)
             if k:

@@ -63,7 +63,9 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   **Tri (19/11, choix de Kiki)** : seuls les matchs à **3 barres ou plus** sont analysés (`note` = watchLevel du site porté en
   Python sur le scoreboard ESPN, `match_de` relie le résumé au match), un seul résumé par match (GameTime, sinon NBA), meilleurs
   d'abord : 1 à 4 matchs par nuit. **1 image par seconde** (`PAS = 1`).
-  ~10-15 min par résumé à 2 s (environ le double à 1 s). Format : 720p OBLIGATOIRE (en 480p le bandeau est illisible), H.264 puis VP9 (l'AV1 fait planter le
+  ~10-15 min par résumé à 2 s (environ le double à 1 s). Recherche du bandeau : chrono « mm:ss » seulement (un bilan « 4-9 » lu
+  « 4.9 » passait pour un chrono en dixièmes) ; zone verrouillée : les 4 réglages tesseract essayés avant d'abandonner une image.
+  Sur le site, avant le 1er point : stats à zéro et « En attente du chrono… ». Format : 720p OBLIGATOIRE (en 480p le bandeau est illisible), H.264 puis VP9 (l'AV1 fait planter le
   décodeur du téléphone). Bandeaux testés : NBC (chrono au-dessus de « 1ST ») et ESPN (tout sur une ligne, chrono sur fond blanc,
   « 2ND » illisible → quart-temps déduit de la chronologie dans `nettoyer`, le plus tôt en cas de doute). Garde-fou : publiée
   seulement si ≥ 40 points et jusqu'au 4e quart-temps. yt-dlp utilise Node.js
@@ -78,7 +80,9 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   (`requestFullscreen` pendant le clic, classes `.full`), **sans défilement sur PC** (vidéo dimensionnée pour laisser ~250 px
   dessous) : stats à droite (5 joueurs par équipe) + **tendances** en 6 tuiles sous les joueurs (`trendsHTML`, rangées par thème :
   maintenant = écart, série en cours ; moments forts = plus gros run, plus grosse avance ; contrôle = temps en tête, changements
-  de leader ; version resserrée si l'écran fait moins de 880 px de haut) ; sous la vidéo (`curveHTML`, `#lvbelow`) le film du match en ligne continue FUSIONNÉ avec les scores
+  de leader) puis **le mini-terrain des tirs** (`shotsHTML` : terrain entier, visiteurs à gauche, domicile à droite, ● réussi /
+  ✕ raté à la couleur de l'équipe, anneau sur le dernier tir, tirs ESPN `coordinate` gardés dans `parsePlays` sx/sy, lancers exclus)
+  + tableau Raquette / Mi-distance / 3 points. Écran < 1080 px de haut : version resserrée ; < 820 px : terrain masqué (zones gardées) ; sous la vidéo (`curveHTML`, `#lvbelow`) le film du match en ligne continue FUSIONNÉ avec les scores
   par quart-temps, alignés sous chaque quart (quarts TERMINÉS seulement, le quart en cours = « en cours » ; prolongation ajoutée
   à l'axe seulement une fois atteinte). Calculs communs : `flow(D, at)`.
   « Dernières actions » retirées (illisibles sur un résumé). Téléphone : vidéo, stats, puis le dessous, en une colonne. Sans table : mode direct ci-dessous (PC),

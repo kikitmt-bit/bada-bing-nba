@@ -28,7 +28,13 @@ const Chrono = (() => {
     const plays = (j.plays || []).map(p => {
       const tt = (p.type && p.type.text) || "", tx = p.text || "";
       const pa = (p.participants || []).map(x => x.athlete ? String(x.athlete.id) : "");
-      return {
+      let sx = null, sy = null;
+      if (p.shootingPlay && p.coordinate && !/free throw/i.test(tt)) {
+        let { x, y } = p.coordinate;
+        if (y > 47) { y = 94 - y; x = 50 - x; }
+        if (x >= 0 && x <= 50 && y >= -2 && y <= 47) { sx = x; sy = Math.max(0, y); }
+      }
+      return { sx, sy,
         per: p.period ? p.period.number : 1, sec: secOf(p.clock && p.clock.displayValue),
         clk: p.clock ? p.clock.displayValue : "", tid: p.team ? +p.team.id : 0,
         hs: +p.homeScore || 0, as: +p.awayScore || 0, tx, tt,
@@ -360,7 +366,7 @@ const Chrono = (() => {
       <div class="lv-pl"><div><h4 style="--mc:${a.color}">${a.name}</h4><ol>${top(D.away) || "<li class=e>—</li>"}</ol></div>
         <div><h4 style="--mc:${h.color}">${h.name}</h4><ol>${top(D.home) || "<li class=e>—</li>"}</ol></div></div>`;
     const F = flow(D, S.at);
-    el.insertAdjacentHTML("beforeend", trendsHTML(D, F));
+    el.insertAdjacentHTML("beforeend", trendsHTML(D, F) + shotsHTML(D, S.at));
     if (S.below) S.below.innerHTML = curveHTML(D, S.at, F);
     const prev = S.vals || {}, vals = {};
     for (const n of el.querySelectorAll("[data-k]")) {
@@ -434,6 +440,35 @@ const Chrono = (() => {
       <div class="lv-qs" style="grid-template-columns:${tmpl}">${cols.map(qcell).join("")}</div></div>`;
   }
   const pct = (x, tot) => Math.round(100 * x / tot) + " %";
+  /* ---------- le mini-terrain : les tirs des deux équipes (visiteurs à gauche, domicile à droite), jusqu'au moment affiché ---------- */
+  const HALF = `<rect x="0" y="17" width="19" height="16"/><circle cx="19" cy="25" r="6"/><path d="M0 3H14A23.75 23.75 0 0 1 14 47H0"/>
+    <path d="M4 22V28"/><circle cx="5.25" cy="25" r=".75"/><path d="M5.25 21A4 4 0 0 1 5.25 29"/>`;
+  function shotsHTML(D, at) {
+    const h = team(D.home), a = team(D.away);
+    const Z = { [D.away]: [[0, 0], [0, 0], [0, 0]], [D.home]: [[0, 0], [0, 0], [0, 0]] }; // raquette, mi-distance, 3 pts : [réussis, tentés]
+    const dots = []; let last = null;
+    for (const p of D.plays) {
+      if (p.per > at.per || (p.per === at.per && p.sec <= at.sec)) break;
+      if (!p.shoot || p.ft || p.sx === null || !Z[p.tid]) continue;
+      const zone = p.three ? 2 : (p.sx >= 17 && p.sx <= 33 && p.sy <= 19) ? 0 : 1;
+      Z[p.tid][zone][1]++; if (p.made) Z[p.tid][zone][0]++;
+      const home = p.tid === D.home, X = home ? 94 - p.sy : p.sy, Y = home ? p.sx : 50 - p.sx, col = home ? h.color : a.color;
+      last = { X, Y, col };
+      dots.push(p.made ? `<circle cx="${X.toFixed(1)}" cy="${Y.toFixed(1)}" r="1.05" fill="${col}" class="mk"/>`
+        : `<path d="M${(X - .75).toFixed(1)} ${(Y - .75).toFixed(1)}l1.5 1.5m0-1.5l-1.5 1.5" stroke="${col}" class="ms"/>`);
+    }
+    const ring = last ? `<circle cx="${last.X.toFixed(1)}" cy="${last.Y.toFixed(1)}" r="1.4" stroke="${last.col}" class="ring" key="${dots.length}"/>` : "";
+    const z = (t, i) => `${Z[t][i][0]}/${Z[t][i][1]}`;
+    return `<div class="lv-shots"><h4>Les tirs</h4>
+      <svg class="lv-court" viewBox="-1 -1 96 52" role="img" aria-label="Les tirs des deux équipes jusqu'ici">
+        <g class="ln"><rect x="0" y="0" width="94" height="50"/><path d="M47 0V50"/><circle cx="47" cy="25" r="6"/>
+        ${HALF}<g transform="matrix(-1 0 0 1 94 0)">${HALF}</g></g>
+        <text x="1.5" y="4.6" class="tt" fill="${a.color}">${a.tri}</text><text x="92.5" y="4.6" class="tt" text-anchor="end" fill="${h.color}">${h.tri}</text>
+        ${dots.join("")}${ring}</svg>
+      <div class="lv-zones"><span></span><b>Raquette</b><b>Mi-distance</b><b>3 points</b>
+        <span style="--mc:${a.color}">${a.tri}</span><i>${z(D.away, 0)}</i><i>${z(D.away, 1)}</i><i>${z(D.away, 2)}</i>
+        <span style="--mc:${h.color}">${h.tri}</span><i>${z(D.home, 0)}</i><i>${z(D.home, 1)}</i><i>${z(D.home, 2)}</i></div></div>`;
+  }
   function trendsHTML(D, F) {
     const h = team(D.home), a = team(D.away), dNow = F.hs - F.as;
     const tile = (lab, val, sub) => `<div class="lv-tile"><span>${lab}</span><b>${val}</b><small>${sub || "&nbsp;"}</small></div>`;

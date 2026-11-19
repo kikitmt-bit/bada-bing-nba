@@ -339,28 +339,37 @@ function ytURL(g) { // filet de sécurité : la recherche YouTube
   return "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
 }
 const vidovl = $("#vidovl"), vplayer = $("#vplayer");
-function playVideo(vid, label) { // lecteur intégré, sans quitter le site
+function playVideo(vid, label, gid) { // lecteur intégré, sans quitter le site
   // beIN SPORTS interdit la lecture de ses vidéos hors de YouTube (« Vidéo non disponible ») : NBA Extra s'ouvre sur YouTube.
   if (VIDS && VIDS.some(v => v.id === vid && v.c === "bein")) {
     window.open("https://www.youtube.com/watch?v=" + vid, "_blank", "noopener"); return;
   }
+  const live = gid && typeof Chrono !== "undefined" && Chrono.CAN; // stats en direct à côté du résumé (ordinateur seulement)
+  const frame = vid ? `<iframe src="https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0&hl=fr"
+      title="${label}" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>`
+    : `<div class="vdemo">Démo : la vidéo YouTube serait ici</div>`;
+  vplayer.classList.toggle("live", !!live);
   vplayer.innerHTML = `
     <button class="x" aria-label="Fermer">✕</button>
-    <div class="vframe"><iframe src="https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0&hl=fr"
-      title="${label}" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe></div>
+    <div class="vmain"><div class="vframe">${frame}</div>
     <div class="vfoot"><span>${label}</span>
-      <a href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a></div>`;
+      ${vid ? `<a href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a>` : ""}</div></div>
+    ${live ? `<aside class="lv" id="lvpanel"></aside>` : ""}`;
   vidovl.classList.add("open"); document.body.style.overflow = "hidden";
+  if (live) Chrono.attach(gid, $("#lvpanel"), vplayer.querySelector(".vframe"));
 }
 async function openResume(id, extra) {
   const g = state.games.find(x => x.id === id); if (!g) return;
-  if (DEMO) { toast("Démo : ici, le vrai résumé vidéo se lancerait dans le site"); return; }
+  if (DEMO) {
+    if (extra || !(typeof Chrono !== "undefined" && Chrono.CAN)) { toast("Démo : ici, le vrai résumé vidéo se lancerait dans le site"); return; }
+    playVideo(null, `${g.teams.away.name} – ${g.teams.home.name} · démo`, g.id); return;
+  }
   await loadVideos();
   const v = extra ? findExtra(g) : findVideo(g);
   if (!v) { window.open(ytURL(g), "_blank", "noopener"); return; }
-  playVideo(v.id, `${g.teams.away.name} – ${g.teams.home.name} · ${extra ? "NBA Extra" : v.c === "gt" ? "résumé GameTime" : "résumé NBA"}`);
+  playVideo(v.id, `${g.teams.away.name} – ${g.teams.home.name} · ${extra ? "NBA Extra" : v.c === "gt" ? "résumé GameTime" : "résumé NBA"}`, extra ? null : g.id);
 }
-function closeResume() { vplayer.innerHTML = ""; vidovl.classList.remove("open"); document.body.style.overflow = ""; }
+function closeResume() { if (typeof Chrono !== "undefined") Chrono.close(); vplayer.innerHTML = ""; vidovl.classList.remove("open"); document.body.style.overflow = ""; }
 
 /* ---------- briques d'affichage ---------- */
 const RARL = ["À fuir", "Bof", "Sans plus", "Sympa", "À voir", "Immanquable"];

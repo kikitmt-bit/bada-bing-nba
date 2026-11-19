@@ -54,6 +54,15 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   (« REPLAY - NBA Extra (13/11) » = nuit du 12 au 13, `findJournal`) et « Résumé de la nuit » NBA (`findNightRecap`,
   « nightly recap » + date) en tête de page ; lecteur intégré (`playVideo`), SAUF les vidéos beIN (`c: "bein"`) : beIN bloque
   leur lecture hors de YouTube (« Vidéo non disponible »), donc NBA Extra s'ouvre dans un nouvel onglet YouTube (app sur téléphone).
+- **Stats en direct sur le résumé (prototype, 19/11, `docs/chrono.js`)** : sur ordinateur, panneau à droite du lecteur
+  (`playVideo(vid, label, gid)`). « 📡 Activer » = partage de l'onglet (`getDisplayMedia`, accord du visiteur, rien n'est envoyé),
+  tesseract.js (jsdelivr) lit le bandeau du match (quart-temps + chrono, `parseWords` : le chrono le plus proche du « 1ST »,
+  pour ignorer le minutage YouTube), fenêtre de lecture calée sur le bandeau trouvé (`S.lock`), filtre de vraisemblance
+  (`accept` : « 1:12 » peut être « 11:12 »), puis stats recalculées depuis `plays` ESPN jusqu'à ce moment (`statsAt`,
+  3 pts = `pointsAttempted`, rebonds d'équipe exclus : identique à la feuille ESPN). Pas sur téléphone (pas de partage d'onglet).
+  Le robot qui préparait le minutage à l'avance est impossible : YouTube bloque le téléchargement depuis GitHub Actions
+  (« not a bot »), et on ne contourne pas. Démo : `?demo=1&live=1` (curseur à la place du chrono). ESPN depuis le navigateur :
+  CORS OK (vérifié le 19/11).
 - Fiche : feuille de match complète (Min/Tirs/3 pts/Reb/Pas/Pts) ; clic sur un joueur = **carte de tirs animée**
   (tirs ESPN `plays[].coordinate`, panier en (25, 5.25) pieds, moitiés de terrain repliées, lancers francs exclus),
   replay ~5 s avec compteur en direct (quart-temps, n° de tir, points cumulés) + bouton « ↻ Rejouer ».

@@ -111,7 +111,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .btn .pl{font-size:.75em}
 
 /* ---------- afficheur LED d'arène ---------- */
-.led{position:relative;display:inline-grid;place-items:center;min-width:64px;height:44px;padding:0 8px;
+.led{position:relative;display:inline-grid;place-items:center;min-width:calc(3ch + .1em + 16px);height:44px;padding:0 8px;
   font:900 31px/1 var(--led);color:var(--amber);letter-spacing:.02em;font-variant-numeric:tabular-nums;
   background:radial-gradient(120% 120% at 50% 0%,#14100a,#07070a 70%);
   box-shadow:inset 0 0 0 1px rgba(255,176,46,.16),inset 0 -10px 18px rgba(0,0,0,.5);
@@ -231,7 +231,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   background:rgba(4,4,8,.86);clip-path:polygon(14px 0,calc(100% - 14px) 0,100% 14px,100% calc(100% - 14px),calc(100% - 14px) 100%,14px 100%,0 calc(100% - 14px),0 14px);
   box-shadow:inset 0 0 0 1px rgba(255,176,46,.18)}
 .jscore .leds{display:flex;gap:10px;align-items:center}
-.jscore .led{min-width:118px;height:84px;font-size:64px}
+.jscore .led{min-width:calc(3ch + .1em + 22px);height:84px;font-size:64px}
 .jscore .led.time{min-width:200px;font-size:46px}
 .jscore .st{font:700 13px var(--disp);letter-spacing:.24em;text-transform:uppercase;color:var(--ink2);white-space:nowrap}
 .jscore .st.live{color:var(--live)}
@@ -278,7 +278,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .brow .nm{min-width:0;display:flex;align-items:baseline;gap:9px}
 .brow .nm b{font:900 25px/1 var(--disp);text-transform:uppercase;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brow .nm small{font-size:12.5px;color:var(--ink2);white-space:nowrap}
-.brow .led{min-width:62px;height:42px;font-size:30px}
+.brow .led{min-width:calc(3ch + .1em + 16px);height:42px;font-size:30px}
 .brow.won{animation:won .9s ease-out}
 @keyframes won{0%{background:color-mix(in srgb,var(--tc) 85%,transparent)}100%{background:linear-gradient(90deg,color-mix(in srgb,var(--tc) 30%,transparent),transparent 70%)}}
 .bf{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px 12px 14px}
@@ -411,7 +411,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .fteam small{color:rgba(255,255,255,.75);font-size:12px;white-space:nowrap}
 .fmid{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 14px;background:rgba(4,4,8,.86)}
 .fmid .leds{display:flex;gap:8px}
-.fmid .led{min-width:88px;height:62px;font-size:46px}
+.fmid .led{min-width:calc(3ch + .1em + 18px);height:62px;font-size:46px}
 .fstat{font:700 12px var(--disp);letter-spacing:.2em;text-transform:uppercase;color:var(--ink2);white-space:nowrap}
 .fbody{padding:22px 26px 8px;display:grid;gap:28px}
 .fsect h3{display:flex;align-items:center;gap:12px;margin:0 0 14px}
@@ -640,7 +640,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .jmid{grid-template-columns:1fr 1fr;padding:6px 14px}
   .jscore{grid-column:1/-1;grid-row:2}
   .jteam .lg{width:92px;height:92px}
-  .jscore .led{min-width:92px;height:66px;font-size:48px}
+  .jscore .led{min-width:calc(3ch + .1em + 18px);height:66px;font-size:48px}
   .jscore .led.time{min-width:150px;font-size:36px}
   .jfoot .acts{margin-left:0}
   .bugs{grid-template-columns:1fr}
@@ -655,7 +655,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .standwrap{grid-template-columns:1fr}
   .srow{grid-template-columns:30px 34px minmax(0,1fr) 34px 34px 52px}
   .srow .gb{display:none}
-  .fmid .led{min-width:66px;height:50px;font-size:34px}
+  .fmid .led{min-width:calc(3ch + .1em + 16px);height:50px;font-size:34px}
   .fteam .lg{width:56px;height:56px}
 }
 @media (prefers-reduced-motion:reduce){
@@ -718,3 +718,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .lv-courth h4{margin:0 6px 6px 0}
 .lv-courth span:first-of-type{margin-right:auto}
 .lv-courth span{font:900 12px var(--disp);letter-spacing:.12em;color:var(--mc);filter:brightness(1.35)}
+
+/* infos clés d'avant-match : jusqu'à 3 lignes */
+.kfs{display:flex;flex-direction:column;gap:5px;min-width:0}
+.jfoot .kfs{flex:1 1 260px}
+.bf .kfs{flex:1 1 100%}

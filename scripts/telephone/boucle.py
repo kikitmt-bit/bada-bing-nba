@@ -202,7 +202,88 @@ def publier(nouveaux):
     return False
 
 
+# ---------- la « photo » d'avant-match : ce qu'ESPN dit AVANT le coup d'envoi (après, il le remplace par le match) ----------
+INJURIES = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
+
+
+def lire(url):
+    with urllib.request.urlopen(url, timeout=30) as r:
+        return json.load(r)
+
+
+def cote(c, injs):
+    recs = {r.get("type"): r.get("summary", "") for r in c.get("records", [])}
+    d = {"record": recs.get("total", ""), "recHome": recs.get("home", ""), "recRoad": recs.get("road", ""),
+         "top": None, "star": None, "out": injs.get(int(c["team"]["id"]), [])}
+    for L in c.get("leaders", []):
+        l = (L.get("leaders") or [None])[0]
+        if not l or not l.get("athlete"):
+            continue
+        if L.get("name") == "pointsPerGame":
+            d["top"] = {"n": l["athlete"].get("shortName", ""), "ppg": float(l.get("value") or 0)}
+        if L.get("name") == "rating":
+            d["star"] = l["athlete"].get("shortName", "")
+    return d
+
+
+def photo_avant():
+    """Pour chaque match pas encore commencé (nuits d'aujourd'hui et de demain, heure de New York) : bilans, meilleur
+    marqueur et star de la saison, blessés. Publié dans v2/avant/<nuit>.json ; le site s'en sert après le match (sans spoil)."""
+    ny = datetime.now(timezone.utc) - timedelta(hours=5)
+    jours = [(ny + timedelta(days=d)).strftime("%Y%m%d") for d in (0, 1)]
+    evs = {j: lire(ESPN + j).get("events", []) for j in jours}
+    if not any((e["competitions"][0].get("status") or {}).get("type", {}).get("state") == "pre" for j in jours for e in evs[j]):
+        return
+    injs = {}
+    for t in lire(INJURIES).get("injuries", []):
+        injs[int(t["id"])] = [{"n": (i.get("athlete") or {}).get("shortName", ""), "st": i.get("status", ""),
+                               "ty": (i.get("details") or {}).get("type", "")} for i in t.get("injuries", [])]
+    fichiers = {}
+    for j in jours:
+        chemin = os.path.join(DEPOT, "v2", "avant", j + ".json")
+        ancien = charger(chemin, {})
+        neuf = dict(ancien)
+        for e in evs[j]:
+            comp = e["competitions"][0]
+            if (comp.get("status") or {}).get("type", {}).get("state") != "pre":
+                continue  # commencé : on garde la dernière photo prise avant
+            cs = {c.get("homeAway"): c for c in comp.get("competitors", [])}
+            if "home" in cs and "away" in cs:
+                neuf[e["id"]] = {"a": cote(cs["away"], injs), "h": cote(cs["home"], injs)}
+        if neuf != ancien:
+            fichiers["v2/avant/" + j + ".json"] = neuf
+    if fichiers:
+        publier_fichiers(fichiers, "avant-match : photo de %d nuit(s)" % len(fichiers))
+
+
+def publier_fichiers(fichiers, message):
+    for essai in range(4):
+        try:
+            depot_pret()
+            for rel, obj in fichiers.items():
+                chemin = os.path.join(DEPOT, rel)
+                os.makedirs(os.path.dirname(chemin), exist_ok=True)
+                with open(chemin, "w") as f:
+                    json.dump(obj, f, separators=(",", ":"))
+            sh("git", "add", *fichiers.keys(), cwd=DEPOT)
+            if not sh("git", "status", "--porcelain", cwd=DEPOT).stdout.strip():
+                return True
+            sh("git", "commit", "-m", message, cwd=DEPOT)
+            sh("git", "push", "origin", "HEAD:data", cwd=DEPOT)
+            return True
+        except subprocess.CalledProcessError as e:
+            log("publication ratée (%d) : %s" % (essai + 1, (e.stderr or "").strip()[-200:]))
+            time.sleep(20)
+    return False
+
+
 def passage():
+    _SB.clear()  # les scoreboards ESPN changent (un match « à venir » finit par être « terminé ») : on relit à chaque passage
+    try:
+        depot_pret()
+        photo_avant()
+    except Exception as e:
+        log("photo d'avant-match ratée :", str(e)[-200:])
     etat = charger(ETAT, {})
     try:
         liste = resumes()

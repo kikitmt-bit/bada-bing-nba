@@ -120,10 +120,17 @@ function normEvent(ev) {
   for (const c of comp.competitors || []) {
     const side = c.homeAway === "home" ? "home" : "away";
     const rec = (c.records || []).find(r => r.type === "total" || r.name === "overall");
+    const recOf = ty => { const r = (c.records || []).find(x => x.type === ty); return r ? r.summary : ""; };
     g.teams[side] = {
       ...team(+c.team.id), score: +c.score || 0, record: rec ? rec.summary : "",
+      recHome: recOf("home"), recRoad: recOf("road"),
       ls: (c.linescores || []).map(l => +l.value || 0), // points par quart-temps (pour le match en accéléré)
     };
+    for (const L of c.leaders || []) { // leaders de la SAISON : ESPN ne les donne qu'avant le match
+      const l = (L.leaders || [])[0]; if (!l || !l.athlete) continue;
+      if (L.name === "pointsPerGame") g.teams[side].top = { n: l.athlete.shortName, ppg: +l.value || 0 };
+      if (L.name === "rating") g.teams[side].star = l.athlete.shortName;
+    }
     for (const L of c.leaders || []) for (const l of L.leaders || [])
       if (L.name === "pointsLeader" || L.abbreviation === "PTS")
         g.leaders.push({ name: l.athlete && l.athlete.shortName || "", pts: +l.value || 0 });
@@ -247,7 +254,52 @@ const RAR = [
   ["rar", "🔥 Sympa"], ["epi", "🔥🔥 À voir"], ["leg", "🔥🔥🔥 Immanquable"],
 ];
 
-/* ---------- l'info clé d'avant-match (une seule, la plus importante, jamais de spoil) ---------- */
+/* ---------- les infos clés d'avant-match : jusqu'à 3 par match, aussi sur les matchs joués, JAMAIS de spoil ----------
+   Avant le match : données ESPN du jour (bilans, leaders de la saison) + blessés (ESPN /injuries).
+   Après : la « photo » prise avant le coup d'envoi par le téléphone-serveur (v2/avant/<nuit>.json) ; sans photo,
+   les bilans d'avant-match sont recalculés en retirant le résultat (rien n'est affiché qui le trahisse). */
+let INJ = null, INJT = 0;
+async function loadInjuries() {
+  if (DEMO) return (INJ = {});
+  if (INJ && Date.now() - INJT < 15 * 60e3) return INJ;
+  try {
+    const j = await fetchJSON(API + "injuries");
+    const m = {};
+    for (const t of j.injuries || []) m[+t.id] = (t.injuries || []).map(i => ({
+      n: i.athlete ? i.athlete.shortName : "", st: i.status || "", ty: (i.details && i.details.type) || "" }));
+    INJ = m; INJT = Date.now();
+  } catch (e) { INJ = INJ || {}; }
+  return INJ;
+}
+let AVANT = {}, AVKEY = null;
+async function loadAvant(key) {
+  if (AVKEY === key || DEMO) return;
+  try { AVANT = await fetchJSON(RAWDATA + "avant/" + key + ".json?t=" + Math.floor(Date.now() / 600e3)); } catch (e) { AVANT = {}; }
+  AVKEY = key;
+}
+const BLESS = { ankle: "cheville", knee: "genou", hamstring: "ischio-jambiers", calf: "mollet", back: "dos", hip: "hanche",
+  foot: "pied", shoulder: "épaule", groin: "aine", wrist: "poignet", hand: "main", illness: "malade", concussion: "commotion",
+  achilles: "tendon d'Achille", thigh: "cuisse", elbow: "coude", finger: "doigt", toe: "orteil", rest: "repos", personal: "raisons personnelles",
+  quadriceps: "quadriceps", abdomen: "abdominaux", oblique: "obliques", neck: "cou", head: "tête", chest: "poitrine", leg: "jambe", lower: "bas du dos" };
+const blessFr = ty => BLESS[(ty || "").toLowerCase().split(/[\s/]/)[0]] || (ty || "").toLowerCase();
+function moins(rec, gagne) { // un bilan « 13-3 » d'après-match, ramené à avant le match
+  const m = /^(\d+)-(\d+)/.exec(rec || ""); if (!m) return rec || "";
+  return gagne ? `${Math.max(0, +m[1] - 1)}-${m[2]}` : `${m[1]}-${Math.max(0, +m[2] - 1)}`;
+}
+function avantMatch(g) { // les données d'avant-match de chaque équipe
+  const A = g.teams.away, H = g.teams.home;
+  if (g.state === "pre") {
+    const inj = INJ || {};
+    return { a: { ...A, out: inj[A.id] || [] }, h: { ...H, out: inj[H.id] || [] } };
+  }
+  const ph = AVANT[g.id];
+  if (ph) return { a: { ...A, ...ph.a, name: A.name }, h: { ...H, ...ph.h, name: H.name } };
+  if (g.state !== "post") return { a: { ...A, record: "", recHome: "", recRoad: "" }, h: { ...H, record: "", recHome: "", recRoad: "" }, live: true };
+  const awayWon = A.score > H.score; // sert seulement à retirer le résultat des bilans, jamais affiché
+  return { a: { ...A, top: null, star: null, out: [], record: moins(A.record, awayWon), recRoad: moins(A.recRoad, awayWon), recHome: A.recHome },
+           h: { ...H, top: null, star: null, out: [], record: moins(H.record, !awayWon), recHome: moins(H.recHome, !awayWon), recRoad: H.recRoad } };
+}
+const fr1 = x => String((+x).toFixed(1)).replace(".", ",");
 let PREVNIGHT = null, PREVKEY = null; // équipes qui jouaient déjà la nuit précédente
 async function loadPrevNight(key) {
   if (PREVKEY === key) return;
@@ -256,24 +308,39 @@ async function loadPrevNight(key) {
   PREVKEY = key;
 }
 function played(rec) { const m = /^(\d+)-(\d+)/.exec(rec || ""); return m ? +m[1] + +m[2] : 0; }
-function keyFact(g) {
-  if (g.state !== "pre") return null; // après le coup d'envoi, plus d'avant-match
-  const a = g.teams.away, h = g.teams.home, pa = winpct(a.record), ph = winpct(h.record);
-  const n = Math.min(played(a.record), played(h.record));
-  if (n >= 8 && pa >= .65 && ph >= .65) return ["Choc au sommet", `${a.name} et ${h.name}, deux des meilleurs bilans de la ligue`];
-  const star = [...g.leaders].sort((x, y) => y.pts - x.pts)[0];
-  if (star && star.pts >= 27) return ["L'homme en forme", `${star.name} tourne à ${String(star.pts.toFixed(1)).replace(".", ",")} points par match`];
-  if (n >= 6 && Math.abs(pa - ph) >= .35) return ["Grand favori", `Victoire attendue côté ${pa > ph ? a.name : h.name}`];
+function keyFacts(g) {
+  const D = avantMatch(g), a = D.a, h = D.h, F = [];
+  const add = (p, t, x) => F.push({ p, t, x });
+  // les absences de marque : la star ou le meilleur marqueur de l'équipe
+  for (const t of [a, h]) {
+    const vips = [t.star, t.top && t.top.n].filter(Boolean);
+    for (const o of t.out || []) {
+      if (!vips.includes(o.n)) continue;
+      const what = o.ty ? ` · ${blessFr(o.ty)}` : "";
+      if (/^out$/i.test(o.st)) { add(10, "Grosse absence", `${o.n} (${t.tri}) forfait${what}`); break; }
+      if (/day|question|doubt|probable/i.test(o.st)) { add(7, "Incertain", `${o.n} (${t.tri}) incertain${what}`); break; }
+    }
+  }
+  const pa = winpct(a.record), ph = winpct(h.record), n = Math.min(played(a.record), played(h.record));
+  if (n >= 8 && pa >= .65 && ph >= .65) add(9, "Choc au sommet", "Deux des meilleurs bilans de la ligue");
+  const ta = a.top, th = h.top;
+  if (ta && th && ta.ppg >= 25 && th.ppg >= 25) add(8, "Duel de stars", `${ta.n} ${fr1(ta.ppg)} pts – ${th.n} ${fr1(th.ppg)} pts`);
+  else { const st = [ta, th].filter(x => x && x.ppg >= 26).sort((x, y) => y.ppg - x.ppg)[0];
+    if (st) add(7, "L'homme en forme", `${st.n} : ${fr1(st.ppg)} pts par match`); }
+  if (n >= 6 && Math.abs(pa - ph) >= .35) add(6, "Grand favori", `Victoire attendue : ${pa > ph ? a.name : h.name}`);
+  else if (n >= 6 && Math.abs(pa - ph) <= .06) add(4, "Pile ou face", "Impossibles à départager sur le papier");
   if (PREVNIGHT && (PREVNIGHT.has(a.id) || PREVNIGHT.has(h.id))) {
     const t = PREVNIGHT.has(a.id) ? a : h;
-    return ["Fatigue", `${t.name} : 2e match en 2 soirs${t === a ? ", en déplacement" : ""}`];
+    add(5, "Fatigue", `${t.name} : 2e soir de suite${t === a ? ", en déplacement" : ""}`);
   }
-  if (n >= 6 && Math.abs(pa - ph) <= .06) return ["Pile ou face", "Deux équipes impossibles à départager sur le papier"];
-  return null;
+  if (played(h.recHome) >= 5 && winpct(h.recHome) >= .8) add(5, "Forteresse", `${h.name} : ${h.recHome} à domicile`);
+  if (played(a.recRoad) >= 5 && winpct(a.recRoad) <= .2) add(5, "En galère dehors", `${a.name} : ${a.recRoad} à l'extérieur`);
+  else if (played(a.recRoad) >= 5 && winpct(a.recRoad) >= .8) add(4, "Solides en voyage", `${a.name} : ${a.recRoad} à l'extérieur`);
+  return F.sort((x, y) => y.p - x.p).slice(0, 3);
 }
 function kfHTML(g) {
-  const f = keyFact(g);
-  return f ? `<div class="kf"><b>${f[0]}</b><span>${f[1]}</span></div>` : "";
+  const fs = keyFacts(g);
+  return fs.length ? `<div class="kfs">${fs.map(f => `<div class="kf"><b>${f.t}</b><span>${f.x}</span></div>`).join("")}</div>` : "";
 }
 
 /* ---------- vidéos : liste tenue par le robot GitHub (branche data), lecteur intégré ---------- */
@@ -600,7 +667,9 @@ async function renderNight(soft) {
   state.lastLoad = Date.now();
   if (settings.showAll) games.forEach(g => state.revealed.add(g.id));
   if (games.some(g => g.state !== "pre")) markSeen(state.night);
-  if (games.some(g => g.state === "pre")) await loadPrevNight(state.night); // pour l'info « 2e soir »
+  // pour les infos clés : « 2e soir », blessés (avant le match), photo d'avant-match (après)
+  await Promise.all([loadPrevNight(state.night), games.some(g => g.state === "pre") ? loadInjuries() : null,
+    games.some(g => g.state !== "pre") ? loadAvant(state.night) : null]);
   if (tok !== state.tok) return;
 
   const scored = games.map(g => ({ g, lvl: watchLevel(g) })).sort((x, y) => y.lvl - x.lvl || jitter(x.g.id) - jitter(y.g.id));

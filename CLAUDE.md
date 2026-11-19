@@ -109,8 +109,14 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
 - Fiche : feuille de match complète (Min/Tirs/3 pts/Reb/Pas/Pts) ; clic sur un joueur = **carte de tirs animée**
   (tirs ESPN `plays[].coordinate`, panier en (25, 5.25) pieds, moitiés de terrain repliées, lancers francs exclus),
   replay ~5 s avec compteur en direct (quart-temps, n° de tir, points cumulés) + bouton « ↻ Rejouer ».
-- Info clé d'avant-match (`keyFact`, une seule par match) : choc au sommet, homme en forme (meneur ≥ 27 pts),
-  grand favori, 2e soir de suite (scoreboard de la veille), pile ou face. Rien après le coup d'envoi (spoil).
+- **Infos clés d'avant-match (20/11, `keyFacts`, jusqu'à 3 par match, par priorité)** : grosse absence / incertain (star ou meilleur
+  marqueur dans ESPN `/injuries`), choc au sommet, duel de stars (2 × ≥ 25 pts) ou homme en forme (≥ 26 pts), grand favori / pile
+  ou face, fatigue (2e soir), forteresse à domicile / en galère ou solides à l'extérieur (bilans home/road). Affichées AUSSI sur les
+  matchs joués, sans spoil : `avantMatch` prend la **photo d'avant-match** publiée par le téléphone (`photo_avant` dans
+  boucle.py → `v2/avant/<nuit NY>.json` : bilans, meilleur marqueur `pointsPerGame`, star `rating`, blessés, mise à jour tant
+  que le match n'a pas commencé) ; sans photo, bilans recalculés en retirant le résultat (`moins`), sans leaders ni blessés
+  (après le match ESPN remplace les leaders de la saison par ceux du match). Testé : des données d'après-match truquées ne
+  changent rien. Afficheurs de score : largeur fixe de 3 chiffres (`min-width:calc(3ch …)`), « ?? » compris.
 - **Mode démo** : `?demo=1` = fausse saison stable (`demo.js`), l'équivalent de `BB_FAUX_ESPN=1`. Test local :
   `python3 -m http.server 8777` dans `docs/` puis `http://localhost:8777/?demo=1` (Playwright : PC 1400px + téléphone 393px,
   vérifier zéro erreur JS et zéro défilement horizontal).

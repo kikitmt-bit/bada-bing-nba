@@ -62,7 +62,8 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   3 pts = `pointsAttempted`, rebonds d'équipe exclus : identique à la feuille ESPN). Pas sur téléphone (pas de partage d'onglet).
   Le robot qui préparait le minutage à l'avance est impossible : YouTube bloque le téléchargement depuis GitHub Actions
   (« not a bot »), et on ne contourne pas. Démo : `?demo=1&live=1` (curseur à la place du chrono). ESPN depuis le navigateur :
-  CORS OK (vérifié le 19/11).
+  CORS OK (vérifié le 19/11). Panneau affiché si le navigateur a une souris (`any-pointer:fine`, PC tactiles compris).
+- **Cache** : GitHub Pages garde les fichiers 10 min ; `index.html` appelle `app.js?v=…` etc. : changer ce `v` à chaque modif.
 - Fiche : feuille de match complète (Min/Tirs/3 pts/Reb/Pas/Pts) ; clic sur un joueur = **carte de tirs animée**
   (tirs ESPN `plays[].coordinate`, panier en (25, 5.25) pieds, moitiés de terrain repliées, lancers francs exclus),
   replay ~5 s avec compteur en direct (quart-temps, n° de tir, points cumulés) + bouton « ↻ Rejouer ».

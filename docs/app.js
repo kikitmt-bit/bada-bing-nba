@@ -430,6 +430,7 @@ function playVideo(vid, label, gid) { // lecteur intégré, sans quitter le site
   vplayer.classList.toggle("live", !!live); vplayer.classList.toggle("full", !!full); vidovl.classList.toggle("full", !!full);
   vplayer.innerHTML = `
     <button class="x" aria-label="Fermer">✕</button>
+    ${full && vidovl.requestFullscreen ? `<button class="fsb" aria-label="Plein écran" title="Remettre en plein écran"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg></button>` : ""}
     <div class="vmain"><div class="vframe">${frame}</div>
     <div class="vfoot"><span>${label}</span>
       ${vid ? `<a href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a>` : ""}</div></div>
@@ -450,6 +451,8 @@ async function openResume(id, extra) {
   if (!v) { window.open(ytURL(g), "_blank", "noopener"); return; }
   playVideo(v.id, `${g.teams.away.name} – ${g.teams.home.name} · ${extra ? "Replay FR (NBA Extra)" : v.c === "gt" ? "replay GameTime" : "replay NBA"}`, extra ? null : g.id);
 }
+// après Échap, le bouton « plein écran » réapparaît (seulement hors plein écran)
+document.addEventListener("fullscreenchange", () => vplayer.classList.toggle("fs", document.fullscreenElement === vidovl));
 function closeResume() {
   if (typeof Chrono !== "undefined") Chrono.close();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -880,15 +883,17 @@ async function loadMVP(btn) {
   const facts = nightFacts(posts, sums);
   const factsBlock = facts.length ? `<div class="ess-h"><span class="tag">Les faits marquants</span><i></i></div><div class="facts">${facts.map(factHTML).join("")}</div>` : "";
   // les Français
-  const fr = all.filter(p => frIds.has(p.aid)).sort((a, b) => gscore(b) - gscore(a));
+  // un MVP français est déjà en vedette juste au-dessus : la rubrique montre alors les AUTRES Français
+  const mvpFr = frIds.has(mvp.aid);
+  const fr = all.filter(p => frIds.has(p.aid) && p !== mvp).sort((a, b) => gscore(b) - gscore(a));
   const frCols = fr.length <= 5 ? Math.max(1, fr.length) : fr.length === 6 ? 3 : 4; // 1 à 5 sur une ligne, 6 = 2 × 3, puis 4 par ligne
-  const frBlock = `<div class="ess-h"><span class="tag">Les Français de la nuit</span><i></i></div>${fr.length ? `<div class="frg" style="--n:${frCols}">${fr.map((p, i) => {
+  const frBlock = `<div class="ess-h"><span class="tag">${mvpFr ? "Les autres Français de la nuit" : "Les Français de la nuit"}</span><i></i></div>${fr.length ? `<div class="frg" style="--n:${frCols}">${fr.map((p, i) => {
       const pt = team(p.tid), og = p.g.teams.away.id === p.tid ? p.g.teams.home : p.g.teams.away;
       const ph = /^\d+$/.test(p.aid) && !DEMO ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${p.aid}.png" alt="" loading="lazy" onerror="this.remove()">` : "";
       return `<div class="frt" style="--tc:${pt.color};animation-delay:${i * 60}ms"><span class="frp">${ph}${logoHTML(pt)}</span>
         <span class="frn"><b>${p.full || p.name}</b><small>${pt.tri} contre ${og.tri} · ${p.min} min</small>
         <span class="frs"><b>${p.pts}</b><small>pts</small><b>${p.reb}</b><small>reb</small><b>${p.ast}</b><small>pd</small></span></span></div>`;
-    }).join("")}</div>` : `<p class="essn pad">Aucun Français sur les parquets cette nuit.</p>`}`;
+    }).join("")}</div>` : `<p class="essn pad">${mvpFr ? "Aucun autre Français sur les parquets cette nuit." : "Aucun Français sur les parquets cette nuit."}</p>`}`;
   // le classement
   const mvBlock = moves.length ? `<div class="essb"><h4>Ça a bougé au classement</h4>${moves.map(m => {
       const tt = team(m.id), up = m.a < m.b;
@@ -904,7 +909,8 @@ async function loadMVP(btn) {
       for (const o of INJ[T.id] || []) if (!before.has(o.n) && /out|day|question/i.test(o.st)) hurt.push({ o, T });
     }
   }
-  const huBlock = hurt.length ? `<div class="essb"><h4>Sortis blessés</h4>${hurt.slice(0, 5).map(({ o, T }) => `<div class="hul">${logoHTML(T)}<span class="mvn"><b>${o.n}</b><small>${o.ty ? blessFr(o.ty) : "blessure"} · ${/^out$/i.test(o.st) ? "forfait" : "incertain"} pour la suite</small></span></div>`).join("")}</div>` : "";
+  const huBlock = hurt.length ? `<div class="essb hu"><h4>Sortis blessés</h4>${hurt.slice(0, 5).map(({ o, T }) => { const out = /^out$/i.test(o.st);
+      return `<div class="hul">${logoHTML(T)}<span class="mvn"><b>${o.n}</b><small>${T.name} · ${o.ty ? blessFr(o.ty) : "blessure"}</small></span><span class="hst ${out ? "out" : ""}">${out ? "Forfait" : "Incertain"}</span></div>`; }).join("")}</div>` : "";
   btn.hidden = true;
   const body = $("#mvpbody");
   const more = mvBlock || huBlock ? `<div class="ess-h"><span class="tag">Et aussi</span><i></i></div><div class="essrow">${mvBlock}${huBlock}</div>` : "";
@@ -1252,7 +1258,7 @@ async function renderStandings() {
   const tok = ++state.tok;
   const main = $("#main");
   setURL();
-  main.innerHTML = `<section class="ptitle"><p class="greet"><i></i>La hiérarchie</p><h1>Classement</h1></section>
+  main.innerHTML = `<section class="tvhead"><p class="greet"><i></i>La hiérarchie</p></section>
     <div class="skel"><div class="ph" style="height:300px"></div></div>`;
   let data;
   try {
@@ -1302,8 +1308,8 @@ async function renderStandings() {
           <span class="n gb">${gb === 0 ? "–" : gb.toFixed(1).replace(".0", "").replace(".", ",")}</span></div>`;
       }).join("")}</div>`;
   };
-  main.innerHTML = `<section class="ptitle"><p class="greet"><i></i>La hiérarchie</p><h1>Classement</h1></section>
-    <div class="cutbar">
+  // plus de grand titre (déjà dans le menu, comme le programme) : étiquette, coupure sans spoil et légende sur UNE ligne
+  main.innerHTML = `<div class="cutbar onel"><p class="greet"><i></i>La hiérarchie</p>
       ${cutPossible ? `<span>${cut ? "Arrêté avant la dernière nuit, pour ne rien te gâcher." : "À jour, dernière nuit comprise."}</span>
       <button class="sw ${cut ? "" : "on"}" id="swcut" role="switch" aria-checked="${!cut}"></button>
       <span>Inclure la dernière nuit</span>` : `<span>Classement à jour.</span>`}
@@ -1356,19 +1362,29 @@ function renderChips() {
   // seulement 3 nuits : celle d'avant, celle affichée, celle d'après ; le calendrier pour aller plus loin
   const keys = [addDays(state.night, -1), state.night, addDays(state.night, 1)];
   const live = state.games.some(g => g.state === "live");
-  const cal = `<button class="chip calchip" title="Choisir une autre nuit"><small>Autre nuit</small><b><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></b><input type="date" id="dpick" value="${state.night.slice(0, 4)}-${state.night.slice(4, 6)}-${state.night.slice(6, 8)}"></button>`;
+  const cal = `<div class="chip calchip" id="calbtn" role="button" tabindex="0" title="Choisir une autre nuit"><small>Autre nuit</small><b><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></b><input type="date" id="dpick" tabindex="-1" aria-label="Autre nuit" value="${state.night.slice(0, 4)}-${state.night.slice(4, 6)}-${state.night.slice(6, 8)}"></div>`;
   el.innerHTML = cal + keys.map(k => {
     const c = chipText(k);
     const cur = k === state.night;
     let dot = "";
     if (k === tonight && k === state.night && live) dot = `<span class="dot red"></span>`;
     else if (k < tonight && !seen.has(k)) dot = `<span class="dot gold"></span>`;
-    const lab = k === tonight ? (EURO ? "Cette nuit" : "Ce soir") : k === addDays(tonight, -1) ? (EURO ? "Nuit dernière" : "Hier") : k === addDays(tonight, 1) ? "Demain" : c.s;
-    // le contexte (« Retour sur la nuit »…) seulement quand l'étiquette ne dit pas déjà « Nuit dernière », « Cette nuit » ou « Demain »
+    // seule la dernière nuit (celle d'il y a quelques heures) et la suivante ont un nom ; la veille passe en « Retour sur la nuit »
+    // comme les autres (« Nuit dernière » prêtait à confusion avec « Cette nuit »)
+    const lab = k === tonight ? (EURO ? "Cette nuit" : "Ce soir") : k === addDays(tonight, 1) ? "Demain" : c.s;
+    // le contexte (« Retour sur la nuit »…) seulement quand l'étiquette ne dit pas déjà « Cette nuit » ou « Demain »
     const ctxOn = cur && lab === c.s && el.dataset.ctx;
     return `<button class="chip ${cur ? "on" : ""}" data-night="${k}">${ctxOn ? `<em>${el.dataset.ctx}</em>` : ""}<small>${lab}</small><b>${c.b}</b>${dot}</button>`;
   }).join("");
   const dp = $("#dpick");
+  // un <input> dans un <button> ne reçoit pas le clic (Firefox) et un champ date invisible n'ouvre pas son calendrier :
+  // le bouton ouvre lui-même le sélecteur (showPicker), sinon donne le focus au champ
+  const cb = $("#calbtn");
+  const pick = () => { try { dp.showPicker(); } catch { dp.focus(); dp.click(); } };
+  if (cb && dp) {
+    cb.addEventListener("click", e => { if (e.target !== dp) pick(); });
+    cb.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+  }
   if (dp) dp.addEventListener("change", () => { if (dp.value) { state.night = dp.value.replaceAll("-", ""); state.revealed.clear(); renderNight(); } });
 }
 
@@ -1406,6 +1422,7 @@ document.addEventListener("click", e => {
   if (rp) { openShots(rp.dataset.replay); return; }
   const sh = e.target.closest("[data-shot]");
   if (sh) { openShots(sh.dataset.shot); return; }
+  if (e.target.closest(".fsb") && vidovl.requestFullscreen) { vidovl.requestFullscreen().catch(() => {}); return; }
   if (e.target === vidovl || (e.target.closest(".x") && e.target.closest("#vidovl"))) { closeResume(); return; }
   if (e.target === shotovl || (e.target.closest(".x") && e.target.closest("#shotovl"))) { closeShots(); return; }
   if (e.target.closest("#gear") || e.target.closest("#gear2")) { openSettings(); return; }

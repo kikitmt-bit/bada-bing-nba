@@ -474,11 +474,13 @@ const Chrono = (() => {
     }
     const ring = last ? `<circle cx="${last.X.toFixed(1)}" cy="${last.Y.toFixed(1)}" r="1.4" stroke="${last.col}" class="ring" key="${dots.length}"/>` : "";
     const z = (t, i) => `${Z[t][i][0]}/${Z[t][i][1]}`;
-    return `<div class="lv-shots"><div class="lv-courth"><h4>Les tirs</h4><span style="--mc:${a.color}">◀ ${a.tri}</span><span style="--mc:${h.color}">${h.tri} ▶</span></div>
-      <svg class="lv-court" viewBox="-1 -1 96 52" role="img" aria-label="Les tirs des deux équipes jusqu'ici">
-        <g class="ln"><rect x="0" y="0" width="94" height="50"/><path d="M47 0V50"/><circle cx="47" cy="25" r="6"/>
-        ${HALF}<g transform="matrix(-1 0 0 1 94 0)">${HALF}</g></g>
-        ${dots.join("")}${ring}</svg>
+    const inner = `<g class="ln"><rect x="0" y="0" width="94" height="50"/><path d="M47 0V50"/><circle cx="47" cy="25" r="6"/>
+        ${HALF}<g transform="matrix(-1 0 0 1 94 0)">${HALF}</g></g>${dots.join("")}${ring}`;
+    // deux terrains : en largeur (visiteurs à gauche) et en hauteur (visiteurs en haut, tourné d'un quart de tour) ;
+    // le CSS montre celui qui remplit le mieux la colonne (en hauteur sur les écrans hauts, 21/11)
+    return `<div class="lv-shots"><div class="lv-courth"><h4>Les tirs</h4><span style="--mc:${a.color}"><em class="cl-h">◀</em><em class="cl-v">▲</em> ${a.tri}</span><span style="--mc:${h.color}">${h.tri} <em class="cl-h">▶</em><em class="cl-v">▼</em></span></div>
+      <svg class="lv-court ch" viewBox="-1 -1 96 52" role="img" aria-label="Les tirs des deux équipes jusqu'ici">${inner}</svg>
+      <svg class="lv-court cv" viewBox="-1 -1 52 96" role="img" aria-label="Les tirs des deux équipes jusqu'ici"><g transform="matrix(0 1 -1 0 50 0)">${inner}</g></svg>
       <div class="lv-zones"><span></span><b>Raquette</b><b>Mi-distance</b><b>3 points</b>
         <span style="--mc:${a.color}">${a.tri}</span><i>${z(D.away, 0)}</i><i>${z(D.away, 1)}</i><i>${z(D.away, 2)}</i>
         <span style="--mc:${h.color}">${h.tri}</span><i>${z(D.home, 0)}</i><i>${z(D.home, 1)}</i><i>${z(D.home, 2)}</i></div></div>`;

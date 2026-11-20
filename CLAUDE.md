@@ -152,6 +152,16 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   (après le match ESPN remplace les leaders de la saison par ceux du match). Testé : des données d'après-match truquées ne
   changent rien. Afficheurs de score : largeur fixe de 3 chiffres (`min-width:calc(3ch …)`), « ?? » compris.
 - **Couleurs proches (21/11, demande de Kiki : 76ers / Magic tous deux bleus)** : `ALT` = 2e couleur de chaque équipe ; `vsColor(visiteurs, domicile)` : si l'écart perçu (`colorGap`, « redmean ») est < 170, les VISITEURS prennent leur 2e couleur (sinon blanc cassé), le domicile garde la sienne. Appliqué à chaque match dans `normEvent`/`scoreboard` (`pairColors`, démo et copie de secours comprises), dans la fiche (`teamIn`, carte de tirs) et le Replay + (chrono.js). **Patrons du match** : plus de « TOP MATCH » (il passait sous les barres), logo + nom de l'équipe en tête de carte à sa couleur, barres REB / PD / CTR. **Contres** : colonne « Ctr » de la feuille de match (ESPN `BLK`), barre CTR des patrons, et dans le Replay + (ligne « Contres » + colonne « Ctr » des joueurs : `statsAt` compte les tirs ratés « X blocks Y's shot », contreur = 2e nommé `a1`, équipe adverse du tireur ; vérifié identique à la feuille ESPN sur 2 matchs).
+- **Retouches du 21/11 (soir)** : MVP français = absent de « Les Français de la nuit » (devient « Les autres Français de la nuit ») ;
+  « Et aussi » agrandi (logos 48 px, noms 21 px, places en LED, étiquette Forfait/Incertain) ; frise des nuits : seules « Cette nuit »
+  (la dernière jouée) et « Demain » ont un nom, la veille affiche « Retour sur la nuit » (plus de « Nuit dernière ») ; calendrier
+  « Autre nuit » = `div` qui appelle `showPicker()` (un `<input>` dans un `<button>` ne recevait pas le clic) ; classement sans
+  grand titre, étiquette + coupure + légende sur une ligne (`.cutbar.onel`). **Replay +** : la colonne des stats est une pile de
+  100 vh qui se remplit toujours (terrain des tirs EN HAUTEUR dès 860 px de haut, `.lv-court.cv` tourné d'un quart de tour,
+  visiteurs en haut ; les lignes de stats s'aèrent s'il reste de la place ; textes plus grands dès 1100 px de haut) ; bouton ⛶
+  `.fsb` à gauche de la croix, visible seulement hors plein écran (`fullscreenchange` → `.fs`) ; en-tête du panneau réservé
+  (96 px) pour que la croix ne recouvre rien. **Firefox** : classe `ff` sur `<html>` (index.html) → pas de flou d'arrière-plan,
+  ciel figé, pas d'entrées en scène, pas d'ombres floues (artefacts de calques composés, même remède que le site NFL).
 - **Mode démo** : `?demo=1` = fausse saison stable (`demo.js`), l'équivalent de `BB_FAUX_ESPN=1`. Test local :
   `python3 -m http.server 8777` dans `docs/` puis `http://localhost:8777/?demo=1` (Playwright : PC 1400px + téléphone 393px,
   vérifier zéro erreur JS et zéro défilement horizontal).

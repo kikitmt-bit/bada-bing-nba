@@ -292,6 +292,29 @@ def _binaire(g, thr, clairs_minoritaires):
         if sum(1 for y in range(H) if px[x, y] == 0) > H * .85:
             for y in range(H):
                 px[x, y] = 255
+    # ce qui touche un bord de la case et n'est pas un chiffre : bord du panneau voisin (trait fin ou aplat plein),
+    # traits horizontaux du cadre en haut ou en bas
+    seen = set()
+    depart = [(x, y) for x in (0, W - 1) for y in range(H)] + [(x, y) for y in (0, H - 1) for x in range(W)]
+    for x0, y0 in depart:
+        if px[x0, y0] != 0 or (x0, y0) in seen:
+            continue
+        comp, pile = [], [(x0, y0)]
+        seen.add((x0, y0))
+        while pile:
+            cx, cy2 = pile.pop()
+            comp.append((cx, cy2))
+            for nx, ny in ((cx + 1, cy2), (cx - 1, cy2), (cx, cy2 + 1), (cx, cy2 - 1)):
+                if 0 <= nx < W and 0 <= ny < H and (nx, ny) not in seen and px[nx, ny] == 0:
+                    seen.add((nx, ny))
+                    pile.append((nx, ny))
+        xs = [c[0] for c in comp]
+        ys = [c[1] for c in comp]
+        bw, bh = max(xs) - min(xs) + 1, max(ys) - min(ys) + 1
+        cote = min(xs) == 0 or max(xs) == W - 1
+        if (cote and (bw < W * .1 or bh > H * .85)) or (not cote and bh < H * .1 and bw > W * .3):
+            for c in comp:
+                px[c[0], c[1]] = 255
     return ImageOps.expand(b, 24, 255)
 
 
@@ -316,12 +339,16 @@ def chiffres(img):
             break
     if hi - lo < 60:
         return {}  # case unie : pas de chiffre
+    # la couleur du fond : les bords haut et bas de la case, au milieu (le texte est de l'autre couleur)
+    W, H = g.size
+    px = g.load()
+    bords = [px[x, y] for y in (1, 2, H - 3, H - 2) for x in range(W // 4, W * 3 // 4)]
+    fond = sorted(bords)[len(bords) // 2]
     votes = Counter()
     tmp = _tmp()
     for f in (.4, .5, .6):
         thr = lo + (hi - lo) * f
-        clairs = sum(h[int(thr) + 1:])
-        _binaire(g, thr, clairs < tot / 2).save(tmp)
+        _binaire(g, thr, fond <= thr).save(tmp)  # fond sombre : le texte clair passe en noir
         for psm in (7, 8, 13):
             out = subprocess.run(["tesseract", tmp, "stdout", "--psm", str(psm), "-c", "tessedit_char_whitelist=0123456789"],
                                  capture_output=True, text=True).stdout.strip()
@@ -405,14 +432,46 @@ class Tableau:
         if abs(cyA - cyH) > h * 2.5:
             return
         def case(b, cy, droite):
-            y0, y1 = cy - h * .75, cy + h * .75
+            y0, y1 = cy - h * .58, cy + h * .58  # serré : la ligne « FOULS | 1 » sous certains tableaux se collerait au score
             return (b[2] + h * .15, y0, b[2] + h * 2.2, y1) if droite else (b[0] - h * 2.2, y0, b[0] - h * .15, y1)
+        self.h = h
         if abs(cyA - cyH) > h * .8:            # l'une sous l'autre : les scores à droite des sigles
             self.box = {"away": case(A, cyA, True), "home": case(Hm, cyH, True)}
+            self.cote = {"away": "gauche", "home": "gauche"}
         else:  # côte à côte : les scores vers le centre, sur la même ligne (celle du sigle le mieux cadré)
             cy = cyA if A[3] - A[1] <= Hm[3] - Hm[1] else cyH
             gA = A[0] < Hm[0]
             self.box = {"away": case(A, cy, gA), "home": case(Hm, cy, not gA)}
+            self.cote = {"away": "gauche" if gA else "droite", "home": "droite" if gA else "gauche"}
+        self.a_affiner = True
+
+    def affiner(self, band):
+        """Bord extérieur de chaque case : là où la couleur du fond change (le panneau voisin), pour ne pas l'attraper."""
+        rgb = band.convert("RGB")
+        W, H = rgb.size
+        h = getattr(self, "h", 20)
+        for k, (x0, y0, x1, y1) in list(self.box.items()):
+            ys = [int(y0) + 1, int(y0) + 3, int(y1) - 4, int(y1) - 2]
+            col = lambda x: tuple(sorted(rgb.getpixel((x, y))[i] for y in ys)[len(ys) // 2] for i in range(3))
+            dist = lambda a, b: sum(abs(a[i] - b[i]) for i in range(3))
+            # on part du côté du sigle et on avance ; le bord = un changement de couleur qui DURE (un trait de chiffre ne dure pas)
+            vers_droite = self.cote.get(k) == "gauche"  # la case est à droite de son sigle
+            xa = int(x0 + h * .1) if vers_droite else int(x1 - h * .1)
+            ref = col(xa)
+            pas = 1 if vers_droite else -1
+            lim = min(W - 13, int(x1 + h)) if vers_droite else max(12, int(x0 - h))
+            x, bord = xa, None
+            while (x < lim) if vers_droite else (x > lim):
+                if all(dist(col(x + pas * d), ref) > 80 for d in range(0, 12, 3)):
+                    bord = x
+                    break
+                x += pas
+            if bord is not None and abs(bord - xa) > h * 1.5:  # une case de score est au moins aussi large que 1,5 fois le sigle
+                if vers_droite:
+                    x1 = min(x1, bord - 2)
+                else:
+                    x0 = max(x0, bord + 2)
+            self.box[k] = (x0, y0, x1, y1)
 
     def lire(self, band, horloge=None):
         self.n += 1
@@ -423,6 +482,9 @@ class Tableau:
                 self.chercher(band)
         if self.box is None:
             return None
+        if getattr(self, "a_affiner", False):
+            self.affiner(band)
+            self.a_affiner = False
         W, H = band.size
         out = []
         for k in ("away", "home"):
@@ -532,6 +594,17 @@ def soutenus(D, nums):
 RETARD = 3.5  # le bandeau change de score ~2 s (de chrono) avant l'horaire noté par ESPN (vérifié : 14-7 à l'écran à 6:25, ESPN 6:24)
 
 
+def etendre(votes):
+    """Les confusions courantes de lecture : un nombre à 3 chiffres est souvent un score collé à un autre chiffre
+    (« 907 » = 90 + chrono des tirs) : on essaie aussi ses deux moitiés, à demi-voix."""
+    out = dict(votes)
+    for v, n in votes.items():
+        if v >= 100:
+            for w in (v // 10, v % 100):
+                out[w] = out.get(w, 0) + n / 2
+    return out
+
+
 def caler(lectures, D):
     """lectures : [(t, quart|None, secondes|None, variante, mots, cases)] ; cases = ({visiteurs: voix}, {domicile: voix}) ou None.
     Renvoie [t, quart, secondes(, visiteurs, domicile)] : le score affiché est CELUI DE L'ÉCRAN quand les cases sont lues
@@ -545,7 +618,7 @@ def caler(lectures, D):
         t, cases = lec[0], (lec[5] if len(lec) > 5 else None)
         if not cases:
             continue
-        A, Hm = ({int(k): v for k, v in c.items()} for c in cases)  # (relu depuis un JSON : clés en texte)
+        A, Hm = (etendre({int(k): v for k, v in c.items()}) for c in cases)  # (relu depuis un JSON : clés en texte)
         ta, th = sum(A.values()) or 1, sum(Hm.values()) or 1
         for a, va in A.items():
             for h, vh in Hm.items():
@@ -556,7 +629,7 @@ def caler(lectures, D):
                 else:
                     near = [(abs(e["as"] - a) + abs(e["hs"] - h), k) for k, e in enumerate(E)]
                     dmin, k = min(near)
-                    if dmin > 3 or conf < .5:
+                    if dmin > 3 or conf < .2:
                         continue
                     w = .8 * conf
                 fin = E[k + 1]["el"] if k + 1 < len(E) else 1e9
@@ -612,9 +685,11 @@ def caler(lectures, D):
         if k is None:  # chrono seul : on garde le dernier score vu à l'écran, le moment reste dans ce score
             av = [v for v in vus if v[0] < t]
             if av:
-                k, sc = av[-1][2], av[-1][3]
-                fin = (E[k + 1]["el"] - .3) if k + 1 < len(E) else 1e9
-                el = min(el, fin)
+                k2 = av[-1][2]
+                fin = (E[k2 + 1]["el"] - .3) if k2 + 1 < len(E) else 1e9
+                if el <= fin + 20:  # le chrono reste dans ce score (ou juste après) : on garde le score vu
+                    k, sc, el = k2, av[-1][3], min(el, fin)
+                # sinon le match a bien avancé sans qu'on lise le tableau : le chrono seul (score ESPN)
         if el + .001 < last:
             continue
         last = el

@@ -99,8 +99,8 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   15h08** (après un mode essai) : `depuis.txt` = cette date, donc seulement les nouvelles soirées, jamais l'historique.
   Tables d'essai publiées : Lakers-Hornets, Celtics-Nuggets, Suns-Kings (17-18/11).
   **Plein écran (19/11, demande de Kiki)** : avec stats possibles (`Chrono.wantsFull`), le lecteur s'ouvre en plein écran
-  (`requestFullscreen` pendant le clic, classes `.full`), **sans défilement sur PC** (vidéo dimensionnée pour laisser ~250 px
-  dessous) : stats à droite, joueurs en **tableau compact** (une ligne par joueur, Pts/Reb/Pd ; toujours 5 par équipe : ceux qui
+  (`requestFullscreen` pendant le clic, classes `.full`), **sans défilement sur PC**, **sans bandes noires** (21/11, demande de Kiki : la vidéo remplit sa colonne ; la colonne des stats
+  fait 340-440 px et absorbe le reste ; le film du match garde 26 % de la hauteur, 170-260 px ; terrain des tirs = hauteur restante) : stats à droite, joueurs en **tableau compact** (une ligne par joueur, Pts/Reb/Pd ; toujours 5 par équipe : ceux qui
   ont des stats, complétés par le 5 de départ ESPN `starter`) + **tendances** en 4 tuiles (`trendsHTML` : écart, série en cours,
   plus gros run, plus grosse avance ; « temps en tête » et « changements de leader » sont dans l'en-tête du film, `.lv-fx`) puis **le mini-terrain des tirs** (`shotsHTML` : terrain entier, visiteurs à gauche, domicile à droite, ● réussi /
   ✕ raté à la couleur de l'équipe, anneau sur le dernier tir, tirs ESPN `coordinate` gardés dans `parsePlays` sx/sy, lancers exclus)

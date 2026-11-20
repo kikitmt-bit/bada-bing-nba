@@ -422,7 +422,7 @@ function playVideo(vid, label, gid) { // lecteur intégré, sans quitter le site
     window.open("https://www.youtube.com/watch?v=" + vid, "_blank", "noopener"); return;
   }
   const live = gid && typeof Chrono !== "undefined"; // stats en direct à côté du résumé (le panneau se retire s'il n'a rien à montrer)
-  const frame = vid ? `<iframe src="https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0&hl=fr${live ? "&enablejsapi=1&origin=" + encodeURIComponent(location.origin) : ""}"
+  const frame = vid ? `<iframe src="https://www.youtube.com/embed/${vid}?autoplay=1&rel=0&hl=fr${live ? "&enablejsapi=1&origin=" + encodeURIComponent(location.origin) : ""}"
       title="${label}" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>`
     : `<div class="vdemo">Démo : la vidéo YouTube serait ici</div>`;
   const full = live && Chrono.wantsFull(vid); // plein écran d'office quand il y aura des stats (plus immersif, place dessous)

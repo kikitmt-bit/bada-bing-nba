@@ -61,7 +61,7 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
 - Vidéos : robot `.github/workflows/videos-v2.yml` + `scripts/v2_videos.py` (toutes les 20 min, **flux RSS publics**
   des 3 chaînes — GameTime, NBA, beIN — sans clé, cumulés 10 jours) → `v2/videos.json` sur la branche `data`, lu par le
   site via raw.githubusercontent.com. `findVideo` associe le match à son résumé (surnom d'équipe + date NY, GameTime
-  d'abord, choix de Kiki) et l'ouvre dans un **lecteur intégré** (youtube-nocookie) ; sinon, recherche YouTube en filet.
+  d'abord, choix de Kiki) et l'ouvre dans un **lecteur intégré** (youtube.com/embed, PAS youtube-nocookie : sur la Xbox, ce dernier ignore la connexion Google et bloque sur « confirmez que vous n'êtes pas un robot ») ; sinon, recherche YouTube en filet.
   ⚠️ Le cron ne tourne que depuis la branche par défaut (main) : actif après la fusion.
 - **Révéler = REVIVRE LE MATCH EN ACCÉLÉRÉ** (le moment signature, réponse au retour « pas assez d'ambition » du 13/11) :
   les deux scores s'affrontent quart-temps par quart-temps (`linescores` du scoreboard, ~0,5 s par quart), le leader

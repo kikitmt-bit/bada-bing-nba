@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Nocturne : la boucle du téléphone-serveur.
 
-Toutes les 20 minutes : lit la liste des résumés tenue par le robot GitHub (v2/videos.json),
+Toutes les 20 minutes : met à jour la liste des résumés (v2/videos.json, flux RSS des chaînes),
 analyse chaque nouveau résumé de match (chrono_video.py) et publie la table sur la branche
 data du dépôt (v2/chrono/<id>.json + v2/chrono/index.json), que le site lit directement.
 
@@ -18,6 +18,9 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 
 import chrono_video
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # scripts/ en local ; sur le téléphone, v2_videos.py est copié à côté
+import v2_videos  # noqa: E402
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 DEPOT = os.path.join(ICI, "depot")          # clone léger de la branche data
@@ -126,10 +129,21 @@ def match_de(v):
     return None
 
 
-def resumes():
+def liste_videos():
+    """Met à jour v2/videos.json (flux RSS des chaînes) : le robot GitHub planifié « toutes les 20 min » n'est lancé
+    par GitHub que toutes les 6 à 9 h, trop tard pour les résumés du matin. Le téléphone le fait donc à chaque passage."""
+    chemin = os.path.join(DEPOT, "v2", "videos.json")
+    data = v2_videos.refresh(charger(chemin, {}))
+    if data["videos"]:
+        publier_fichiers({"v2/videos.json": data}, "vidéos v2 : mise à jour par le téléphone")
+    return data["videos"]
+
+
+def resumes(vids=None):
     """Les résumés de match récents, GameTime d'abord (c'est celui que le site ouvre en premier)."""
-    with urllib.request.urlopen(LISTE + "?t=%d" % time.time(), timeout=30) as r:
-        vids = json.load(r).get("videos", [])
+    if vids is None:
+        with urllib.request.urlopen(LISTE + "?t=%d" % time.time(), timeout=30) as r:
+            vids = json.load(r).get("videos", [])
     lim = datetime.now(timezone.utc) - timedelta(days=JOURS)
     if not os.path.exists(DEPUIS):
         with open(DEPUIS, "w") as f:
@@ -284,9 +298,14 @@ def passage():
         photo_avant()
     except Exception as e:
         log("photo d'avant-match ratée :", str(e)[-200:])
+    vids = None
+    try:
+        vids = liste_videos()
+    except Exception as e:
+        log("mise à jour de la liste des vidéos ratée :", str(e)[-200:])
     etat = charger(ETAT, {})
     try:
-        liste = resumes()
+        liste = resumes(vids)
     except Exception as e:
         log("liste des vidéos illisible :", e)
         return

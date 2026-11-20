@@ -13,8 +13,10 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import chrono_video
@@ -50,7 +52,8 @@ def charger(path, defaut):
 
 
 # ---------- la note « à voir » : même formule que le site (watchLevel dans docs/app.js) ----------
-SEUIL = 3          # on n'analyse que les matchs à 3 barres ou plus (choix de Kiki)
+SEUIL = 0          # tous les matchs (20/11, choix de Kiki : rien ne limite le téléphone), les meilleurs d'abord
+EN_MEME_TEMPS = 3  # analyses en parallèle (le téléphone a 8 cœurs, une analyse n'en prend qu'un)
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates="
 _SB = {}
 
@@ -312,12 +315,16 @@ def passage():
     a_faire = [v for v in liste if etat.get(v["id"], {}).get("ok") is None and etat.get(v["id"], {}).get("essais", 0) < ESSAIS]
     if not a_faire:
         return
-    log("%d résumé(s) à analyser" % len(a_faire))
+    log("%d résumé(s) à analyser, %d à la fois" % (len(a_faire), EN_MEME_TEMPS))
     os.makedirs(TRAVAIL, exist_ok=True)
-    for v in a_faire:
-        vid, e = v["id"], etat.setdefault(v["id"], {"essais": 0})
-        e["essais"] += 1
-        video = os.path.join(TRAVAIL, "v.mp4")
+    verrou = threading.Lock()  # l'état et la publication git : un seul fil à la fois
+
+    def traiter(v):
+        vid = v["id"]
+        with verrou:
+            e = etat.setdefault(vid, {"essais": 0})
+            e["essais"] += 1
+        video = os.path.join(TRAVAIL, vid + ".mp4")
         try:
             if os.path.exists(video):
                 os.remove(video)
@@ -328,21 +335,26 @@ def passage():
             res["t"] = v.get("t", "")
             pts = res["pts"]
             bon = len(pts) >= 40 and max(p[1] for p in pts) >= 4  # un résumé complet va jusqu'au 4e quart-temps
-            if bon and publier({vid: res}):
-                e["ok"] = True
-                log("publié :", v.get("t", vid))
-            else:
-                log("table pas assez sûre, non publiée :", v.get("t", vid), len(pts), "points")
-                if not bon and res["n"] > 120:
-                    e["essais"] = ESSAIS  # vidéo entière lue mais bandeau illisible : inutile de réessayer
+            with verrou:
+                if bon and publier({vid: res}):
+                    e["ok"] = True
+                    log("publié :", v.get("t", vid))
+                else:
+                    log("table pas assez sûre, non publiée :", v.get("t", vid), len(pts), "points")
+                    if not bon and res["n"] > 120:
+                        e["essais"] = ESSAIS  # vidéo entière lue mais bandeau illisible : inutile de réessayer
         except Exception as ex:
             log("échec", vid, (getattr(ex, "stderr", "") or str(ex))[-300:])
         finally:
-            if os.path.exists(video):
-                os.remove(video)
-            with open(ETAT, "w") as f:
-                json.dump(etat, f)
+            for f in (video, video + ".part"):
+                if os.path.exists(f):
+                    os.remove(f)
+            with verrou:
+                with open(ETAT, "w") as f:
+                    json.dump(etat, f)
 
+    with ThreadPoolExecutor(EN_MEME_TEMPS) as pool:
+        list(pool.map(traiter, a_faire))
 
 if __name__ == "__main__":
     if "--une" in sys.argv:

@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 from PIL import Image, ImageOps
@@ -56,12 +57,15 @@ def read_clock(s, dixiemes=True):
     return None
 
 
-TMP = os.path.join(tempfile.gettempdir(), "nocturne_ocr.png")
+def _tmp():
+    # un fichier par fil d'exécution : boucle.py lance plusieurs analyses en même temps
+    return os.path.join(tempfile.gettempdir(), "nocturne_ocr_%d.png" % threading.get_ident())
 
 
 def ocr(img, psm):
-    img.save(TMP)
-    out = subprocess.run(["tesseract", TMP, "stdout", "--psm", str(psm), "tsv"],
+    tmp = _tmp()
+    img.save(tmp)
+    out = subprocess.run(["tesseract", tmp, "stdout", "--psm", str(psm), "tsv"],
                          capture_output=True, text=True).stdout
     words = []
     for line in out.splitlines()[1:]:

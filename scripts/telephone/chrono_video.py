@@ -266,7 +266,8 @@ def analyse(video, sortie, vid=""):
                 brut.append((k * PAS,) + tuple(r))  # (t, quart ou None, secondes, variante)
         pts = nettoyer(brut)
         res = {"v": vid, "pas": PAS, "made": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-               "n": len(frames), "lus": len(brut), "pts": pts}
+               "n": len(frames), "lus": len(brut), "pts": pts,
+               "ti": round(t1 - t0), "tl": round(time.time() - t1)}  # durées (s) : extraction des images, lecture du chrono
         with open(sortie, "w") as f:
             json.dump(res, f, separators=(",", ":"))
         print(f"{vid} : {len(frames)} images, {len(brut)} lectures, {len(pts)} gardées "

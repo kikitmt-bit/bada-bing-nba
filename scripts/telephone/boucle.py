@@ -294,6 +294,21 @@ def publier_fichiers(fichiers, message):
     return False
 
 
+SUIVI = "v2/suivi.json"   # chronologie de chaque Replay + (sortie YouTube → téléchargé → en ligne), 30 derniers jours
+
+
+def heure(t=None):
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(t))
+
+
+def suivre(ligne):
+    """Ajoute une ligne au suivi publié sur la branche data (appelé sous le verrou)."""
+    chemin = os.path.join(DEPOT, SUIVI)
+    lignes = [l for l in charger(chemin, {}).get("l", []) if l.get("fin", "") >= heure(time.time() - 30 * 86400)]
+    lignes.append(ligne)
+    publier_fichiers({SUIVI: {"l": lignes}}, "suivi : " + ligne.get("etat", ""))
+
+
 def passage():
     _SB.clear()  # les scoreboards ESPN changent (un match « à venir » finit par être « terminé ») : on relit à chaque passage
     try:
@@ -325,19 +340,24 @@ def passage():
             e = etat.setdefault(vid, {"essais": 0})
             e["essais"] += 1
         video = os.path.join(TRAVAIL, vid + ".mp4")
+        suivi = {"v": vid, "t": v.get("t", ""), "note": v.get("note"), "yt": v.get("p", ""), "debut": heure(),
+                 "fils": EN_MEME_TEMPS, "etat": "échec"}
         try:
             if os.path.exists(video):
                 os.remove(video)
             # 720p obligatoire (en 480p le bandeau est illisible) ; H.264 puis VP9 avant l'AV1, qui fait planter le décodeur du téléphone
             sh("yt-dlp", "-q", "--no-warnings", "-f", "bv*[height=720][vcodec^=avc1]/bv*[height=720][vcodec^=vp]/bv*[height=720]/bv*[height<=720]",
                "-o", video, "https://www.youtube.com/watch?v=" + vid)
+            suivi["telecharge"] = heure()
             res = chrono_video.analyse(video, os.path.join(TRAVAIL, vid + ".json"), vid)
             res["t"] = v.get("t", "")
             pts = res["pts"]
             bon = len(pts) >= 40 and max(p[1] for p in pts) >= 4  # un résumé complet va jusqu'au 4e quart-temps
             with verrou:
+                suivi.update(images=res.get("n"), extraction=res.get("ti"), lecture=res.get("tl"), etat="non publié")
                 if bon and publier({vid: res}):
                     e["ok"] = True
+                    suivi["etat"] = "en ligne"
                     log("publié :", v.get("t", vid))
                 else:
                     log("table pas assez sûre, non publiée :", v.get("t", vid), len(pts), "points")
@@ -352,6 +372,11 @@ def passage():
             with verrou:
                 with open(ETAT, "w") as f:
                     json.dump(etat, f)
+                suivi["fin"] = heure()
+                try:
+                    suivre(suivi)
+                except Exception as ex:
+                    log("suivi non publié :", str(ex)[-200:])
 
     with ThreadPoolExecutor(EN_MEME_TEMPS) as pool:
         list(pool.map(traiter, a_faire))

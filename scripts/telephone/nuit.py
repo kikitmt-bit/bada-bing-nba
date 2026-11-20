@@ -198,7 +198,7 @@ def actions(frames_dir, frames, ch, Ds):
             g.append(r)
         else:
             groupes.append([r])
-    groupes = [g for g in groupes if len(g) >= 2]
+    groupes = [g for g in groupes if len(g) >= 2 and any(r[2] is not None for r in g)]
     out = []
     for n, g in enumerate(groupes):
         D = Ds[g[0][1]]
@@ -211,12 +211,14 @@ def actions(frames_dir, frames, ch, Ds):
         jeu = None
         # le panier : celui qui fait passer à un score vu à l'écran (le plus tardif), dans la fenêtre du chrono
         for k in sorted(vus, reverse=True):
-            if k > 0 and lo <= E[k]["el"] <= hi and P[E[k]["i"]]["a0"]:
-                jeu = P[E[k]["i"]]
+            p = P[E[k]["i"]] if k > 0 else None
+            if p and lo <= E[k]["el"] <= hi and p["a0"] and not re.search(r"free throw", p["tx"], re.I):
+                jeu = p
                 break
         if jeu is None and els:  # sinon : l'action la plus proche du chrono lu (contre, passe…)
-            m = sorted(els)[len(els) // 2]
-            c = [p for p in P if p["a0"] and abs(p["el"] - m) <= 20 and re.search(r"dunk|block|three|layup|jumper|alley", p["tx"], re.I)]
+            m = max(els)  # le dernier chrono lu : juste avant ou après l'action
+            c = [p for p in P if p["a0"] and abs(p["el"] - m - cv.RETARD) <= 12 and not re.search(r"misses|free throw", p["tx"], re.I)
+                 and re.search(r"dunk|block|three|layup|jumper|alley|hook", p["tx"], re.I)]
             if c:
                 jeu = min(c, key=lambda p: abs(p["el"] - m))
         a = {"s": max(ch["s"], g[0][0] - 1), "e": groupes[n + 1][0][0] - 1 if n + 1 < len(groupes) else ch["e"], "gid": D["gid"]}
@@ -228,6 +230,9 @@ def actions(frames_dir, frames, ch, Ds):
                 pass
         out.append(a)
     return out
+
+
+BRUT = {}
 
 
 def analyse(vid, titre, video=None, publier=None):
@@ -263,6 +268,7 @@ def analyse(vid, titre, video=None, publier=None):
             # le bandeau change d'une chaîne à l'autre : nouvelle recherche à chaque match ; chrono + scores lus à l'écran
             pts, brut = cv.lire_plage(b, frames, c["s"], c["e"], Ds.get(c["gid"]))
             c["pts"] = pts if len(pts) >= 8 else []
+            BRUT[c["t"]] = brut
             print(f"  {c['t']} : {len(brut)} lectures, {len(c['pts'])} gardées", flush=True)
         potn = next((c for c in chs if c["k"] == "potn"), None)
         if potn:
@@ -272,7 +278,7 @@ def analyse(vid, titre, video=None, publier=None):
                     potn.update(p)
                     if p["gid"] not in Ds:
                         Ds[p["gid"]] = cv.deroule(p["gid"])
-                    pts, _ = cv.lire_plage(b, frames, potn["s"], potn["e"], Ds[p["gid"]])  # ses actions, calées sur son match
+                    pts, BRUT["potn"] = cv.lire_plage(b, frames, potn["s"], potn["e"], Ds[p["gid"]])  # ses actions, calées sur son match
                     potn["pts"] = pts
                 print("  joueur de la nuit :", p, len(potn.get("pts") or []), "points", flush=True)
             except Exception as e:
@@ -285,6 +291,11 @@ def analyse(vid, titre, video=None, publier=None):
             except Exception as e:
                 print("  plus belles actions illisibles :", e, flush=True)
         res["fait"] = True
+        try:  # les lectures brutes, à côté (pour recaler sans relire la vidéo)
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "brut_%s.json" % vid), "w") as f:
+                json.dump(BRUT, f)
+        except Exception:
+            pass
         if publier:
             publier(res)
         return res

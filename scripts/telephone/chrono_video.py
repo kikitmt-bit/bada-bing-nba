@@ -347,26 +347,28 @@ def soutenus(D, nums):
     return out
 
 
+RETARD = 2.5  # le bandeau change de score ~2 s (de chrono) avant l'horaire noté par ESPN (vérifié : 14-7 à l'écran à 6:25, ESPN 6:24)
+
+
 def caler(lectures, D):
-    """lectures : [(t, quart|None, secondes|None, variante, mots)]. Renvoie [[t, quart, secondes, score visiteurs, score domicile]] :
-    le score est TOUJOURS celui vu à l'écran (ou le dernier vu), et le moment du match reste à l'intérieur de ce score."""
+    """lectures : [(t, quart|None, secondes|None, variante, mots)]. Renvoie des points [t, quart, secondes(, visiteurs, domicile)].
+    Le chrono lu donne le moment (décalé de RETARD pour coller au bandeau) ; quand l'image montre un score lisible et sûr,
+    le moment est borné à l'intérieur de ce score (et le point le porte : le site ne fera jamais passer un panier pas vu)."""
     E = D["etats"]
     K = {p[0]: (p[1], p[2]) for p in nettoyer([l[:4] for l in lectures if l[2] is not None])}
-    items = []  # (t, score possible, poids) : plus sûr s'il colle au chrono lu
+    items = []  # (t, score possible, poids)
     for t, _, _, _, mots in lectures:
         nums = nombres(mots)
         for k in soutenus(D, nums):
             a, h = E[k]["as"], E[k]["hs"]
-            w = 1.0
             if t in K:
-                el = ecoule(*K[t])
+                el = ecoule(*K[t]) + RETARD
                 fin = E[k + 1]["el"] if k + 1 < len(E) else 1e9
-                if E[k]["el"] - 20 <= el <= fin + 20:
-                    w = 3.0
-                elif abs(E[k]["el"] - el) > 240:
-                    continue
-            elif max(a, h) < 4:
-                w = .6  # tout petits nombres sans chrono (chrono des tirs, fautes…) : peu sûr
+                if not (E[k]["el"] - 25 <= el <= fin + 25):
+                    continue  # le chrono lu dit autre chose : ce sont d'autres nombres (chrono des tirs, fautes…)
+                w = 3.0
+            else:
+                w = 1.0 if max(a, h) >= 10 else .5  # tout petits nombres sans chrono (début de match) : moins sûr
             items.append((t, k, w))
     items.sort()
     n = len(items)  # plus longue suite chronologique : le score ne recule jamais
@@ -384,27 +386,34 @@ def caler(lectures, D):
         while i >= 0:
             vu[items[i][0]] = items[i][1]
             i = prev[i]
-    out, k = [], None
+    pts = []
     for t in sorted(set(K) | set(vu)):
         if t in vu:
             k = vu[t]
-        elif k is None:
-            # chrono lu avant tout score vu : seulement si on est encore à 0-0
-            if len(E) > 1 and ecoule(*K[t]) < E[1]["el"]:
-                k = 0
-            else:
+            deb = E[k]["el"] + .01
+            fin = (E[k + 1]["el"] - .3) if k + 1 < len(E) else 1e9
+            el = min(max(ecoule(*K[t]) + RETARD, deb), fin) if t in K else deb
+            pts.append((t, el, k))
+        else:
+            pts.append((t, ecoule(*K[t]) + RETARD, None))
+    # cohérence : un point au chrono seul ne doit pas contredire les scores vus avant/après lui
+    vus = [(t, el, k) for t, el, k in pts if k is not None]
+    res, last = [], -1.0
+    for t, el, k in pts:
+        if k is None:
+            av = [v for v in vus if v[0] < t]
+            ap = [v for v in vus if v[0] > t]
+            if av and el < av[-1][1]:
                 continue
-        deb = E[k]["el"] + .01
-        fin = (E[k + 1]["el"] - .3) if k + 1 < len(E) else 1e9
-        el = min(max(ecoule(*K[t]), deb), fin) if t in K else deb
+            if ap:
+                nk = ap[0][2]
+                if el >= ap[0][1] + 30:  # bien plus loin que le score vu juste après : chrono mal lu
+                    continue
+        if el + .001 < last:
+            continue
+        last = el
         per, sec = moment(el)
-        out.append([t, per, sec, E[k]["as"], E[k]["hs"]])
-    res, last = [], -1  # le moment du match ne recule jamais non plus
-    for p in out:
-        el = ecoule(p[1], p[2])
-        if el + .001 >= last:
-            res.append(p)
-            last = el
+        res.append([t, per, sec, E[k]["as"], E[k]["hs"]] if k is not None else [t, per, sec])
     return res
 
 

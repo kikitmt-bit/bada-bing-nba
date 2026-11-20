@@ -34,7 +34,8 @@ const Chrono = (() => {
       if (p.shootingPlay && p.coordinate && !/free throw/i.test(tt)) {
         let { x, y } = p.coordinate;
         if (y > 47) { y = 94 - y; x = 50 - x; }
-        if (x >= 0 && x <= 50 && y >= -2 && y <= 47) { sx = x; sy = Math.max(0, y); }
+        y += 5.25; // ESPN mesure y depuis le PANIER (vérifié : 3 pts tous derrière la ligne) ; le dessin, depuis la ligne de fond
+        if (x >= 0 && x <= 50 && y >= 0 && y <= 47) { sx = x; sy = y; }
       }
       return { sx, sy,
         per: p.period ? p.period.number : 1, sec: secOf(p.clock && p.clock.displayValue),
@@ -377,8 +378,9 @@ const Chrono = (() => {
       </div>
       <div class="lv-pl">${ptab(a, D.away)}${ptab(h, D.home)}</div>`;
     const F = flow(D, S.at);
-    el.insertAdjacentHTML("beforeend", trendsHTML(D, F) + shotsHTML(D, S.at));
-    if (S.below) S.below.innerHTML = curveHTML(D, S.at, F);
+    // sous la vidéo : le film du match + les tendances à côté ; la colonne des stats garde le terrain des tirs en grand
+    el.insertAdjacentHTML("beforeend", (S.below ? "" : trendsHTML(D, F)) + shotsHTML(D, S.at));
+    if (S.below) S.below.innerHTML = curveHTML(D, S.at, F) + trendsHTML(D, F);
     const prev = S.vals || {}, vals = {};
     for (const n of el.querySelectorAll("[data-k]")) {
       const k = n.dataset.k, v = n.textContent; vals[k] = v;

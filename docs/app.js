@@ -219,6 +219,7 @@ function normSummary(j) {
       if (!p.shootingPlay || !p.coordinate) continue;
       let { x, y } = p.coordinate;
       if (y > 47) { y = 94 - y; x = 50 - x; } // les deux moitiés de terrain → une seule
+      y += 5.25; // ESPN mesure y depuis le PANIER, la carte depuis la ligne de fond (sans ça, les 3 pts tombaient devant la ligne)
       if (x < 0 || x > 50 || y < 0 || y > 47) continue;
       if (p.type && /free throw/i.test(p.type.text || "")) continue; // pas de lancers francs sur la carte
       const aid = p.participants && p.participants[0] && p.participants[0].athlete ? String(p.participants[0].athlete.id) : "";
@@ -1082,7 +1083,7 @@ function boxHTML(g, s, side) {
 /* ---------- la carte de tirs (tous les tirs du joueur, dans l'ordre du match) ---------- */
 const shotovl = $("#shotovl"), shotsheet = $("#shotsheet");
 function courtSVG(shots, color) {
-  // repère ESPN : panier en (25, 5.25), x sur la largeur (0-50 pieds), y depuis la ligne de fond
+  // repère de la carte : panier en (25, 5.25), x sur la largeur (0-50 pieds), y depuis la ligne de fond (ESPN + 5,25 : voir normSummary)
   const S = 10, W = 500, H = 400; // on montre jusqu'à 40 pieds (au-delà : exploits de fin de quart)
   const hoop = { x: 25 * S, y: 5.25 * S };
   const lines = `

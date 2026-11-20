@@ -101,7 +101,7 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   **Plein écran (19/11, demande de Kiki)** : avec stats possibles (`Chrono.wantsFull`), le lecteur s'ouvre en plein écran
   (`requestFullscreen` pendant le clic, classes `.full`), **sans défilement sur PC**, **sans bandes noires** (21/11, demande de Kiki : la vidéo remplit sa colonne ; la colonne des stats
   fait 340-440 px et absorbe le reste ; le film du match garde 26 % de la hauteur, 170-260 px ; terrain des tirs = hauteur restante) : stats à droite, joueurs en **tableau compact** (une ligne par joueur, Pts/Reb/Pd ; toujours 5 par équipe : ceux qui
-  ont des stats, complétés par le 5 de départ ESPN `starter`) + **tendances** en 4 tuiles (`trendsHTML` : écart, série en cours,
+  ont des stats, complétés par le 5 de départ ESPN `starter`) + **tendances** en 4 tuiles SOUS LA VIDÉO à droite du film (21/11, pour laisser au terrain toute la largeur de la colonne) (`trendsHTML` : écart, série en cours,
   plus gros run, plus grosse avance ; « temps en tête » et « changements de leader » sont dans l'en-tête du film, `.lv-fx`) puis **le mini-terrain des tirs** (`shotsHTML` : terrain entier, visiteurs à gauche, domicile à droite, ● réussi /
   ✕ raté à la couleur de l'équipe, anneau sur le dernier tir, tirs ESPN `coordinate` gardés dans `parsePlays` sx/sy, lancers exclus)
   + tableau Raquette / Mi-distance / 3 points. Écran < 900 px de haut : version resserrée ; < 740 px (Xbox, 1280×720) : terrain réduit à 15 % de la hauteur, jamais masqué. Pendant la vidéo, `body.vidon` cache la page derrière et arrête ses animations (vidéo saccadée sur la Xbox), fond du lecteur opaque sans flou ; sous la vidéo (`curveHTML`, `#lvbelow`) le film du match en ligne continue FUSIONNÉ avec les scores
@@ -124,7 +124,7 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   Démo : `?demo=1&live=1`. ESPN depuis le navigateur : CORS OK (19/11).
 - **Cache** : GitHub Pages garde les fichiers 10 min ; `index.html` appelle `app.js?v=…` etc. : changer ce `v` à chaque modif.
 - Fiche : feuille de match complète (Min/Tirs/3 pts/Reb/Pas/Pts) ; clic sur un joueur = **carte de tirs animée**
-  (tirs ESPN `plays[].coordinate`, panier en (25, 5.25) pieds, moitiés de terrain repliées, lancers francs exclus),
+  (tirs ESPN `plays[].coordinate` : **ESPN mesure y depuis le PANIER** → `y + 5.25` pour le dessin (21/11 : sans ça, 162 tirs à 3 pts sur 291 tombaient devant la ligne), panier dessiné en (25, 5.25) pieds, moitiés de terrain repliées, lancers francs exclus),
   replay ~5 s avec compteur en direct (quart-temps, n° de tir, points cumulés) + bouton « ↻ Rejouer ».
 - **« L'essentiel de la nuit » (20/11, remplace « Qui a tout cassé »)** : une seule rubrique, cachée derrière « Voir l'essentiel »
   (seule rubrique qui assume les résultats). `loadMVP` : **faits marquants** (`nightFacts`, 6 max, 2 par match/type : surprise =

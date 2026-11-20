@@ -17,6 +17,8 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.request
+from collections import Counter
 
 from PIL import Image, ImageOps
 
@@ -149,6 +151,22 @@ class Lecteur:
         self.miss = 0
         self.ordre = list(self.MODES)  # le réglage qui a marché passe en tête
 
+    def ligne(self, band):
+        """Les mots de toute la ligne du bandeau (à la hauteur du chrono) : les deux scores, les sigles des équipes."""
+        if self.lock is None or getattr(self, "vus", None) is not None:
+            vus, self.vus = getattr(self, "vus", None) or [], None
+            if self.lock is None or vus:
+                return vus  # la recherche vient de lire toute la bande : ses mots suffisent
+        W, H = band.size
+        y0, y1 = self.lock[1], self.lock[3]
+        h = y1 - y0
+        crop = band.crop((0, max(0, int(y0 - h * .35)), W, min(H, int(y1 + h * .35))))
+        scale = max(1, min(3, 120 / max(1, crop.height)))
+        mots = []
+        for mode in ("gray", "inv"):
+            mots += [w["t"] for w in ocr(prep(crop, scale, mode), 11)]
+        return mots
+
     def lire_zone(self, band):
         W, H = band.size
         x0, y0, x1, y1 = [int(v) for v in self.lock]
@@ -167,8 +185,10 @@ class Lecteur:
         W, H = band.size
         # 1) toute la bande, agrandie modérément : quart-temps + chrono
         scale = max(.8, min(2.4, 2000 / W))
+        self.vus = []
         for mode in ("gray", "inv"):
             words = ocr(prep(band, scale, mode), 11)
+            self.vus += [w["t"] for w in words]  # gardés pour ligne() : les scores se lisent parfois sans le chrono
             q = find_quarter(words)
             k = find_clock(words, q[1] if q else None, dixiemes=False)
             if k:
@@ -251,7 +271,156 @@ def nettoyer(lectures):
     return out[::-1]
 
 
-def analyse(video, sortie, vid=""):
+# ---------- les scores lus à l'écran, recoupés avec la suite des scores ESPN (22/11) ----------
+# Le chrono seul ne suffit pas : le minutage ESPN des paniers ne colle pas toujours au bandeau, et bien des images n'ont
+# pas de chrono lisible. Le score affiché, lui, se lit bien et ne peut prendre que les valeurs successives du match.
+SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event="
+
+
+def secs(d):
+    m = re.match(r"^(\d+):(\d+)", d or "")
+    if m:
+        return int(m.group(1)) * 60 + int(m.group(2))
+    try:
+        return float(d)
+    except Exception:
+        return 0.0
+
+
+def ecoule(per, sec):
+    return (per - 1) * 720 + 720 - sec if per <= 4 else 2880 + (per - 5) * 300 + 300 - sec
+
+
+def moment(el):
+    if el < 2880:
+        per = min(4, int(el // 720) + 1)
+        return per, round(720 - (el - (per - 1) * 720), 2)
+    per = 5 + int((el - 2880) // 300)
+    return per, round(300 - (el - 2880 - (per - 5) * 300), 2)
+
+
+def deroule(gid):
+    for k in range(5):  # le wifi du téléphone a des trous : on réessaie
+        try:
+            with urllib.request.urlopen(SUMMARY + str(gid), timeout=30) as r:
+                j = json.load(r)
+            break
+        except Exception:
+            if k == 4:
+                raise
+            time.sleep(20 * (k + 1))
+    cs = {c["homeAway"]: c for c in j["header"]["competitions"][0]["competitors"]}
+    plays = []
+    for p in j.get("plays", []):
+        per = (p.get("period") or {}).get("number") or 1
+        sec = secs((p.get("clock") or {}).get("displayValue"))
+        pa = [(x.get("athlete") or {}).get("id") for x in p.get("participants") or []]
+        plays.append({"per": per, "sec": sec, "el": ecoule(per, sec), "as": int(p.get("awayScore") or 0), "hs": int(p.get("homeScore") or 0),
+                      "pts": bool(p.get("scoringPlay")), "a0": pa[0] if pa else None, "tid": str((p.get("team") or {}).get("id") or ""),
+                      "tx": p.get("text", ""), "tt": (p.get("type") or {}).get("text", "")})
+    etats = [{"as": 0, "hs": 0, "el": 0.0, "i": -1}]  # les scores successifs du match
+    for i, p in enumerate(plays):
+        if (p["as"], p["hs"]) != (etats[-1]["as"], etats[-1]["hs"]):
+            etats.append({"as": p["as"], "hs": p["hs"], "el": p["el"], "i": i})
+    ab = {k: cs[k]["team"].get("abbreviation", "") for k in ("away", "home")}
+    return {"plays": plays, "etats": etats, "ab": ab, "gid": str(gid),
+            "ids": {k: str(cs[k]["team"]["id"]) for k in ("away", "home")}}
+
+
+def nombres(mots):
+    out = []
+    for w in mots:
+        w = w.strip("|[](){}.,:;'\"")
+        if re.fullmatch(r"[0-9OoIl|]{1,3}", w) and sum(ch.isdigit() for ch in w) >= max(1, len(w) - 1):
+            w = w.replace("O", "0").replace("o", "0").replace("I", "1").replace("l", "1").replace("|", "1")
+            out.append(int(w))
+    return Counter(out)
+
+
+def soutenus(D, nums):
+    """Les scores du match dont les deux nombres sont à l'écran."""
+    out = []
+    for k, e in enumerate(D["etats"]):
+        a, h = e["as"], e["hs"]
+        if (a == h and nums.get(a, 0) >= 2) or (a != h and nums.get(a) and nums.get(h)):
+            out.append(k)
+    return out
+
+
+def caler(lectures, D):
+    """lectures : [(t, quart|None, secondes|None, variante, mots)]. Renvoie [[t, quart, secondes, score visiteurs, score domicile]] :
+    le score est TOUJOURS celui vu à l'écran (ou le dernier vu), et le moment du match reste à l'intérieur de ce score."""
+    E = D["etats"]
+    K = {p[0]: (p[1], p[2]) for p in nettoyer([l[:4] for l in lectures if l[2] is not None])}
+    items = []  # (t, score possible, poids) : plus sûr s'il colle au chrono lu
+    for t, _, _, _, mots in lectures:
+        nums = nombres(mots)
+        for k in soutenus(D, nums):
+            a, h = E[k]["as"], E[k]["hs"]
+            w = 1.0
+            if t in K:
+                el = ecoule(*K[t])
+                fin = E[k + 1]["el"] if k + 1 < len(E) else 1e9
+                if E[k]["el"] - 20 <= el <= fin + 20:
+                    w = 3.0
+                elif abs(E[k]["el"] - el) > 240:
+                    continue
+            elif max(a, h) < 4:
+                w = .6  # tout petits nombres sans chrono (chrono des tirs, fautes…) : peu sûr
+            items.append((t, k, w))
+    items.sort()
+    n = len(items)  # plus longue suite chronologique : le score ne recule jamais
+    best, prev = [0.0] * n, [-1] * n
+    for i in range(n):
+        ti, ki, wi = items[i]
+        best[i] = wi
+        for j in range(i):
+            tj, kj, wj = items[j]
+            if tj < ti and kj <= ki and best[j] + wi > best[i]:
+                best[i], prev[i] = best[j] + wi, j
+    vu = {}
+    if n:
+        i = max(range(n), key=lambda x: best[x])
+        while i >= 0:
+            vu[items[i][0]] = items[i][1]
+            i = prev[i]
+    out, k = [], None
+    for t in sorted(set(K) | set(vu)):
+        if t in vu:
+            k = vu[t]
+        elif k is None:
+            # chrono lu avant tout score vu : seulement si on est encore à 0-0
+            if len(E) > 1 and ecoule(*K[t]) < E[1]["el"]:
+                k = 0
+            else:
+                continue
+        deb = E[k]["el"] + .01
+        fin = (E[k + 1]["el"] - .3) if k + 1 < len(E) else 1e9
+        el = min(max(ecoule(*K[t]), deb), fin) if t in K else deb
+        per, sec = moment(el)
+        out.append([t, per, sec, E[k]["as"], E[k]["hs"]])
+    res, last = [], -1  # le moment du match ne recule jamais non plus
+    for p in out:
+        el = ecoule(p[1], p[2])
+        if el + .001 >= last:
+            res.append(p)
+            last = el
+    return res
+
+
+def lire_plage(frames_dir, frames, t0, t1, D):
+    """Lit les images [t0, t1) (une par seconde) : chrono + ligne du bandeau, puis calage sur les scores ESPN."""
+    lec, brut = Lecteur(), []
+    for t in range(t0, min(t1, len(frames) * PAS), PAS):
+        band = Image.open(os.path.join(frames_dir, frames[t // PAS]))
+        r = lec.lire(band)
+        mots = lec.ligne(band) if D else []
+        if r or mots:
+            brut.append((t,) + (tuple(r) if r else (None, None, None)) + (mots,))
+    return caler(brut, D) if D else nettoyer([b[:4] for b in brut if b[2] is not None]), brut
+
+
+def analyse(video, sortie, vid="", gid=None):
     t0 = time.time()
     tmp = tempfile.mkdtemp(prefix="nocturne_")
     try:
@@ -259,12 +428,14 @@ def analyse(video, sortie, vid=""):
                         f"fps=1/{PAS},crop=iw:ih*{BANDE}:0:ih*{1 - BANDE}", os.path.join(tmp, "%05d.png")], check=True)
         frames = sorted(os.listdir(tmp))
         t1 = time.time()
-        lec, brut = Lecteur(), []
-        for k, name in enumerate(frames):
-            r = lec.lire(Image.open(os.path.join(tmp, name)))
-            if r:
-                brut.append((k * PAS,) + tuple(r))  # (t, quart ou None, secondes, variante)
-        pts = nettoyer(brut)
+        D = None
+        if gid:
+            try:
+                D = deroule(gid)
+            except Exception as e:
+                print("déroulé ESPN illisible :", e)
+        pts, brut = lire_plage(tmp, frames, 0, len(frames) * PAS, D)
+        brut = [b for b in brut if b[2] is not None]
         res = {"v": vid, "pas": PAS, "made": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                "n": len(frames), "lus": len(brut), "pts": pts,
                "ti": round(t1 - t0), "tl": round(time.time() - t1)}  # durées (s) : extraction des images, lecture du chrono

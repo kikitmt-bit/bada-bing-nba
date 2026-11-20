@@ -1234,3 +1234,76 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .npi.m{gap:6px}
 @media (min-height:800px){ .npr{grid-template-columns:34px minmax(0,1fr) auto} .nplg .lg{width:34px;height:34px} .npr b{font-size:18px} .npr .led{height:32px;font-size:23px} }
 @media (max-width:900px){ .vplayer.full.nightp .vmain{position:sticky;top:0;z-index:3} }
+
+/* ---- Résumé de la nuit + : joueur de la nuit, plus belles actions, extraits seuls (22/11) ---- */
+.vplayer.full.nightp.solo{grid-template-areas:"main side" "below side";
+  grid-template-columns:minmax(0,1fr) clamp(340px,calc(100vw - var(--W)),460px)}
+.nps{grid-area:side;min-width:0;height:100vh;display:flex;flex-direction:column;gap:14px;padding:58px 16px 16px;border-left:1px solid var(--line);background:var(--panel);overflow:hidden}
+.np-wait{margin:auto 0;text-align:center}
+.np-wait p{color:var(--ink2)}
+/* la carte du joueur */
+.np-card{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 16px;align-items:center;min-width:0;padding:14px 16px;
+  background:linear-gradient(120deg,color-mix(in srgb,var(--tc) 38%,#05060c),#0b0d18 75%);clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
+.np-ph{position:relative;width:112px;height:112px;overflow:hidden;background:color-mix(in srgb,var(--tc) 55%,#05060c);
+  clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
+.np-ph img{position:absolute;inset:auto 0 0;width:150%;margin-left:-25%}
+.np-ph .lg{position:absolute;left:6px;top:6px;width:26px;height:26px;font-size:8px}
+.np-id{min-width:0;display:flex;flex-direction:column;gap:2px}
+.np-id>b{font:900 clamp(22px,2.2vw,34px)/1 var(--disp);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np-id>small{color:var(--ink2);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np-live{display:flex;align-items:center;gap:10px;margin-top:8px;font:700 11px/1.2 var(--disp);letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)}
+.np-live .led{min-width:calc(3ch + 14px);height:40px;font-size:28px;cursor:default}
+.np-live em{font-style:normal;color:var(--amber);letter-spacing:.06em}
+.npcs{grid-column:1/-1;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.npc{min-width:0;display:flex;flex-direction:column;align-items:center;padding:7px 4px;background:rgba(0,0,0,.35)}
+.npc b{font:900 20px var(--disp);color:var(--amber);font-variant-numeric:tabular-nums;white-space:nowrap}
+.npc small{font:700 9.5px var(--disp);letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.np-card.tall{grid-template-columns:1fr;justify-items:start}
+.np-card.tall .np-ph{width:100%;height:auto;aspect-ratio:4/3}
+.np-card.tall .npcs{grid-template-columns:repeat(3,minmax(0,1fr))}
+.np-bigrk{position:absolute;right:18px;top:12px;z-index:2;font:900 46px/1 var(--disp);color:var(--amber);text-shadow:0 0 18px rgba(255,176,46,.5)}
+.np-tx{margin:8px 0 0;color:var(--ink2);font-size:14px;line-height:1.35}
+/* son demi-terrain : les tirs s'ajoutent au fil de la vidéo */
+.np-court{min-width:0;min-height:0;display:flex;flex-direction:column}
+.np-court .lv-courth span{color:var(--amber)}
+.np-hc{flex:1;min-height:0;width:100%;display:block;background:rgba(255,176,46,.04)}
+.np-hc .ln{fill:none;stroke:rgba(255,255,255,.22);stroke-width:.3}
+.np-hc .mk{stroke:#fff;stroke-width:.3}
+.np-hc .ms{stroke:#8a8fa8;stroke-width:.55;fill:none}
+.np-hc .ring{fill:none;stroke-width:.4;transform-box:fill-box;transform-origin:center;animation:lvring 1.6s ease-out infinite}
+.nps .np-court{flex:1}
+/* sous la vidéo (résumé complet) : la carte à gauche, le terrain à droite */
+.np-potn{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:14px}
+.np-potn .np-card{align-self:stretch}
+/* les plus belles actions : une carte par action, de gauche à droite (n° 5 → n° 1) */
+.np-tops{flex:1;min-height:0;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:10px}
+.np-top{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;justify-content:flex-end;gap:4px;padding:10px 12px;overflow:hidden;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--tc,#333) 40%,#05060c),#0b0d18);clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);
+  animation:topin .5s cubic-bezier(.2,.9,.3,1)}
+@keyframes topin{from{opacity:0;transform:translateY(14px) scale(.96)}}
+.np-top.off{background:rgba(255,255,255,.04);justify-content:center;align-items:center;animation:none}
+.np-top.cur{box-shadow:inset 0 0 0 2px var(--amber)}
+.np-rk{position:absolute;left:10px;top:6px;z-index:2;font:900 30px/1 var(--disp);color:var(--amber);text-shadow:0 0 12px rgba(255,176,46,.5)}
+.np-top.off .np-rk{color:rgba(255,176,46,.35);text-shadow:none}
+.np-q{font:900 40px var(--led);color:rgba(255,176,46,.2)}
+.np-tph{position:absolute;inset:0 0 auto;height:62%;display:flex;justify-content:center;opacity:.95}
+.np-tph img{height:100%;width:auto}
+.np-top>b{position:relative;font:900 17px var(--disp);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np-top>small{position:relative;color:var(--ink2);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.npcs.mini{position:relative;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;margin-top:4px}
+.npcs.mini .npc{padding:4px 2px}
+.npcs.mini .npc b{font-size:14px}
+.npcs.mini .npc small{font-size:8.5px}
+@media (max-width:900px){
+  .vplayer.full.nightp.solo{grid-template-columns:1fr;grid-template-areas:"main" "side" "below"}
+  .nps{height:auto;padding:14px;border-left:0}
+  .np-potn{grid-template-columns:1fr}
+  .np-hc{flex:none;height:auto}
+  .np-tops{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .np-top{min-height:200px}
+  .npcs{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+.np-card.tall .np-ph{aspect-ratio:auto;height:clamp(110px,24vh,240px);width:100%}
+.np-card.tall .np-ph img{width:auto;height:100%;left:50%;margin-left:0;transform:translateX(-50%)}
+.nps>.np-card:only-child{flex:1;align-content:start}
+.nps>.np-card:only-child .np-ph{height:clamp(160px,46vh,480px)}

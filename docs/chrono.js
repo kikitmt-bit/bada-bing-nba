@@ -87,7 +87,7 @@ const Chrono = (() => {
     const T = {}; const P = {};
     for (const t of [D.home, D.away]) T[t] = { fg: 0, fga: 0, tp: 0, tpa: 0, ftm: 0, fta: 0, reb: 0, ast: 0, to: 0, pf: 0, blk: 0 };
     let hs = 0, as = 0, last = [];
-    const pl = id => P[id] || (P[id] = { pts: 0, reb: 0, ast: 0, blk: 0, fg: 0, fga: 0 });
+    const pl = id => P[id] || (P[id] = { pts: 0, reb: 0, ast: 0, blk: 0, fg: 0, fga: 0, tp: 0, tpa: 0 });
     for (const p of D.plays) {
       if (p.per > per || (p.per === per && p.sec <= sec)) break; // strictement avant le moment affiché : jamais en avance
       hs = p.hs; as = p.as;
@@ -96,7 +96,7 @@ const Chrono = (() => {
       if (p.shoot) {
         if (p.ft) { t.fta++; if (p.made) t.ftm++; }
         else { t.fga++; if (p.made) t.fg++; if (p.three) { t.tpa++; if (p.made) t.tp++; } }
-        if (p.a0) { const q = pl(p.a0); if (!p.ft) { q.fga++; if (p.made) q.fg++; } if (p.made) q.pts += p.ft ? 1 : p.three ? 3 : 2; }
+        if (p.a0) { const q = pl(p.a0); if (!p.ft) { q.fga++; if (p.made) q.fg++; if (p.three) { q.tpa++; if (p.made) q.tp++; } } if (p.made) q.pts += p.ft ? 1 : p.three ? 3 : 2; }
         if (p.made && p.ast && p.a1) { pl(p.a1).ast++; t.ast++; }
         if (!p.made && p.blk && p.a1) { pl(p.a1).blk++; const o = T[p.tid === D.home ? D.away : D.home]; if (o) o.blk++; } // le contreur est le 2e nommé, dans l'autre équipe
       } else if (/rebound/i.test(p.tt)) { if (p.a0) { t.reb++; pl(p.a0).reb++; } } // rebonds « d'équipe » exclus, comme la feuille ESPN
@@ -570,7 +570,7 @@ const Chrono = (() => {
       const dt = q[0] - p[0], ds = p[2] - q[2];
       if (dt > 0 && dt <= 4.5 && ds > 0 && ds <= dt * 1.3 + .5) sec = p[2] - Math.min(ds, (t - p[0]) * ds / dt);
     }
-    return { per: p[1], sec };
+    return { per: p[1], sec, sc: p.length >= 5 ? [p[3], p[4]] : null }; // sc : le score lu à l'écran (tables récentes)
   }
   async function prepLoop(my) {
     let n = 0;
@@ -579,7 +579,7 @@ const Chrono = (() => {
       // entre deux messages du lecteur, on avance au plus de 1,5 s (pub, vidéo bloquée : on s'arrête au lieu de courir devant)
       const t = my.ytT === undefined ? null : my.ytT + (my.ytState === 1 ? Math.min(1.5, (performance.now() - my.ytAt) / 1000) : 0);
       // avant le premier chrono lu (ou avant le lancement) : le début du match, stats à zéro (rien ne peut être spoilé)
-      const m = t === null ? null : momentAt(my.map, t);
+      const m0 = t === null ? null : momentAt(my.map, t), m = m0 && clampAt(my.D, m0, m0.sc);
       my.at = m || { per: 1, sec: 720 };
       my.status = my.ytState === 2 ? "pause" : m ? "prep" : "wait";
       render();
@@ -618,22 +618,41 @@ const Chrono = (() => {
 
   /* ---------- le résumé de la nuit + : la liste des matchs à gauche, qui se remplit au fil de la vidéo ----------
      Chapitres préparés par le téléphone (v2/nuit/<nuit>.json) : chaque match, le joueur de la nuit, les plus belles actions.
-     Un match pas encore atteint reste éteint ; celui qui passe s'allume à ses couleurs, son score suit le chrono lu dans la
-     vidéo (jamais en avance) ; un match passé garde son score final. Un clic sur un match y saute dans la vidéo. */
+     Un match pas encore atteint reste éteint ; celui qui passe s'allume à ses couleurs, son score est CELUI LU À L'ÉCRAN
+     (le téléphone lit le score du bandeau et le recoupe avec la suite des scores ESPN) ; un match regardé jusqu'au bout
+     garde son score final. Un clic sur un match y saute dans la vidéo.
+     Mode « extrait » (solo : depuis l'essentiel) : seulement le chapitre du joueur de la nuit, ou des plus belles actions. */
   function seekYT(t) {
     const f = S && S.iframe && S.iframe.querySelector("iframe");
     if (f && f.contentWindow) f.contentWindow.postMessage(JSON.stringify({ event: "command", func: "seekTo", args: [t, true], id: 1, channel: "widget" }), "*");
     if (S) { S.ytT = t; S.ytAt = performance.now(); }
   }
-  async function attachNight(N, list, iframe, below) {
+  const fromEl = el => el < 2880 ? { per: Math.min(4, Math.floor(el / 720) + 1), sec: 720 - (el - (Math.min(4, Math.floor(el / 720) + 1) - 1) * 720) }
+    : { per: 5 + Math.floor((el - 2880) / 300), sec: 300 - (el - 2880 - Math.floor((el - 2880) / 300) * 300) };
+  // le moment du match, borné à l'intérieur du score vu à l'écran (le chrono qui coule entre deux images ne doit jamais
+  // faire passer un panier qu'on n'a pas encore vu)
+  function clampAt(D, at, sc) {
+    if (!sc || !D || !at) return at;
+    const P = D.plays;
+    let i0 = -1;
+    if (sc[0] + sc[1] > 0) { i0 = P.findIndex(p => p.as === sc[0] && p.hs === sc[1]); if (i0 < 0) return at; }
+    const lo = i0 >= 0 ? elapsed(P[i0].per, P[i0].sec) + .01 : 0;
+    let hi = Infinity;
+    for (let i = i0 + 1; i < P.length; i++) if (P[i].as !== sc[0] || P[i].hs !== sc[1]) { hi = elapsed(P[i].per, P[i].sec) - .3; break; }
+    const el = elapsed(at.per, at.sec), e2 = Math.min(Math.max(el, lo), hi);
+    return Math.abs(e2 - el) < .001 ? at : fromEl(e2);
+  }
+  async function attachNight(N, list, iframe, below, opts) {
     if (S) S.on = false;
-    const my = S = { night: N, el: list, below, iframe, on: true, D: {}, key: null, done: new Set() };
-    const games = c => (typeof state !== "undefined" ? state.games : []).find(g => g.id === c.gid);
-    my.games = games;
+    opts = opts || {};
+    const my = S = { night: N, el: list, below, side: opts.side || null, solo: opts.solo || null, iframe, on: true, D: {}, key: null, done: new Set() };
+    my.games = c => (typeof state !== "undefined" ? state.games : []).find(g => g.id === c.gid);
     renderNight(true);
-    // les déroulés ESPN des matchs de la nuit (pour le score et le film du match au moment affiché)
-    await Promise.all(N.ch.filter(c => c.k === "match").map(async c => {
-      try { my.D[c.gid] = parsePlays(await fetchJSON(API + "summary?event=" + c.gid)); } catch (e) { /* ce match restera sans score en direct */ }
+    // les déroulés ESPN des matchs (score, film du match, tirs, stats des joueurs)
+    const gids = new Set();
+    for (const c of N.ch) { if (c.gid) gids.add(c.gid); for (const a of c.plays || []) if (a.gid) gids.add(a.gid); }
+    await Promise.all([...gids].map(async gid => {
+      try { my.D[gid] = parsePlays(await fetchJSON(API + "summary?event=" + gid)); } catch (e) { /* ce match restera sans score en direct */ }
     }));
     if (S !== my) return;
     my.key = null;
@@ -648,24 +667,57 @@ const Chrono = (() => {
     }
   }
   const nowT = () => S.ytT === undefined ? -1 : S.ytT + (S.ytState === 1 ? Math.min(1.5, (performance.now() - S.ytAt) / 1000) : 0);
+  // le moment du match à la seconde t d'un chapitre (chrono + score lus à l'écran)
+  function chapAt(c, t) {
+    if (!c.pts || !c.pts.length || !c.gid) return null;
+    const m = momentAt(c.pts, t); if (!m) return null;
+    return clampAt(S.D[c.gid], m, m.sc);
+  }
   function nightState() {
     const N = S.night, t = nowT();
     return N.ch.map((c, i) => {
       let st = t >= c.e - .5 ? "past" : t >= c.s ? "cur" : "next";
+      if (S.solo && c.k === S.solo) st = "cur"; // extrait seul : son chapitre, du début à la fin
       // un match n'est « vu » (score final affiché) que si on a regardé sa fin ; sauté (clic plus loin) = toujours caché
       if (st === "cur" && t >= c.e - 8) S.done.add(i);
       if (st === "past" && !S.done.has(i)) st = "skip";
-      let at = null;
-      if (c.k === "match" && st === "cur" && c.pts && c.pts.length) at = momentAt(c.pts, t);
-      return { c, i, st, at };
+      const at = st === "cur" && (c.k === "match" || c.k === "potn") ? chapAt(c, t) : null;
+      return { c, i, st, at, t };
     });
   }
+  const photoURL = aid => /^\d+$/.test(aid || "") ? `https://a.espncdn.com/i/headshots/nba/players/full/${aid}.png` : "";
   function renderNight(force) {
     const my = S; if (!my || !my.night) return;
     const L = nightState();
-    const key = L.map(x => x.st[0] + (x.at ? x.at.per + ":" + (my.D[x.c.gid] ? playIndex(my.D[x.c.gid], x.at) : "") : "")).join("|");
+    const cur = L.find(x => x.st === "cur");
+    const topI = cur && cur.c.k === "top" ? (cur.c.plays || []).filter(a => cur.t >= a.s).length : 0;
+    const key = L.map(x => x.st[0] + (x.at ? x.at.per + ":" + (my.D[x.c.gid] ? playIndex(my.D[x.c.gid], x.at) : "") : "")).join("|") + "|" + topI;
     if (!force && key === my.key) return;
     my.key = key;
+    if (my.el) my.el.innerHTML = listHTML(L);
+    if (!cur) {
+      if (my.below) my.below.innerHTML = `<div class="lv-sec np-idle"><span class="lv-kick sm">Lance la vidéo</span>
+        <p>Les matchs s'allument à gauche au fil du résumé, avec le score qui suit l'écran. Clique sur un match pour y aller.</p></div>`;
+      return;
+    }
+    const c = cur.c;
+    if (c.k === "match" && my.D[c.gid]) {
+      const D = my.D[c.gid], at = cur.at || { per: 1, sec: 720 }, F = flow(D, at);
+      if (my.below) my.below.innerHTML = curveHTML(D, at, F) + trendsHTML(D, F);
+    } else if (c.k === "potn" && c.aid) {
+      const D = my.D[c.gid];
+      if (my.solo) {
+        if (my.side) my.side.innerHTML = potnCard(c, cur.at, true) + potnCourt(c, cur.at);
+        if (my.below) my.below.innerHTML = D ? curveHTML(D, cur.at || { per: 1, sec: 720 }, flow(D, cur.at || { per: 1, sec: 720 })) : "";
+      } else if (my.below) my.below.innerHTML = `<div class="np-potn">${potnCard(c, cur.at, false)}${potnCourt(c, cur.at)}</div>`;
+    } else if (c.k === "top") {
+      const plays = c.plays || [], n = plays.filter(a => cur.t >= a.s).length;
+      if (my.below) my.below.innerHTML = topCards(c, cur.t);
+      if (my.side) my.side.innerHTML = n ? topBig(plays[n - 1], plays.length - n + 1) : `<div class="np-wait"><span class="lv-kick sm">Les plus belles actions</span><p>Elles se dévoilent une par une.</p></div>`;
+    } else if (my.below) my.below.innerHTML = `<div class="lv-sec np-idle"><span class="lv-kick sm">${c.t}</span></div>`;
+  }
+  function listHTML(L) {
+    const my = S;
     const nM = L.filter(x => x.c.k === "match").length, seen = L.filter(x => x.c.k === "match" && x.st === "past").length;
     const item = x => {
       const c = x.c;
@@ -680,38 +732,87 @@ const Chrono = (() => {
           if (x.at && D) { const F = flow(D, x.at); as = F.as; hs = F.hs; lab = clockTxt(x.at.per, x.at.sec); }
           else lab = "En cours";
         }
-        const win = x.st === "past" ? (as > hs ? "a" : "h") : as > hs ? "a" : hs > as ? "h" : "";
+        const win = as === null ? "" : as > hs ? "a" : hs > as ? "h" : "";
         const row = (T, v, side) => `<span class="npr ${win === side ? "w" : ""}" style="--tc:${T.color}"><span class="nplg">${logoHTML(T)}</span><b>${T.name}</b>
           <span class="led ${v === null ? "off" : ""}"><span class="v">${v === null ? "??" : v}</span></span></span>`;
         return `<button class="npi m ${x.st}" data-np-seek="${c.s}" style="--ca:${A.color};--cb:${H.color}">
           <span class="nph">${x.st === "cur" ? `<i class="npdot"></i>` : ""}${lab || "Match " + (L.filter(y => y.c.k === "match").indexOf(x) + 1)}</span>${row(A, as, "a")}${row(H, hs, "h")}</button>`;
       }
       if (c.k === "potn") {
-        const known = x.st !== "next" && c.aid;
-        const ph = known && /^\d+$/.test(c.aid) ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${c.aid}.png" alt="" onerror="this.remove()">` : "";
-        return `<button class="npi xt potn ${x.st}" data-np-seek="${c.s}"><span class="npx">${ph || "★"}</span><span class="npt"><small>Le joueur de la nuit</small>${known ? c.n : "?"}</span></button>`;
+        const known = x.st !== "next" && x.st !== "skip" && c.aid, ph = known ? photoURL(c.aid) : "";
+        return `<button class="npi xt potn ${x.st}" data-np-seek="${c.s}"><span class="npx">${ph ? `<img src="${ph}" alt="" onerror="this.remove()">` : "★"}</span><span class="npt"><small>Le joueur de la nuit</small>${known ? c.n : "?"}</span></button>`;
       }
-      return `<button class="npi xt ${x.st}" data-np-seek="${c.s}"><span class="npx">${c.k === "top" ? "🔥" : "▶"}</span><span class="npt"><small>${c.k === "top" ? "Pour finir" : "Chapitre"}</small>${c.k === "top" ? "Les plus belles actions" : c.t}</span></button>`;
+      return `<button class="npi xt ${x.st}" data-np-seek="${c.s}"><span class="npx">${c.k === "top" ? "🔥" : "▶"}</span><span class="npt"><small>${c.k === "top" ? "Pour finir" : "Chapitre"}</small>${c.k === "top" ? `Les ${(c.plays || []).length || ""} plus belles actions`.replace("  ", " ") : c.t}</span></button>`;
     };
-    my.el.innerHTML = `<div class="nphead"><span class="lv-kick sm">La nuit</span><span class="npcount"><b>${seen}</b> / ${nM} matchs vus</span></div>
+    return `<div class="nphead"><span class="lv-kick sm">La nuit</span><span class="npcount"><b>${seen}</b> / ${nM} matchs vus</span></div>
       <div class="npl">${L.map(item).join("")}</div>`;
-    // sous la vidéo : le match en cours (film du match + tendances), ou le joueur de la nuit
-    const cur = L.find(x => x.st === "cur");
-    if (!my.below) return;
-    if (cur && cur.c.k === "match" && my.D[cur.c.gid]) {
-      const D = my.D[cur.c.gid], at = cur.at || { per: 1, sec: 720 };
-      const F = flow(D, at);
-      my.below.innerHTML = curveHTML(D, at, F) + trendsHTML(D, F);
-    } else if (cur && cur.c.k === "potn" && cur.c.aid) {
-      my.below.innerHTML = potnHTML(cur.c);
-    } else my.below.innerHTML = `<div class="lv-sec np-idle"><span class="lv-kick sm">${cur ? (cur.c.k === "top" ? "Les plus belles actions de la nuit" : cur.c.t) : "Lance la vidéo"}</span>
-      <p>${cur ? "Profite." : "Les matchs s'allument à gauche au fil du résumé, avec le score qui suit la vidéo. Clique sur un match pour y aller."}</p></div>`;
   }
-  function potnHTML(c) {
-    const D = S.D[c.gid]; let line = "";
-    if (D) { const A = statsAt(D, 99, -1), p = A.P[c.aid]; if (p) line = `${p.pts} pts · ${p.reb} reb · ${p.ast} pd${p.blk ? ` · ${p.blk} ctr` : ""}`; }
-    const ph = /^\d+$/.test(c.aid) ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${c.aid}.png" alt="" onerror="this.remove()">` : "";
-    return `<div class="lv-sec np-potn">${ph}<div><span class="lv-kick sm">Le joueur de la nuit</span><b>${c.n}</b><small>${line}</small></div></div>`;
+  // le joueur de la nuit : sa carte, ses stats du match, et le compteur de ce qu'on a vu dans la vidéo
+  function teamOf(D, tid) { const t = team(tid); return D && tid === D.away ? { ...t, color: vsColor(D.away, D.home) } : t; }
+  function playerTid(D, aid) { return D && D.names[aid] ? D.names[aid].t : 0; }
+  function potnCard(c, at, tall) {
+    const D = S.D[c.gid]; if (!D) return "";
+    const tid = playerTid(D, c.aid), T = teamOf(D, tid), O = team(tid === D.home ? D.away : D.home);
+    const fin = statsAt(D, 99, -1).P[c.aid] || {}, now = at ? (statsAt(D, at.per, at.sec).P[c.aid] || {}) : {};
+    const cell = (v, l) => `<div class="npc"><b>${v}</b><small>${l}</small></div>`;
+    const ph = photoURL(c.aid);
+    return `<div class="np-card ${tall ? "tall" : ""}" style="--tc:${T.color}">
+      <div class="np-ph">${ph ? `<img src="${ph}" alt="" onerror="this.remove()">` : ""}${logoHTML(T)}</div>
+      <div class="np-id"><span class="lv-kick sm">Le joueur de la nuit</span><b>${c.n}</b><small>${T.city} ${T.name} · contre ${O.name}</small>
+        <div class="np-live"><span class="led"><span class="v">${now.pts || 0}</span></span><span>points vus<br>dans la vidéo</span>
+          ${at ? `<em>${clockTxt(at.per, at.sec)}</em>` : ""}</div></div>
+      <div class="npcs">${cell(fin.pts || 0, "Points")}${cell(fin.reb || 0, "Rebonds")}${cell(fin.ast || 0, "Passes")}${cell(fin.blk || 0, "Contres")}
+        ${cell(`${fin.fg || 0}/${fin.fga || 0}`, "Tirs")}${cell(`${fin.tp || 0}/${fin.tpa || 0}`, "À 3 pts")}</div></div>`;
+  }
+  // ses tirs sur un demi-terrain, ajoutés au fil de la vidéo (jusqu'au moment affiché) ; le dernier panier clignote
+  function potnCourt(c, at) {
+    const D = S.D[c.gid]; if (!D) return "";
+    const T = teamOf(D, playerTid(D, c.aid));
+    const shots = [];
+    if (at) for (const p of D.plays) {
+      if (p.per > at.per || (p.per === at.per && p.sec <= at.sec)) break;
+      if (p.shoot && !p.ft && p.a0 === c.aid && p.sx != null) shots.push(p);
+    }
+    const lastMade = [...shots].reverse().find(p => p.made);
+    const dots = shots.map(p => {
+      const x = p.sx, y = Math.min(p.sy, 39);
+      return p.made ? `<circle cx="${x}" cy="${y}" r="1.1" fill="${T.color}" class="mk"/>`
+        : `<path d="M${x - .8} ${y - .8}l1.6 1.6m0-1.6l-1.6 1.6" class="ms"/>`;
+    }).join("");
+    const ring = lastMade ? `<circle cx="${lastMade.sx}" cy="${Math.min(lastMade.sy, 39)}" r="1.6" stroke="${T.color}" class="ring" key="${shots.length}"/>` : "";
+    const made = shots.filter(p => p.made).length;
+    return `<div class="np-court"><div class="lv-courth"><h4>Ses tirs</h4><span>${made}/${shots.length} jusqu'ici</span></div>
+      <svg class="np-hc" viewBox="-1 -1 52 42" role="img" aria-label="Ses tirs jusqu'ici">
+        <g class="ln"><rect x="0" y="0" width="50" height="40"/><rect x="17" y="0" width="16" height="19"/><circle cx="25" cy="19" r="6"/>
+        <path d="M3 0V14A23.75 23.75 0 0 0 47 14V0"/><path d="M22 4H28"/><circle cx="25" cy="5.25" r=".75"/></g>${dots}${ring}</svg></div>`;
+  }
+  // les plus belles actions : une carte par action, dévoilée quand elle passe (n° 5 → n° 1)
+  function playStats(a) {
+    const D = S.D[a.gid]; if (!D || !a.aid) return null;
+    return { D, T: teamOf(D, playerTid(D, a.aid)), s: statsAt(D, 99, -1).P[a.aid] || {} };
+  }
+  function topCards(c, t) {
+    const plays = c.plays || [];
+    if (!plays.length) return `<div class="lv-sec np-idle"><span class="lv-kick sm">Les plus belles actions de la nuit</span><p>Profite.</p></div>`;
+    const n = plays.filter(a => t >= a.s).length;
+    return `<div class="np-tops" style="--n:${plays.length}">${plays.map((a, i) => {
+      const rank = plays.length - i, open = i < n, curr = i === n - 1, P = open ? playStats(a) : null;
+      if (!open) return `<div class="np-top off"><span class="np-rk">${rank}</span><span class="np-q">?</span></div>`;
+      const s = P ? P.s : {}, ph = photoURL(a.aid);
+      return `<div class="np-top ${curr ? "cur" : ""}" style="--tc:${P ? P.T.color : "#444"}"><span class="np-rk">${rank}</span>
+        <div class="np-tph">${ph ? `<img src="${ph}" alt="" onerror="this.remove()">` : ""}</div>
+        <b>${a.n || "Action " + rank}</b><small>${P ? P.T.name : ""}${a.per ? ` · ${clockTxt(a.per, a.sec)}` : ""}</small>
+        ${P ? `<div class="npcs mini"><div class="npc"><b>${s.pts || 0}</b><small>Pts</small></div><div class="npc"><b>${s.reb || 0}</b><small>Reb</small></div><div class="npc"><b>${s.ast || 0}</b><small>Pd</small></div><div class="npc"><b>${s.blk || 0}</b><small>Ctr</small></div><div class="npc"><b>${s.fg || 0}/${s.fga || 0}</b><small>Tirs</small></div></div>` : ""}</div>`;
+    }).join("")}</div>`;
+  }
+  function topBig(a, rank) {
+    const P = playStats(a), s = P ? P.s : {}, ph = photoURL(a.aid);
+    return `<div class="np-card tall" style="--tc:${P ? P.T.color : "#444"}"><span class="np-bigrk">N° ${rank}</span>
+      <div class="np-ph">${ph ? `<img src="${ph}" alt="" onerror="this.remove()">` : ""}${P ? logoHTML(P.T) : ""}</div>
+      <div class="np-id"><span class="lv-kick sm">La plus belle action n° ${rank}</span><b>${a.n || "?"}</b><small>${P ? `${P.T.city} ${P.T.name}` : ""}${a.per ? ` · ${clockTxt(a.per, a.sec)}` : ""}</small>
+        ${a.tx ? `<p class="np-tx">${fr(a.tx)}</p>` : ""}</div>
+      ${P ? `<div class="npcs">${[[s.pts, "Points"], [s.reb, "Rebonds"], [s.ast, "Passes"], [s.blk, "Contres"], [`${s.fg || 0}/${s.fga || 0}`, "Tirs"], [`${s.tp || 0}/${s.tpa || 0}`, "À 3 pts"]]
+        .map(([v, l]) => `<div class="npc"><b>${v || 0}</b><small>${l}</small></div>`).join("")}</div>` : ""}</div>`;
   }
   document.addEventListener("click", e => {
     const b = e.target.closest("[data-np-seek]"); if (!b || !S || !S.night) return;

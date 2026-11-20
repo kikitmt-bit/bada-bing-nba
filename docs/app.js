@@ -428,9 +428,12 @@ function ytURL(g) { // filet de sécurité : la recherche YouTube
   return "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
 }
 const vidovl = $("#vidovl"), vplayer = $("#vplayer");
-function openNightPlus(key) {
+function openNightPlus(key, solo) {
   const N = NUIT[key]; if (!N) return;
-  playVideo(N.v, "Le résumé de la nuit NBA", null, { night: N });
+  const c = solo ? N.ch.find(x => x.k === solo) : null;
+  if (solo && !c) return;
+  playVideo(N.v, solo === "potn" ? `${c.n || "Le joueur de la nuit"} · ses meilleures actions` : solo === "top" ? "Les plus belles actions de la nuit" : "Le résumé de la nuit NBA",
+    null, c ? { night: N, solo, start: c.s, end: c.e } : { night: N });
 }
 function playVideo(vid, label, gid, opts) { // lecteur intégré, sans quitter le site ; opts : { start, end } (un extrait), { night } (résumé de la nuit +)
   // beIN SPORTS interdit la lecture de ses vidéos hors de YouTube (« Vidéo non disponible ») : NBA Extra s'ouvre sur YouTube.
@@ -446,18 +449,19 @@ function playVideo(vid, label, gid, opts) { // lecteur intégré, sans quitter l
     : `<div class="vdemo">Démo : la vidéo YouTube serait ici</div>`;
   const full = live && (night || Chrono.wantsFull(vid)); // plein écran d'office quand il y aura des stats (plus immersif, place dessous)
   vplayer.classList.toggle("live", !!live); vplayer.classList.toggle("full", !!full); vidovl.classList.toggle("full", !!full);
-  vplayer.classList.toggle("nightp", !!night);
+  vplayer.classList.toggle("nightp", !!night); vplayer.classList.toggle("solo", !!(night && opts.solo));
   vplayer.innerHTML = `
     <button class="x" aria-label="Fermer">✕</button>
     ${full && vidovl.requestFullscreen ? `<button class="fsb" aria-label="Plein écran" title="Remettre en plein écran"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg></button>` : ""}
     <div class="vmain"><div class="vframe">${frame}</div>
     <div class="vfoot"><span>${label}</span>
       ${vid ? `<a href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a>` : ""}</div></div>
-    ${night ? `<aside class="np" id="nplist"></aside><section class="lv-below" id="lvbelow"></section>`
+    ${night && opts.solo ? `<aside class="nps" id="npside"></aside><section class="lv-below" id="lvbelow"></section>`
+      : night ? `<aside class="np" id="nplist"></aside><section class="lv-below" id="lvbelow"></section>`
       : live ? `<aside class="lv" id="lvpanel"></aside><section class="lv-below" id="lvbelow"></section>` : ""}`;
   vidovl.classList.add("open"); document.body.style.overflow = "hidden"; document.body.classList.add("vidon");
   if (full && vidovl.requestFullscreen && !document.fullscreenElement) vidovl.requestFullscreen().catch(() => {}); // pendant le clic : le navigateur l'exige
-  if (night) Chrono.attachNight(night, $("#nplist"), vplayer.querySelector(".vframe"), $("#lvbelow"));
+  if (night) Chrono.attachNight(night, $("#nplist"), vplayer.querySelector(".vframe"), $("#lvbelow"), { solo: opts.solo, side: $("#npside") });
   else if (live) Chrono.attach(gid, $("#lvpanel"), vplayer.querySelector(".vframe"), vid, $("#lvbelow"));
 }
 async function openResume(id, extra) {
@@ -477,7 +481,7 @@ document.addEventListener("fullscreenchange", () => vplayer.classList.toggle("fs
 function closeResume() {
   if (typeof Chrono !== "undefined") Chrono.close();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  vplayer.innerHTML = ""; vplayer.classList.remove("full", "nightp"); vidovl.classList.remove("open", "full"); document.body.style.overflow = ""; document.body.classList.remove("vidon");
+  vplayer.innerHTML = ""; vplayer.classList.remove("full", "nightp", "solo"); vidovl.classList.remove("open", "full"); document.body.style.overflow = ""; document.body.classList.remove("vidon");
 }
 
 /* ---------- briques d'affichage ---------- */
@@ -884,9 +888,9 @@ async function loadMVP(btn) {
   const pi = potn && potn.aid ? all.findIndex(p => p.aid === potn.aid) : -1;
   if (pi > 0) all.unshift(all.splice(pi, 1)[0]);
   const mvp = all[0], t = team(mvp.tid);
-  const seg = (c, lab) => `data-vplay="${N.v}" data-vs="${c.s}" data-ve="${c.e}" data-vlabel="${lab}"`;
-  const mvpPlay = pi >= 0 && N ? `<button class="btn amber mvplay" ${seg(potn, "Le joueur de la nuit · résumé de la nuit NBA")}><span class="pl">▶</span>Son match en vidéo</button>` : "";
-  const topPlay = top && N ? `<button class="btn amber" ${seg(top, "Les plus belles actions de la nuit")}><span class="pl">▶</span>Les plus belles actions</button>` : "";
+  // les extraits du résumé de la nuit, avec leur panneau (ses tirs qui s'ajoutent, les actions qui se dévoilent)
+  const mvpPlay = pi >= 0 && N ? `<button class="btn amber mvplay" data-nuitsolo="potn" data-night="${state.night}"><span class="pl">▶</span>Ses meilleures actions</button>` : "";
+  const topPlay = top && N ? `<button class="btn amber" data-nuitsolo="top" data-night="${state.night}"><span class="pl">▶</span>Les ${top.plays && top.plays.length ? top.plays.length + " " : ""}plus belles actions</button>` : "";
   const opp = mvp.g.teams.away.id === mvp.tid ? mvp.g.teams.home : mvp.g.teams.away;
   const photo = /^\d+$/.test(mvp.aid) && !DEMO ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${mvp.aid}.png" alt="" onerror="this.remove()">` : "";
   const stat = (v, l) => `<div class="stat"><span class="led"><span class="v" data-count="${v}">0</span></span><small>${l}</small></div>`;
@@ -897,8 +901,8 @@ async function loadMVP(btn) {
       <div style="min-width:0">
         <h3>${nameHTML}</h3>
         <div class="sub">${t.city} ${t.name} · contre ${le(opp)}</div>
-        ${pi >= 0 ? `<span class="tag ghost potn">Choisi par la NBA</span>` : ""}
-        <div class="row">${stat(mvp.pts, "points")}${stat(mvp.reb, "rebonds")}${stat(mvp.ast, "passes")}${stat(mvp.blk || 0, "contres")}</div>${mvpPlay}
+        ${mvpPlay}
+        <div class="row">${stat(mvp.pts, "points")}${stat(mvp.reb, "rebonds")}${stat(mvp.ast, "passes")}${stat(mvp.blk || 0, "contres")}</div>
       </div></div>
     <div class="perfs"><span class="tag ghost">Les grosses perfs</span>${all.slice(1, 7).map((p, i) => {
       const pt = team(p.tid);
@@ -1459,6 +1463,8 @@ document.addEventListener("click", e => {
   if (vp) { playVideo(vp.dataset.vplay, vp.dataset.vlabel || "Vidéo", null, vp.dataset.vs ? { start: +vp.dataset.vs, end: +vp.dataset.ve } : null); return; }
   const np = e.target.closest("[data-nuitplus]");
   if (np) { openNightPlus(np.dataset.nuitplus); return; }
+  const ns = e.target.closest("[data-nuitsolo]");
+  if (ns) { openNightPlus(ns.dataset.night, ns.dataset.nuitsolo); return; }
   const rp = e.target.closest("[data-replay]");
   if (rp) { openShots(rp.dataset.replay); return; }
   const sh = e.target.closest("[data-shot]");

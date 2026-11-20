@@ -182,6 +182,23 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   cours, ou la carte du joueur de la nuit. **MVP = le Player of the Night de la NBA** quand il est lu (étiquette « Choisi par la
   NBA »), bouton « ▶ Son match en vidéo » = extrait du chapitre (`data-vs`/`data-ve` → `&start=&end=` de l'embed) ; « ▶ Les plus
   belles actions » en tête de l'essentiel. Attention : la classe `.x` est celle de la croix de fermeture (ne pas la réutiliser).
+- **Score = celui LU À L'ÉCRAN (22/11, retour Kiki : « 14-5 jamais vu à l'écran »)** : le minutage ESPN des paniers ne colle
+  pas toujours au bandeau et beaucoup d'images n'ont pas de chrono lisible. `chrono_video` lit aussi la ligne du bandeau
+  (`Lecteur.ligne` : les mots à la hauteur du chrono, ou toute la bande pendant une recherche), garde les nombres (`nombres`),
+  les recoupe avec la suite des scores ESPN (`deroule(gid)` → `etats`, `soutenus`) et `caler` choisit la plus longue suite
+  chronologique (poids ×3 si le chrono lu colle) → points `[t, quart, secondes, score visiteurs, score domicile]`, moment
+  borné à l'intérieur du score vu. `lire_plage` = lecture d'une plage d'images. Aussi pour les Replay + des matchs
+  (`boucle.py` passe `v["gid"]`). Site : `momentAt` renvoie `sc`, `clampAt(D, at, sc)` empêche le chrono qui coule de passer
+  un panier pas encore vu (Replay + et résumé de la nuit). Appels ESPN du téléphone : 5 tentatives (le wifi a des trous).
+- **Joueur de la nuit et plus belles actions (22/11)** : le téléphone lit aussi le chrono/score du chapitre « Player of the
+  Night » (calé sur son match) et repère chaque action du top (`actions` : sigles du bandeau → match, chrono + score → le
+  panier ESPN → le joueur `a0`, nom via la feuille de match) → `top.plays = [{s, e, gid, aid, n, per, sec, tx}]`. Site :
+  sous la vidéo, carte du joueur (stats du match, « points vus dans la vidéo » en LED) + **demi-terrain où ses tirs
+  s'ajoutent au fil de la vidéo** (`potnCourt`) ; top = cartes de gauche à droite (n° 5 → n° 1) dévoilées quand l'action
+  passe, 5 stats chacune (`topCards`). Depuis l'essentiel : « ▶ Ses meilleures actions » (à la place de l'étiquette
+  « Choisi par la NBA », supprimée) et « ▶ Les 5 plus belles actions » ouvrent l'EXTRAIT SEUL (`openNightPlus(key, solo)`,
+  `&start=&end=`, classe `.solo`) : vidéo + colonne de droite (`.nps` : carte + terrain, ou grande carte de l'action) +
+  dessous (film de son match, ou les 5 cartes).
 - **Mode démo** : `?demo=1` = fausse saison stable (`demo.js`), l'équivalent de `BB_FAUX_ESPN=1`. Test local :
   `python3 -m http.server 8777` dans `docs/` puis `http://localhost:8777/?demo=1` (Playwright : PC 1400px + téléphone 393px,
   vérifier zéro erreur JS et zéro défilement horizontal).

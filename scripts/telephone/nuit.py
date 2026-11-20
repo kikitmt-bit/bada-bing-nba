@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unicodedata
 import urllib.request
 from datetime import datetime
@@ -29,9 +30,16 @@ import chrono_video as cv
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/"
 
 
-def lire(url):
-    with urllib.request.urlopen(url, timeout=30) as r:
-        return json.load(r)
+def lire(url, essais=5):
+    """ESPN, avec de nouvelles tentatives : le wifi du téléphone a des trous (DNS, réseau injoignable)."""
+    for k in range(essais):
+        try:
+            with urllib.request.urlopen(url, timeout=30) as r:
+                return json.load(r)
+        except Exception:
+            if k == essais - 1:
+                raise
+            time.sleep(20 * (k + 1))
 
 
 def est_recap(v):
@@ -144,6 +152,84 @@ def joueur_de_la_nuit(video, ch, cands_tous, tmp):
     return None
 
 
+# ---------- les plus belles actions : pour chacune, le match (sigles du bandeau), le moment (chrono, score), le joueur ----------
+ALIAS = {"NY": ["NYK", "NY"], "GS": ["GSW", "GS"], "SA": ["SAS", "SA"], "NO": ["NOP", "NO"], "UTAH": ["UTA", "UTAH"],
+         "WSH": ["WAS", "WSH"], "PHX": ["PHX", "PHO"], "BKN": ["BKN", "BRK"], "CHA": ["CHA", "CHO"]}
+
+
+def sigles(ab):
+    return ALIAS.get(ab, [ab])
+
+
+def noms(gid):
+    j = lire(ESPN + "summary?event=" + str(gid))
+    out = {}
+    for side in (j.get("boxscore") or {}).get("players", []):
+        for a in side["statistics"][0].get("athletes", []):
+            if a.get("athlete"):
+                out[str(a["athlete"].get("id"))] = a["athlete"].get("displayName", "")
+    return out
+
+
+def actions(frames_dir, frames, ch, Ds):
+    lect = []  # (t, gid, temps de jeu écoulé ou None, nombres à l'écran)
+    for t in range(ch["s"], min(ch["e"], len(frames) * cv.PAS), cv.PAS):
+        band = Image.open(os.path.join(frames_dir, frames[t // cv.PAS]))
+        scale = max(.8, min(2.4, 2000 / band.width))
+        words = []
+        for mode in ("gray", "inv"):
+            words += cv.ocr(cv.prep(band, scale, mode), 11)
+        txt = {re.sub(r"[^A-Z]", "", w["t"].upper()) for w in words}
+        best = None
+        for gid, D in Ds.items():
+            hits = sum(any(x in txt for x in sigles(D["ab"][k])) for k in ("away", "home"))
+            if hits and (best is None or hits > best[0]):
+                best = (hits, gid)
+        if not best:
+            continue
+        q = cv.find_quarter(words)
+        k = cv.find_clock(words, q[1] if q else None, dixiemes=False)
+        el = cv.ecoule(q[0], k[0]) if q and k else None
+        lect.append((t, best[1], el, cv.nombres([w["t"] for w in words])))
+    groupes = []  # une action = des images qui se suivent, même match, même moment
+    for r in lect:
+        g = groupes[-1] if groupes else None
+        if g and g[-1][1] == r[1] and r[0] - g[-1][0] <= 4 and (r[2] is None or g[-1][2] is None or abs(r[2] - g[-1][2]) <= 45):
+            g.append(r)
+        else:
+            groupes.append([r])
+    groupes = [g for g in groupes if len(g) >= 2]
+    out = []
+    for n, g in enumerate(groupes):
+        D = Ds[g[0][1]]
+        els = [r[2] for r in g if r[2] is not None]
+        lo, hi = (min(els) - 15, max(els) + 20) if els else (-1, 1e9)
+        vus = set()
+        for r in g:
+            vus.update(cv.soutenus(D, r[3]))
+        E, P = D["etats"], D["plays"]
+        jeu = None
+        # le panier : celui qui fait passer à un score vu à l'écran (le plus tardif), dans la fenêtre du chrono
+        for k in sorted(vus, reverse=True):
+            if k > 0 and lo <= E[k]["el"] <= hi and P[E[k]["i"]]["a0"]:
+                jeu = P[E[k]["i"]]
+                break
+        if jeu is None and els:  # sinon : l'action la plus proche du chrono lu (contre, passe…)
+            m = sorted(els)[len(els) // 2]
+            c = [p for p in P if p["a0"] and abs(p["el"] - m) <= 20 and re.search(r"dunk|block|three|layup|jumper|alley", p["tx"], re.I)]
+            if c:
+                jeu = min(c, key=lambda p: abs(p["el"] - m))
+        a = {"s": max(ch["s"], g[0][0] - 1), "e": groupes[n + 1][0][0] - 1 if n + 1 < len(groupes) else ch["e"], "gid": D["gid"]}
+        if jeu:
+            a.update(aid=str(jeu["a0"]), per=jeu["per"], sec=jeu["sec"], tx=jeu["tx"])
+            try:
+                a["n"] = D.setdefault("noms", noms(D["gid"])).get(str(jeu["a0"]), "")
+            except Exception:
+                pass
+        out.append(a)
+    return out
+
+
 def analyse(vid, titre, video=None, publier=None):
     """Tout le travail pour un résumé de la nuit. publier(dict) est appelé avec les chapitres seuls, puis complet."""
     jour = nuit_de(titre)
@@ -164,15 +250,18 @@ def analyse(vid, titre, video=None, publier=None):
         subprocess.run(["ffmpeg", "-loglevel", "error", "-i", video, "-vf",
                         f"fps=1/{cv.PAS},crop=iw:ih*{cv.BANDE}:0:ih*{1 - cv.BANDE}", os.path.join(b, "%05d.png")], check=True)
         frames = sorted(os.listdir(b))
+        Ds = {}  # le déroulé ESPN de chaque match (les scores successifs servent à caler la vidéo)
+        for c in chs:
+            if c.get("gid") and c["gid"] not in Ds:
+                try:
+                    Ds[c["gid"]] = cv.deroule(c["gid"])
+                except Exception as e:
+                    print("  déroulé illisible", c["gid"], e, flush=True)
         for c in chs:
             if c["k"] != "match":
                 continue
-            lec, brut = cv.Lecteur(), []  # le bandeau change d'une chaîne à l'autre : nouvelle recherche à chaque match
-            for k in range(c["s"], min(c["e"], len(frames) * cv.PAS), cv.PAS):
-                r = lec.lire(Image.open(os.path.join(b, frames[k // cv.PAS])))
-                if r:
-                    brut.append((k,) + tuple(r))
-            pts = cv.nettoyer(brut)
+            # le bandeau change d'une chaîne à l'autre : nouvelle recherche à chaque match ; chrono + scores lus à l'écran
+            pts, brut = cv.lire_plage(b, frames, c["s"], c["e"], Ds.get(c["gid"]))
             c["pts"] = pts if len(pts) >= 8 else []
             print(f"  {c['t']} : {len(brut)} lectures, {len(c['pts'])} gardées", flush=True)
         potn = next((c for c in chs if c["k"] == "potn"), None)
@@ -181,9 +270,20 @@ def analyse(vid, titre, video=None, publier=None):
                 p = joueur_de_la_nuit(video, potn, candidats(chs), tmp)
                 if p:
                     potn.update(p)
-                print("  joueur de la nuit :", p, flush=True)
+                    if p["gid"] not in Ds:
+                        Ds[p["gid"]] = cv.deroule(p["gid"])
+                    pts, _ = cv.lire_plage(b, frames, potn["s"], potn["e"], Ds[p["gid"]])  # ses actions, calées sur son match
+                    potn["pts"] = pts
+                print("  joueur de la nuit :", p, len(potn.get("pts") or []), "points", flush=True)
             except Exception as e:
                 print("  joueur de la nuit illisible :", e, flush=True)
+        top = next((c for c in chs if c["k"] == "top"), None)
+        if top and Ds:
+            try:
+                top["plays"] = actions(b, frames, top, Ds)
+                print("  plus belles actions :", [(a.get("n"), a["s"]) for a in top["plays"]], flush=True)
+            except Exception as e:
+                print("  plus belles actions illisibles :", e, flush=True)
         res["fait"] = True
         if publier:
             publier(res)

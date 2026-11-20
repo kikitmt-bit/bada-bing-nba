@@ -180,6 +180,7 @@ def resumes(vids=None):
             continue
         vus.add(ev["id"])
         v["note"] = note(ev)
+        v["gid"] = ev["id"]  # le déroulé ESPN de ce match sert à caler la vidéo sur les scores lus à l'écran
         if v["note"] >= SEUIL:
             gardes.append(v)
     gardes.sort(key=lambda v: -v["note"])                  # les meilleurs matchs d'abord
@@ -391,7 +392,7 @@ def passage():
             sh("yt-dlp", "-q", "--no-warnings", "-f", "bv*[height=720][vcodec^=avc1]/bv*[height=720][vcodec^=vp]/bv*[height=720]/bv*[height<=720]",
                "-o", video, "https://www.youtube.com/watch?v=" + vid)
             suivi["telecharge"] = heure()
-            res = chrono_video.analyse(video, os.path.join(TRAVAIL, vid + ".json"), vid)
+            res = chrono_video.analyse(video, os.path.join(TRAVAIL, vid + ".json"), vid, v.get("gid"))
             res["t"] = v.get("t", "")
             pts = res["pts"]
             bon = len(pts) >= 40 and max(p[1] for p in pts) >= 4  # un résumé complet va jusqu'au 4e quart-temps

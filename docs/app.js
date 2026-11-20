@@ -70,8 +70,10 @@ function nyKey(date) { // AAAAMMJJ à New York
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" })
     .format(date).replaceAll("-", "");
 }
-function defaultNight() { // la nuit qui vient de se jouer (ou se joue) : on recule de 8 h
-  return nyKey(new Date(Date.now() - 8 * 3600e3));
+function defaultNight() { // la DERNIÈRE NUIT JOUÉE (ou en cours) : on recule de 18 h à New York, donc on passe à la nuit
+  // suivante à 18 h (heure de NY, minuit à Paris), juste avant les premiers matchs (21/11, demande de Kiki : avant, à 8 h NY
+  // soit 14 h à Paris, le site affichait déjà la nuit à venir, pas encore jouée)
+  return nyKey(new Date(Date.now() - 18 * 3600e3));
 }
 function keyDate(key) { // midi UTC ce jour-là (stable quel que soit le fuseau)
   return new Date(Date.UTC(+key.slice(0, 4), +key.slice(4, 6) - 1, +key.slice(6, 8), 12));
@@ -207,7 +209,7 @@ function normSummary(j) {
           full: a.athlete.displayName || "", tid,
           min: a.stats[iM] || "0", fg: a.stats[iF] || "", tp: a.stats[i3] || "",
           pts: +a.stats[iP] || 0, reb: +a.stats[iR] || 0, ast: +a.stats[iA] || 0, blk: iB >= 0 ? +a.stats[iB] || 0 : 0,
-          shots: [],
+          starter: !!a.starter, shots: [],
         });
       }
     }
@@ -407,6 +409,15 @@ function findJournal(key) { // le journal NBA Extra du matin : « REPLAY - NBA E
   }
   return null;
 }
+// le résumé de la nuit chapitré, préparé par le téléphone (v2/nuit/<nuit>.json) : chapitres reliés aux matchs,
+// chrono lu chapitre par chapitre, joueur de la nuit lu à l'écran
+const NUIT = {};
+async function loadNuit(key) {
+  if (DEMO || key in NUIT) return NUIT[key];
+  try { NUIT[key] = await fetchJSON(RAWDATA + "nuit/" + key + ".json?t=" + Math.floor(Date.now() / 300e3)); } catch (e) { NUIT[key] = null; }
+  return NUIT[key];
+}
+const nuitCh = (key, k) => { const N = NUIT[key]; return N && N.ch ? N.ch.find(c => c.k === k) || null : null; };
 function findNightRecap(key) { // le résumé de la nuit sur la chaîne NBA
   if (!VIDS) return null;
   const md = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long", day: "numeric" }).format(keyDate(key)).toLowerCase();
@@ -417,27 +428,37 @@ function ytURL(g) { // filet de sécurité : la recherche YouTube
   return "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
 }
 const vidovl = $("#vidovl"), vplayer = $("#vplayer");
-function playVideo(vid, label, gid) { // lecteur intégré, sans quitter le site
+function openNightPlus(key) {
+  const N = NUIT[key]; if (!N) return;
+  playVideo(N.v, "Le résumé de la nuit NBA", null, { night: N });
+}
+function playVideo(vid, label, gid, opts) { // lecteur intégré, sans quitter le site ; opts : { start, end } (un extrait), { night } (résumé de la nuit +)
   // beIN SPORTS interdit la lecture de ses vidéos hors de YouTube (« Vidéo non disponible ») : NBA Extra s'ouvre sur YouTube.
   if (VIDS && VIDS.some(v => v.id === vid && v.c === "bein")) {
     window.open("https://www.youtube.com/watch?v=" + vid, "_blank", "noopener"); return;
   }
-  const live = gid && typeof Chrono !== "undefined"; // stats en direct à côté du résumé (le panneau se retire s'il n'a rien à montrer)
-  const frame = vid ? `<iframe src="https://www.youtube.com/embed/${vid}?autoplay=1&rel=0&hl=fr${live ? "&enablejsapi=1&origin=" + encodeURIComponent(location.origin) : ""}"
+  opts = opts || {};
+  const night = opts.night && typeof Chrono !== "undefined" ? opts.night : null;
+  const live = (gid || night) && typeof Chrono !== "undefined"; // stats en direct à côté du résumé (le panneau se retire s'il n'a rien à montrer)
+  const cut = (opts.start ? "&start=" + Math.floor(opts.start) : "") + (opts.end ? "&end=" + Math.ceil(opts.end) : "");
+  const frame = vid ? `<iframe src="https://www.youtube.com/embed/${vid}?autoplay=1&rel=0&hl=fr${cut}${live ? "&enablejsapi=1&origin=" + encodeURIComponent(location.origin) : ""}"
       title="${label}" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>`
     : `<div class="vdemo">Démo : la vidéo YouTube serait ici</div>`;
-  const full = live && Chrono.wantsFull(vid); // plein écran d'office quand il y aura des stats (plus immersif, place dessous)
+  const full = live && (night || Chrono.wantsFull(vid)); // plein écran d'office quand il y aura des stats (plus immersif, place dessous)
   vplayer.classList.toggle("live", !!live); vplayer.classList.toggle("full", !!full); vidovl.classList.toggle("full", !!full);
+  vplayer.classList.toggle("nightp", !!night);
   vplayer.innerHTML = `
     <button class="x" aria-label="Fermer">✕</button>
     ${full && vidovl.requestFullscreen ? `<button class="fsb" aria-label="Plein écran" title="Remettre en plein écran"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg></button>` : ""}
     <div class="vmain"><div class="vframe">${frame}</div>
     <div class="vfoot"><span>${label}</span>
       ${vid ? `<a href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a>` : ""}</div></div>
-    ${live ? `<aside class="lv" id="lvpanel"></aside><section class="lv-below" id="lvbelow"></section>` : ""}`;
+    ${night ? `<aside class="np" id="nplist"></aside><section class="lv-below" id="lvbelow"></section>`
+      : live ? `<aside class="lv" id="lvpanel"></aside><section class="lv-below" id="lvbelow"></section>` : ""}`;
   vidovl.classList.add("open"); document.body.style.overflow = "hidden"; document.body.classList.add("vidon");
   if (full && vidovl.requestFullscreen && !document.fullscreenElement) vidovl.requestFullscreen().catch(() => {}); // pendant le clic : le navigateur l'exige
-  if (live) Chrono.attach(gid, $("#lvpanel"), vplayer.querySelector(".vframe"), vid, $("#lvbelow"));
+  if (night) Chrono.attachNight(night, $("#nplist"), vplayer.querySelector(".vframe"), $("#lvbelow"));
+  else if (live) Chrono.attach(gid, $("#lvpanel"), vplayer.querySelector(".vframe"), vid, $("#lvbelow"));
 }
 async function openResume(id, extra) {
   const g = state.games.find(x => x.id === id); if (!g) return;
@@ -456,7 +477,7 @@ document.addEventListener("fullscreenchange", () => vplayer.classList.toggle("fs
 function closeResume() {
   if (typeof Chrono !== "undefined") Chrono.close();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  vplayer.innerHTML = ""; vplayer.classList.remove("full"); vidovl.classList.remove("open", "full"); document.body.style.overflow = ""; document.body.classList.remove("vidon");
+  vplayer.innerHTML = ""; vplayer.classList.remove("full", "nightp"); vidovl.classList.remove("open", "full"); document.body.style.overflow = ""; document.body.classList.remove("vidon");
 }
 
 /* ---------- briques d'affichage ---------- */
@@ -581,18 +602,18 @@ function finishReveal(g, fx) {
   }
   updateRevealAll();
 }
-function reveal(id, instant) {
+function reveal(id, instant, quick) {
   const g = state.games.find(x => x.id === id);
   if (!g || g.state === "pre") return;
   const first = !state.revealed.has(id);
   state.revealed.add(id);
   const cells = $$(`.led[data-g="${id}"]`);
   const la = g.teams.away.ls || [], lh = g.teams.home.ls || [];
-  const canRace = first && !instant && !RM && g.state === "post" && la.length >= 4 && lh.length >= 4;
+  const canRace = first && !instant && !quick && !RM && g.state === "post" && la.length >= 4 && lh.length >= 4;
   if (!canRace) {
     if (first && !instant && !RM) {
-      cells.forEach(c => { c.classList.remove("hid"); c.classList.add("flash"); countUp(c.querySelector(".v"), g.teams[c.dataset.side].score); });
-      setTimeout(() => finishReveal(g, true), 700);
+      cells.forEach(c => { c.classList.remove("hid"); c.classList.add("flash"); countUp(c.querySelector(".v"), g.teams[c.dataset.side].score, quick ? 600 : 650); });
+      setTimeout(() => finishReveal(g, !quick), quick ? 650 : 700);
     } else finishReveal(g, false);
     return;
   }
@@ -661,6 +682,7 @@ function skyHTML(games, hero, scored) {
     : isLast && nFin === games.length ? "Pendant que tu dormais"
     : isLast ? "La nuit se termine" : "Retour sur la nuit";
   const nr = started && !DEMO ? findNightRecap(state.night) : null;
+  const nplus = started && NUIT[state.night] && NUIT[state.night].ch && NUIT[state.night].ch.some(c => c.k === "match");
   const jr = started && !DEMO ? findJournal(state.night) : null;
   const left = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).length;
   // en-tête sur UNE ligne (20/11, carte blanche de Kiki) : la nuit d'avant, celle affichée, celle d'après, le calendrier,
@@ -677,9 +699,10 @@ function skyHTML(games, hero, scored) {
     <div class="skyrow">
       <div class="nights" id="nights" data-ctx="${ctx}"></div>
       ${board}
-      ${started || nr || jr ? `<div class="actions">
+      ${started || nr || jr || nplus ? `<div class="actions">
       ${started ? `<button class="btn amber big" id="revall" ${left ? "" : "disabled"}>${left ? "🎬 Révéler la nuit" : "✓ Nuit révélée"}</button>` : ""}
-      ${nr ? `<button class="btn" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
+      ${nplus ? `<button class="btn" data-nuitplus="${state.night}" title="Le résumé de la nuit, avec la liste des matchs et les scores qui suivent la vidéo"><span class="pl">▶</span>Résumé de la nuit<span class="plus">+</span></button>`
+        : nr ? `<button class="btn" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
       ${jr ? `<button class="btn" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin"><span class="pl">▶</span>NBA Extra · le journal</button>` : ""}
       </div>` : ""}
     </div>
@@ -700,7 +723,7 @@ async function renderNight(soft) {
   if (games.some(g => g.state !== "pre")) markSeen(state.night);
   // pour les infos clés : « 2e soir », blessés (avant le match), photo d'avant-match (après)
   await Promise.all([loadPrevNight(state.night), games.some(g => g.state === "pre") ? loadInjuries() : null,
-    games.some(g => g.state !== "pre") ? loadAvant(state.night) : null]);
+    games.some(g => g.state !== "pre") ? loadAvant(state.night) : null, games.some(g => g.state === "post") ? loadNuit(state.night) : null]);
   if (tok !== state.tok) return;
 
   const scored = games.map(g => ({ g, lvl: watchLevel(g) })).sort((x, y) => y.lvl - x.lvl || jitter(x.g.id) - jitter(y.g.id));
@@ -730,15 +753,9 @@ async function renderNight(soft) {
     // la cérémonie : du moins bon au meilleur, le match de la nuit en dernier
     let order = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).sort((x, y) => watchLevel(x) - watchLevel(y));
     if (hero) order = order.filter(g => g.id !== hero.g.id).concat(order.filter(g => g.id === hero.g.id));
-    let d = 0;
-    for (const g of order) {
-      setTimeout(() => {
-        const el = $(`[data-card="${g.id}"]`);
-        if (el && !RM) el.scrollIntoView({ behavior: "smooth", block: "center" });
-        reveal(g.id);
-      }, d);
-      d += RM ? 0 : 1300;
-    }
+    // 21/11 (Kiki : « ça descend tout en bas, ça ne s'arrête pas ») : on reste où on est, tous les scores s'allument ensemble
+    // en moins d'une seconde (petit décalage de 60 ms d'un match à l'autre), sans course quart-temps par quart-temps
+    order.forEach((g, i) => setTimeout(() => reveal(g.id, false, true), RM ? 0 : i * 60));
   });
   const mb = $("#mvpbtn");
   if (mb) mb.addEventListener("click", () => loadMVP(mb));
@@ -763,8 +780,8 @@ const le = t => (SING.has(t.name) ? "le " : "les ") + t.name;
 const du = t => (SING.has(t.name) ? "du " : "des ") + t.name;
 const au = t => (SING.has(t.name) ? "au " : "aux ") + t.name;
 const cap1 = x => x[0].toUpperCase() + x.slice(1);
-function nightFacts(posts, sums) {
-  const F = [];
+function nightFacts(posts, sums, extra) {
+  const F = [...(extra || [])];
   posts.forEach((g, i) => {
     const s = sums[i]; if (!s) return;
     const A = g.teams.away, H = g.teams.home, aw = A.score > H.score, W = aw ? A : H, L = aw ? H : A, m = Math.abs(A.score - H.score);
@@ -861,8 +878,15 @@ async function loadMVP(btn) {
     isLast && !DEMO ? standingMoves(posts).catch(() => []) : Promise.resolve([]),
     posts.some(g => AVANT[g.id]) ? loadInjuries() : null]);
   all.sort((a, b) => gscore(b) - gscore(a));
-  // le MVP et les grosses perfs
+  // le MVP = le « Player of the Night » choisi par la NBA dans son résumé de la nuit (lu à l'écran par le téléphone),
+  // sinon notre calcul (meilleur « game score »)
+  const N = NUIT[state.night], potn = nuitCh(state.night, "potn"), top = nuitCh(state.night, "top");
+  const pi = potn && potn.aid ? all.findIndex(p => p.aid === potn.aid) : -1;
+  if (pi > 0) all.unshift(all.splice(pi, 1)[0]);
   const mvp = all[0], t = team(mvp.tid);
+  const seg = (c, lab) => `data-vplay="${N.v}" data-vs="${c.s}" data-ve="${c.e}" data-vlabel="${lab}"`;
+  const mvpPlay = pi >= 0 && N ? `<button class="btn amber mvplay" ${seg(potn, "Le joueur de la nuit · résumé de la nuit NBA")}><span class="pl">▶</span>Son match en vidéo</button>` : "";
+  const topPlay = top && N ? `<button class="btn amber" ${seg(top, "Les plus belles actions de la nuit")}><span class="pl">▶</span>Les plus belles actions</button>` : "";
   const opp = mvp.g.teams.away.id === mvp.tid ? mvp.g.teams.home : mvp.g.teams.away;
   const photo = /^\d+$/.test(mvp.aid) && !DEMO ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${mvp.aid}.png" alt="" onerror="this.remove()">` : "";
   const stat = (v, l) => `<div class="stat"><span class="led"><span class="v" data-count="${v}">0</span></span><small>${l}</small></div>`;
@@ -873,14 +897,45 @@ async function loadMVP(btn) {
       <div style="min-width:0">
         <h3>${nameHTML}</h3>
         <div class="sub">${t.city} ${t.name} · contre ${le(opp)}</div>
-        <div class="row">${stat(mvp.pts, "points")}${stat(mvp.reb, "rebonds")}${stat(mvp.ast, "passes")}</div>
+        ${pi >= 0 ? `<span class="tag ghost potn">Choisi par la NBA</span>` : ""}
+        <div class="row">${stat(mvp.pts, "points")}${stat(mvp.reb, "rebonds")}${stat(mvp.ast, "passes")}${stat(mvp.blk || 0, "contres")}</div>${mvpPlay}
       </div></div>
     <div class="perfs"><span class="tag ghost">Les grosses perfs</span>${all.slice(1, 7).map((p, i) => {
       const pt = team(p.tid);
-      return `<div class="perf" style="--tc:${pt.color};animation-delay:${200 + i * 70}ms"><span class="slab">${logoHTML(pt)}</span><b>${p.full || p.name}</b><small>${p.pts} PTS · ${p.reb} REB · ${p.ast} PAS</small></div>`;
+      return `<div class="perf" style="--tc:${pt.color};animation-delay:${200 + i * 70}ms"><span class="slab">${logoHTML(pt)}</span><b>${p.full || p.name}</b><small>${p.pts} PTS · ${p.reb} REB · ${p.ast} PAS${p.blk >= 3 ? ` · ${p.blk} CTR` : ""}</small></div>`;
     }).join("")}</div></div>`;
+  // en plus des faits du match : les blessés importants sortis pendant la nuit et ce qui a bougé au classement
+  // (avant dans une rubrique « Et aussi » à part ; 21/11, Kiki : « pourquoi pas dans les faits marquants ? »)
+  const extra = [];
+  const vb = (t, one, many) => SING.has(t.name) ? one : many;
+  if (INJ) posts.forEach((g, i) => {
+    const ph = AVANT[g.id], sm = sums[i]; if (!ph || !sm) return;
+    for (const [side, T] of [["a", g.teams.away], ["h", g.teams.home]]) {
+      const before = new Set(((ph[side] && ph[side].out) || []).map(o => o.n));
+      for (const o of INJ[T.id] || []) {
+        if (before.has(o.n) || !/out|day|question/i.test(o.st)) continue;
+        // seulement un joueur qui compte : titulaire, ou vraies minutes / vrais points ce soir-là (pas le bout de banc)
+        const pl = sm.players.find(p => p.tid === T.id && (p.name === o.n || p.full === o.n));
+        const mins = pl ? parseInt(pl.min, 10) || 0 : 0;
+        if (!pl || !(pl.starter || mins >= 18 || pl.pts >= 10)) continue;
+        const out = /^out$/i.test(o.st);
+        extra.push({ g, aw: g.teams.away.score > g.teams.home.score, p: 6 + (pl.starter ? 1 : 0) + (out ? .5 : 0), k: "blesse", tag: "Sorti blessé",
+          t: `${pl.full || pl.name} sorti blessé`,
+          x: `${T.name} · ${o.ty ? blessFr(o.ty) : "blessure"} · ${out ? "forfait" : "incertain"} pour la suite`, pl });
+      }
+    }
+  });
+  for (const m of moves) {
+    const T = team(m.id), g = posts.find(x => x.teams.away.id === m.id || x.teams.home.id === m.id); if (!g) continue;
+    const up = m.a < m.b, n = Math.abs(m.a - m.b);
+    const t = m.crossed === "prend la tête" ? `${cap1(le(T))} ${vb(T, "prend", "prennent")} la tête de l'${m.conf}`
+      : m.crossed ? `${cap1(le(T))} ${m.crossed.startsWith("entre") ? vb(T, "entre", "entrent") : vb(T, "sort", "sortent")} ${m.crossed.replace(/^(entre|sort) /, "")}`
+      : `${cap1(le(T))} ${up ? vb(T, "gagne", "gagnent") : vb(T, "perd", "perdent")} ${plural(n, "place")}`;
+    extra.push({ g, aw: g.teams.away.score > g.teams.home.score, p: 4 + m.sc / 15, k: "classement", tag: "Au classement",
+      t, x: `Conférence ${m.conf} : ${m.b + 1}e → ${m.a + 1}e` });
+  }
   // les faits marquants
-  const facts = nightFacts(posts, sums);
+  const facts = nightFacts(posts, sums, extra);
   const factsBlock = facts.length ? `<div class="ess-h"><span class="tag">Les faits marquants</span><i></i></div><div class="facts">${facts.map(factHTML).join("")}</div>` : "";
   // les Français
   // un MVP français est déjà en vedette juste au-dessus : la rubrique montre alors les AUTRES Français
@@ -892,30 +947,12 @@ async function loadMVP(btn) {
       const ph = /^\d+$/.test(p.aid) && !DEMO ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${p.aid}.png" alt="" loading="lazy" onerror="this.remove()">` : "";
       return `<div class="frt" style="--tc:${pt.color};animation-delay:${i * 60}ms"><span class="frp">${ph}${logoHTML(pt)}</span>
         <span class="frn"><b>${p.full || p.name}</b><small>${pt.tri} contre ${og.tri} · ${p.min} min</small>
-        <span class="frs"><b>${p.pts}</b><small>pts</small><b>${p.reb}</b><small>reb</small><b>${p.ast}</b><small>pd</small></span></span></div>`;
+        <span class="frs"><b>${p.pts}</b><small>pts</small><b>${p.reb}</b><small>reb</small><b>${p.ast}</b><small>pd</small>${p.blk ? `<b>${p.blk}</b><small>ctr</small>` : ""}</span></span></div>`;
     }).join("")}</div>` : `<p class="essn pad">${mvpFr ? "Aucun autre Français sur les parquets cette nuit." : "Aucun Français sur les parquets cette nuit."}</p>`}`;
-  // le classement
-  const mvBlock = moves.length ? `<div class="essb"><h4>Ça a bougé au classement</h4>${moves.map(m => {
-      const tt = team(m.id), up = m.a < m.b;
-      return `<div class="mvl ${up ? "up" : "down"}">${logoHTML(tt)}<span class="mvn"><b>${tt.name}</b><small>${m.crossed ? m.crossed : (up ? "gagne " : "perd ") + plural(Math.abs(m.a - m.b), "place")} · ${m.conf}</small></span>
-        <span class="mvr"><i>${m.b + 1}e</i><em>${up ? "▲" : "▼"}</em><b>${m.a + 1}e</b></span></div>`;
-    }).join("")}</div>` : "";
-  // sortis blessés : les blessés du matin qui n'étaient pas sur la photo d'avant-match
-  let hurt = [];
-  if (INJ) for (const g of posts) {
-    const ph = AVANT[g.id]; if (!ph) continue;
-    for (const [side, T] of [["a", g.teams.away], ["h", g.teams.home]]) {
-      const before = new Set(((ph[side] && ph[side].out) || []).map(o => o.n));
-      for (const o of INJ[T.id] || []) if (!before.has(o.n) && /out|day|question/i.test(o.st)) hurt.push({ o, T });
-    }
-  }
-  const huBlock = hurt.length ? `<div class="essb hu"><h4>Sortis blessés</h4>${hurt.slice(0, 5).map(({ o, T }) => { const out = /^out$/i.test(o.st);
-      return `<div class="hul">${logoHTML(T)}<span class="mvn"><b>${o.n}</b><small>${T.name} · ${o.ty ? blessFr(o.ty) : "blessure"}</small></span><span class="hst ${out ? "out" : ""}">${out ? "Forfait" : "Incertain"}</span></div>`; }).join("")}</div>` : "";
   btn.hidden = true;
   const body = $("#mvpbody");
-  const more = mvBlock || huBlock ? `<div class="ess-h"><span class="tag">Et aussi</span><i></i></div><div class="essrow">${mvBlock}${huBlock}</div>` : "";
-  body.innerHTML = `<div class="ess"><div class="ess-top"><span class="q">L'essentiel <em>de la nuit</em></span><small>Tout ce qu'il faut retenir, en une minute</small></div>
-    ${factsBlock}<div class="ess-h"><span class="tag">Le MVP et les grosses perfs</span><i></i></div>${mvpBlock}${frBlock}${more}</div>`;
+  body.innerHTML = `<div class="ess"><div class="ess-top"><span class="q">L'essentiel <em>de la nuit</em></span><small>Tout ce qu'il faut retenir, en une minute</small>${topPlay}</div>
+    ${factsBlock}<div class="ess-h"><span class="tag">Le MVP et les grosses perfs</span><i></i></div>${mvpBlock}${frBlock}</div>`;
   for (const v of body.querySelectorAll("[data-count]")) countUp(v, +v.dataset.count, 1100);
 }
 
@@ -1214,7 +1251,7 @@ async function renderProgramme() {
   setURL();
   const head = `<section class="tvhead"><p class="greet"><i></i>Les prochaines nuits · ${tzName()}</p></section>`;
   main.innerHTML = head + `<div class="skel"><div class="ph" style="height:120px"></div><div class="ph" style="height:120px"></div></div>`;
-  const tonight = defaultNight();
+  const tonight = nyKey(new Date()) > defaultNight() ? nyKey(new Date()) : defaultNight(); // la prochaine nuit à jouer
   const keys = [...Array(7)].map((_, i) => addDays(tonight, i));
   let nights;
   try { [nights] = await Promise.all([Promise.all(keys.map(k => scoreboard(k).catch(() => []))), loadRanks()]); }
@@ -1371,8 +1408,10 @@ function renderChips() {
     else if (k < tonight && !seen.has(k)) dot = `<span class="dot gold"></span>`;
     // seule la dernière nuit (celle d'il y a quelques heures) et la suivante ont un nom ; la veille passe en « Retour sur la nuit »
     // comme les autres (« Nuit dernière » prêtait à confusion avec « Cette nuit »)
-    const lab = k === tonight ? (EURO ? "Cette nuit" : "Ce soir") : k === addDays(tonight, 1) ? "Demain" : c.s;
-    // le contexte (« Retour sur la nuit »…) seulement quand l'étiquette ne dit pas déjà « Cette nuit » ou « Demain »
+    // la suivante : « La nuit à venir » (21/11 : « Demain » tombait sur l'après-demain une fois la nuit jouée)
+    const today = k === nyKey(new Date());
+    const lab = k === tonight ? (EURO ? "Cette nuit" : today ? "Ce soir" : "Hier soir") : k === addDays(tonight, 1) ? (EURO ? "La nuit à venir" : today ? "Ce soir" : "Demain") : c.s;
+    // le contexte (« Retour sur la nuit »…) seulement quand l'étiquette ne dit pas déjà « Cette nuit » ou « La nuit à venir »
     const ctxOn = cur && lab === c.s && el.dataset.ctx;
     return `<button class="chip ${cur ? "on" : ""}" data-night="${k}">${ctxOn ? `<em>${el.dataset.ctx}</em>` : ""}<small>${lab}</small><b>${c.b}</b>${dot}</button>`;
   }).join("");
@@ -1417,7 +1456,9 @@ document.addEventListener("click", e => {
   const xz = e.target.closest("[data-extra]");
   if (xz) { openResume(xz.dataset.extra, true); return; }
   const vp = e.target.closest("[data-vplay]");
-  if (vp) { playVideo(vp.dataset.vplay, vp.dataset.vlabel || "Vidéo"); return; }
+  if (vp) { playVideo(vp.dataset.vplay, vp.dataset.vlabel || "Vidéo", null, vp.dataset.vs ? { start: +vp.dataset.vs, end: +vp.dataset.ve } : null); return; }
+  const np = e.target.closest("[data-nuitplus]");
+  if (np) { openNightPlus(np.dataset.nuitplus); return; }
   const rp = e.target.closest("[data-replay]");
   if (rp) { openShots(rp.dataset.replay); return; }
   const sh = e.target.closest("[data-shot]");

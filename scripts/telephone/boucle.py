@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import chrono_video
+import nuit
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # scripts/ en local ; sur le téléphone, v2_videos.py est copié à côté
 import v2_videos  # noqa: E402
@@ -309,6 +310,46 @@ def suivre(ligne):
     publier_fichiers({SUIVI: {"l": lignes}}, "suivi : " + ligne.get("etat", ""))
 
 
+def nuits(vids, etat):
+    """Le résumé de la nuit augmenté (nuit.py) : chapitres publiés tout de suite, puis chrono + joueur de la nuit.
+    Les 2 derniers jours seulement, un résumé à la fois."""
+    lim = datetime.now(timezone.utc) - timedelta(days=2)
+    for v in vids or []:
+        if not nuit.est_recap(v):
+            continue
+        try:
+            if datetime.fromisoformat(v["p"].replace("Z", "+00:00")) < lim:
+                continue
+        except Exception:
+            continue
+        cle = "nuit:" + v["id"]
+        e = etat.setdefault(cle, {"essais": 0})
+        if e.get("ok") or e["essais"] >= ESSAIS:
+            continue
+        e["essais"] += 1
+        jour = nuit.nuit_de(v.get("t", ""))
+        video = os.path.join(TRAVAIL, v["id"] + ".mp4")
+        try:
+            def pub(res):
+                publier_fichiers({"v2/nuit/%s.json" % res["nuit"]: res}, "résumé de la nuit %s : %s" % (res["nuit"], "complet" if res["fait"] else "chapitres"))
+            nuit.analyse(v["id"], v.get("t", ""), None, pub)  # les chapitres d'abord (quelques secondes)
+            sh("yt-dlp", "-q", "--no-warnings", "-f", "bv*[height=720][vcodec^=avc1]/bv*[height=720][vcodec^=vp]/bv*[height=720]/bv*[height<=720]",
+               "-o", video, "https://www.youtube.com/watch?v=" + v["id"])
+            res = nuit.analyse(v["id"], v.get("t", ""), video, pub)
+            if res and res.get("fait"):
+                e["ok"] = True
+                log("résumé de la nuit publié :", jour)
+        except Exception as ex:
+            log("résumé de la nuit raté", v["id"], (getattr(ex, "stderr", "") or str(ex))[-300:])
+        finally:
+            for f in (video, video + ".part"):
+                if os.path.exists(f):
+                    os.remove(f)
+            with open(ETAT, "w") as f:
+                json.dump(etat, f)
+        return  # un seul par passage (les résumés de match passent avant au passage suivant)
+
+
 def passage():
     _SB.clear()  # les scoreboards ESPN changent (un match « à venir » finit par être « terminé ») : on relit à chaque passage
     try:
@@ -329,6 +370,7 @@ def passage():
         return
     a_faire = [v for v in liste if etat.get(v["id"], {}).get("ok") is None and etat.get(v["id"], {}).get("essais", 0) < ESSAIS]
     if not a_faire:
+        nuits(vids, etat)  # rien d'autre à faire : le résumé de la nuit
         return
     log("%d résumé(s) à analyser, %d à la fois" % (len(a_faire), EN_MEME_TEMPS))
     os.makedirs(TRAVAIL, exist_ok=True)
@@ -380,6 +422,7 @@ def passage():
 
     with ThreadPoolExecutor(EN_MEME_TEMPS) as pool:
         list(pool.map(traiter, a_faire))
+    nuits(vids, etat)
 
 if __name__ == "__main__":
     if "--une" in sys.argv:

@@ -162,6 +162,26 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   `.fsb` à gauche de la croix, visible seulement hors plein écran (`fullscreenchange` → `.fs`) ; en-tête du panneau réservé
   (96 px) pour que la croix ne recouvre rien. **Firefox** : classe `ff` sur `<html>` (index.html) → pas de flou d'arrière-plan,
   ciel figé, pas d'entrées en scène, pas d'ombres floues (artefacts de calques composés, même remède que le site NFL).
+- **Retouches du 22/11** : nuit par défaut = la DERNIÈRE NUIT JOUÉE (`defaultNight` recule de 18 h à NY : bascule à 18 h NY,
+  minuit à Paris) ; frise : « Cette nuit » (dernière jouée), « La nuit à venir » (la suivante), le reste en dates ; programme à
+  partir d'aujourd'hui (NY). Classement : « La hiérarchie » sur une ligne (`nowrap`). « Et aussi » SUPPRIMÉ : les sortis blessés
+  (seulement titulaires / ≥ 18 min / ≥ 10 pts ; `starter` ajouté aux feuilles de match) et les mouvements au classement sont des
+  **faits marquants** (`extra` passé à `nightFacts`, types `blesse` et `classement`). Contres : 4e afficheur du MVP, « · 3 CTR »
+  dans les grosses perfs dès 3, « ctr » sur les tuiles des Français dès 1. **Révéler la nuit** : plus de défilement ni de course
+  par quart-temps, tous les scores s'allument ensemble en < 1 s (`reveal(id, false, quick)`).
+- **Résumé de la nuit + (22/11, carte blanche de Kiki)** : le « NBA's Nightly Recap » est chapitré (« Knicks at Timberwolves »…,
+  « Player of the Night », « Top Plays of the Night »). Le téléphone (`scripts/telephone/nuit.py`, appelé par `boucle.py` →
+  `nuits()` après les résumés de match, 2 derniers jours, un par passage) : chapitres via `yt-dlp -J` reliés aux matchs ESPN
+  (surnoms), publiés tout de suite, puis vidéo 720p, chrono lu chapitre par chapitre (`Lecteur` neuf + `nettoyer` par match),
+  et le nom du joueur de la nuit lu à l'écran (images toutes les 2 s du chapitre, comparées aux 14 meilleures perfs, ≥ 2 lectures)
+  → `v2/nuit/<nuit NY>.json` (`ch` : `{s, e, t, k: match|potn|top, gid, pts, aid, n}`). Site : `loadNuit`, bouton « Résumé de la
+  nuit + » (`openNightPlus` → `playVideo(..., {night})` → `Chrono.attachNight`) : plein écran, **liste des matchs à gauche**
+  (`.np`, cases qui se partagent toute la hauteur) dans l'ordre du résumé : à venir = gris « ?? », en cours = aux couleurs, score
+  qui suit le chrono (`momentAt` + `flow`), passé = score final SEULEMENT si on a regardé la fin du chapitre (`S.done`), sauté =
+  « Pas encore vu » ; clic = saut dans la vidéo (`seekTo` par postMessage) ; dessous : film du match + tendances du match en
+  cours, ou la carte du joueur de la nuit. **MVP = le Player of the Night de la NBA** quand il est lu (étiquette « Choisi par la
+  NBA »), bouton « ▶ Son match en vidéo » = extrait du chapitre (`data-vs`/`data-ve` → `&start=&end=` de l'embed) ; « ▶ Les plus
+  belles actions » en tête de l'essentiel. Attention : la classe `.x` est celle de la croix de fermeture (ne pas la réutiliser).
 - **Mode démo** : `?demo=1` = fausse saison stable (`demo.js`), l'équivalent de `BB_FAUX_ESPN=1`. Test local :
   `python3 -m http.server 8777` dans `docs/` puis `http://localhost:8777/?demo=1` (Playwright : PC 1400px + téléphone 393px,
   vérifier zéro erreur JS et zéro défilement horizontal).

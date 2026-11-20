@@ -615,6 +615,108 @@ const Chrono = (() => {
     render(true);
     if (STREAM && STREAM.active) start(false); // déjà partagé pendant cette visite : rien à redemander
   }
+
+  /* ---------- le résumé de la nuit + : la liste des matchs à gauche, qui se remplit au fil de la vidéo ----------
+     Chapitres préparés par le téléphone (v2/nuit/<nuit>.json) : chaque match, le joueur de la nuit, les plus belles actions.
+     Un match pas encore atteint reste éteint ; celui qui passe s'allume à ses couleurs, son score suit le chrono lu dans la
+     vidéo (jamais en avance) ; un match passé garde son score final. Un clic sur un match y saute dans la vidéo. */
+  function seekYT(t) {
+    const f = S && S.iframe && S.iframe.querySelector("iframe");
+    if (f && f.contentWindow) f.contentWindow.postMessage(JSON.stringify({ event: "command", func: "seekTo", args: [t, true], id: 1, channel: "widget" }), "*");
+    if (S) { S.ytT = t; S.ytAt = performance.now(); }
+  }
+  async function attachNight(N, list, iframe, below) {
+    if (S) S.on = false;
+    const my = S = { night: N, el: list, below, iframe, on: true, D: {}, key: null, done: new Set() };
+    const games = c => (typeof state !== "undefined" ? state.games : []).find(g => g.id === c.gid);
+    my.games = games;
+    renderNight(true);
+    // les déroulés ESPN des matchs de la nuit (pour le score et le film du match au moment affiché)
+    await Promise.all(N.ch.filter(c => c.k === "match").map(async c => {
+      try { my.D[c.gid] = parsePlays(await fetchJSON(API + "summary?event=" + c.gid)); } catch (e) { /* ce match restera sans score en direct */ }
+    }));
+    if (S !== my) return;
+    my.key = null;
+    nightLoop(my);
+  }
+  async function nightLoop(my) {
+    let n = 0;
+    while (S === my) {
+      if (n++ % 6 === 0) listenYT();
+      renderNight();
+      await wait(200);
+    }
+  }
+  const nowT = () => S.ytT === undefined ? -1 : S.ytT + (S.ytState === 1 ? Math.min(1.5, (performance.now() - S.ytAt) / 1000) : 0);
+  function nightState() {
+    const N = S.night, t = nowT();
+    return N.ch.map((c, i) => {
+      let st = t >= c.e - .5 ? "past" : t >= c.s ? "cur" : "next";
+      // un match n'est « vu » (score final affiché) que si on a regardé sa fin ; sauté (clic plus loin) = toujours caché
+      if (st === "cur" && t >= c.e - 8) S.done.add(i);
+      if (st === "past" && !S.done.has(i)) st = "skip";
+      let at = null;
+      if (c.k === "match" && st === "cur" && c.pts && c.pts.length) at = momentAt(c.pts, t);
+      return { c, i, st, at };
+    });
+  }
+  function renderNight(force) {
+    const my = S; if (!my || !my.night) return;
+    const L = nightState();
+    const key = L.map(x => x.st[0] + (x.at ? x.at.per + ":" + (my.D[x.c.gid] ? playIndex(my.D[x.c.gid], x.at) : "") : "")).join("|");
+    if (!force && key === my.key) return;
+    my.key = key;
+    const nM = L.filter(x => x.c.k === "match").length, seen = L.filter(x => x.c.k === "match" && x.st === "past").length;
+    const item = x => {
+      const c = x.c;
+      if (c.k === "match") {
+        const g = my.games(c), D = my.D[c.gid];
+        if (!g) return `<button class="npi ${x.st}" data-np-seek="${c.s}"><span class="npt">${c.t}</span></button>`;
+        const A = g.teams.away, H = g.teams.home;
+        let as = null, hs = null, lab = "";
+        if (x.st === "past") { as = A.score; hs = H.score; lab = g.ot ? "Final · prol." : "Final"; }
+        else if (x.st === "skip") lab = "Pas encore vu";
+        else if (x.st === "cur") {
+          if (x.at && D) { const F = flow(D, x.at); as = F.as; hs = F.hs; lab = clockTxt(x.at.per, x.at.sec); }
+          else lab = "En cours";
+        }
+        const win = x.st === "past" ? (as > hs ? "a" : "h") : as > hs ? "a" : hs > as ? "h" : "";
+        const row = (T, v, side) => `<span class="npr ${win === side ? "w" : ""}" style="--tc:${T.color}"><span class="nplg">${logoHTML(T)}</span><b>${T.name}</b>
+          <span class="led ${v === null ? "off" : ""}"><span class="v">${v === null ? "??" : v}</span></span></span>`;
+        return `<button class="npi m ${x.st}" data-np-seek="${c.s}" style="--ca:${A.color};--cb:${H.color}">
+          <span class="nph">${x.st === "cur" ? `<i class="npdot"></i>` : ""}${lab || "Match " + (L.filter(y => y.c.k === "match").indexOf(x) + 1)}</span>${row(A, as, "a")}${row(H, hs, "h")}</button>`;
+      }
+      if (c.k === "potn") {
+        const known = x.st !== "next" && c.aid;
+        const ph = known && /^\d+$/.test(c.aid) ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${c.aid}.png" alt="" onerror="this.remove()">` : "";
+        return `<button class="npi xt potn ${x.st}" data-np-seek="${c.s}"><span class="npx">${ph || "★"}</span><span class="npt"><small>Le joueur de la nuit</small>${known ? c.n : "?"}</span></button>`;
+      }
+      return `<button class="npi xt ${x.st}" data-np-seek="${c.s}"><span class="npx">${c.k === "top" ? "🔥" : "▶"}</span><span class="npt"><small>${c.k === "top" ? "Pour finir" : "Chapitre"}</small>${c.k === "top" ? "Les plus belles actions" : c.t}</span></button>`;
+    };
+    my.el.innerHTML = `<div class="nphead"><span class="lv-kick sm">La nuit</span><span class="npcount"><b>${seen}</b> / ${nM} matchs vus</span></div>
+      <div class="npl">${L.map(item).join("")}</div>`;
+    // sous la vidéo : le match en cours (film du match + tendances), ou le joueur de la nuit
+    const cur = L.find(x => x.st === "cur");
+    if (!my.below) return;
+    if (cur && cur.c.k === "match" && my.D[cur.c.gid]) {
+      const D = my.D[cur.c.gid], at = cur.at || { per: 1, sec: 720 };
+      const F = flow(D, at);
+      my.below.innerHTML = curveHTML(D, at, F) + trendsHTML(D, F);
+    } else if (cur && cur.c.k === "potn" && cur.c.aid) {
+      my.below.innerHTML = potnHTML(cur.c);
+    } else my.below.innerHTML = `<div class="lv-sec np-idle"><span class="lv-kick sm">${cur ? (cur.c.k === "top" ? "Les plus belles actions de la nuit" : cur.c.t) : "Lance la vidéo"}</span>
+      <p>${cur ? "Profite." : "Les matchs s'allument à gauche au fil du résumé, avec le score qui suit la vidéo. Clique sur un match pour y aller."}</p></div>`;
+  }
+  function potnHTML(c) {
+    const D = S.D[c.gid]; let line = "";
+    if (D) { const A = statsAt(D, 99, -1), p = A.P[c.aid]; if (p) line = `${p.pts} pts · ${p.reb} reb · ${p.ast} pd${p.blk ? ` · ${p.blk} ctr` : ""}`; }
+    const ph = /^\d+$/.test(c.aid) ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${c.aid}.png" alt="" onerror="this.remove()">` : "";
+    return `<div class="lv-sec np-potn">${ph}<div><span class="lv-kick sm">Le joueur de la nuit</span><b>${c.n}</b><small>${line}</small></div></div>`;
+  }
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-np-seek]"); if (!b || !S || !S.night) return;
+    seekYT(+b.dataset.npSeek + .5); S.key = null; renderNight(true);
+  });
   function close() { if (S) { S.on = false; S = null; } }
   // plein écran d'office quand il y aura des stats : vidéo analysée, ou ordinateur (mode direct)
   function wantsFull(vid) { return DEMO ? CAN : !!((vid && MAPS && MAPS.has(vid)) || CAN); } // le partage reste ouvert pour le résumé suivant
@@ -658,5 +760,5 @@ const Chrono = (() => {
     pts[pts.length - 1][0] < end ? pts.push([end, F.hs - F.as]) : 0;
     return { pts, span: end, nq: lastPer };
   }
-  return { CAN, attach, film, close, onResumeClick, wantsFull, hasMap, indexReady, testFrames, _flow: flow, _reindex() { MAPS = null; return loadIndex(); }, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
+  return { CAN, attach, attachNight, film, close, onResumeClick, wantsFull, hasMap, indexReady, testFrames, _flow: flow, _reindex() { MAPS = null; return loadIndex(); }, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
 })();

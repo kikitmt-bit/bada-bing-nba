@@ -1098,7 +1098,7 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 
 /* ---- Classement : une seule ligne en tête (21/11) ---- */
 .cutbar.onel{padding-top:26px;margin-bottom:22px;gap:12px 14px}
-.cutbar.onel .greet{margin:0 14px 0 0}
+.cutbar.onel .greet{margin:0 14px 0 0;white-space:nowrap;flex:none}
 @media (max-width:700px){ .cutbar.onel{padding-top:16px} .cutbar.onel .greet{flex:1 0 100%} .cutbar.onel .legend{margin-left:0} }
 
 /* ---- Replay + : la colonne des stats remplit toute la hauteur, quel que soit l'écran (21/11, demande de Kiki) ----
@@ -1171,3 +1171,66 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
   .lv-below .lv-trends h4{display:none}
   .lv-below .lv-tile b{font-size:15px}
 }
+
+/* ---- Résumé de la nuit + (21/11) : la liste des matchs à gauche, la vidéo, le match en cours dessous ---- */
+.vplayer.full.nightp{grid-template-areas:"np main" "np below";
+  --W:calc((100vh - 44px - var(--B)) * 16 / 9);
+  grid-template-columns:clamp(270px,calc(100vw - var(--W)),400px) minmax(0,1fr)}
+.np{grid-area:np;min-width:0;height:100vh;display:flex;flex-direction:column;padding:14px 14px 14px;border-right:1px solid var(--line);background:var(--panel)}
+.nphead{display:flex;align-items:baseline;gap:10px;justify-content:space-between;padding:2px 2px 12px}
+.npcount{font:700 12px var(--disp);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.npcount b{font:400 18px var(--led);color:var(--amber);margin-right:2px}
+.npl{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;overflow-y:auto}
+/* les cases se partagent toute la hauteur (jamais de vide en bas), sans devenir géantes */
+.npi{flex:1 1 0;min-height:52px;max-height:150px;position:relative;display:flex;flex-direction:column;justify-content:center;gap:4px;
+  width:100%;text-align:left;border:0;cursor:pointer;color:var(--ink);padding:8px 12px;background:rgba(255,255,255,.035);
+  clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%);transition:background .3s,opacity .3s,filter .3s}
+.npi:hover{background:rgba(255,255,255,.07)}
+.npi.next,.npi.skip{opacity:.5;filter:grayscale(1)}
+.npi.next:hover,.npi.skip:hover{opacity:.8}
+.npi.m.cur{background:linear-gradient(110deg,color-mix(in srgb,var(--ca) 45%,#05060c) 0 50%,color-mix(in srgb,var(--cb) 45%,#05060c) 50%);
+  box-shadow:inset 0 0 0 1px rgba(255,176,46,.55)}
+.npi.m.past{background:linear-gradient(110deg,color-mix(in srgb,var(--ca) 18%,#0b0d18) 0 50%,color-mix(in srgb,var(--cb) 18%,#0b0d18) 50%)}
+.nph{display:flex;align-items:center;gap:6px;font:700 10.5px var(--disp);letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.npi.cur .nph{color:var(--amber)}
+.npdot{width:7px;height:7px;border-radius:50%;background:var(--live);box-shadow:0 0 8px var(--live);animation:blink 1.2s infinite}
+.npr{display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:center;gap:9px}
+.nplg .lg{width:28px;height:28px;font-size:9px}
+.npr b{font:800 16px var(--disp);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink2)}
+.npr.w b{color:#fff}
+.npr .led{min-width:calc(3ch + 14px);height:28px;font-size:20px;cursor:default}
+.npr .led.off{color:rgba(255,176,46,.25);text-shadow:none}
+.npi.past .npr:not(.w) .led{color:rgba(255,176,46,.4);text-shadow:none}
+.npi.xt{flex-direction:row;align-items:center;gap:12px;flex-grow:.6}
+.npx{flex:none;width:44px;height:44px;display:grid;place-items:center;font-size:20px;overflow:hidden;background:rgba(255,176,46,.12);
+  clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
+.npx img{width:150%;margin-top:6px}
+.npt{min-width:0;display:flex;flex-direction:column;font:800 16px var(--disp);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.npt small{font:700 10.5px var(--disp);letter-spacing:.16em;color:var(--ink3)}
+.npi.xt.cur{box-shadow:inset 0 0 0 1px rgba(255,176,46,.55);background:rgba(255,176,46,.1)}
+.np-idle{flex:1;display:flex;flex-direction:column;justify-content:center;gap:8px}
+.np-idle p{margin:0;color:var(--ink2)}
+.np-potn{flex:1;display:flex;align-items:center;gap:22px;overflow:hidden}
+.np-potn img{height:100%;max-height:220px;width:auto}
+.np-potn b{display:block;font:900 clamp(26px,3vw,46px)/1 var(--disp);text-transform:uppercase;margin:6px 0}
+.np-potn small{font:700 16px var(--disp);color:var(--amber);letter-spacing:.06em}
+@media (max-width:900px){
+  .vplayer.full.nightp{grid-template-columns:1fr;grid-template-areas:"main" "np" "below"}
+  .np{height:auto;border-right:0}
+  .npi{flex:none;min-height:60px}
+}
+/* boutons des extraits du résumé de la nuit */
+.ess-top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px}
+.ess-top .q{flex:1 1 auto}
+.ess-top small{flex:1 1 100%;order:3}
+.mvplay{margin-top:14px}
+.tag.potn{margin-top:6px}
+/* MVP : 4 afficheurs (points, rebonds, passes, contres) sur une seule ligne */
+.mvp .row{flex-wrap:nowrap;gap:8px}
+.mvp .stat .led{min-width:0;width:clamp(54px,5vw,72px);font-size:clamp(26px,2.5vw,36px);height:clamp(42px,3.8vw,52px)}
+.mvp .stat small{font-size:10.5px;letter-spacing:.08em}
+.npi{max-height:none}
+.npi.xt{max-height:120px}
+.npi.m{gap:6px}
+@media (min-height:800px){ .npr{grid-template-columns:34px minmax(0,1fr) auto} .nplg .lg{width:34px;height:34px} .npr b{font-size:18px} .npr .led{height:32px;font-size:23px} }
+@media (max-width:900px){ .vplayer.full.nightp .vmain{position:sticky;top:0;z-index:3} }

@@ -496,7 +496,10 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 @keyframes ring{from{opacity:.9;transform:scale(.3)}to{opacity:0;transform:scale(2.4)}}
 
 /* lecteur vidéo */
-.ovl.vid{align-items:center;padding:16px}
+.ovl.vid{align-items:center;padding:16px;background:#05060c;backdrop-filter:none}
+/* pendant la vidéo : la page derrière est cachée et ses animations arrêtées (sur console ou petit appareil, elles faisaient saccader la vidéo) */
+body.vidon>*:not(#vidovl){visibility:hidden}
+body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-state:paused!important}
 .vplayer{position:relative;width:min(980px,100%);background:#000;animation:rise .3s cubic-bezier(.2,.9,.3,1);
   clip-path:polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))}
 .vplayer .x{position:absolute;top:10px;right:14px;z-index:5;width:36px;height:36px;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:16px;cursor:pointer}
@@ -693,7 +696,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   .vplayer.full .lv-shots{padding-top:6px;margin-top:6px}
   .vplayer.full .lv-zones{margin-top:4px}
 }
-@media (min-width:901px) and (max-height:740px){ .vplayer.full .lv-court{display:none} .vplayer.full .lv-shots{padding-top:4px;margin-top:4px} .vplayer.full .lv-zones{gap:0 8px;margin-top:2px} .vplayer.full .lv h4{margin-bottom:3px} }
+@media (min-width:901px) and (max-height:740px){ .vplayer.full .lv-court{max-height:15vh;width:auto;max-width:100%;margin:0 auto} .vplayer.full .lv-shots{padding-top:4px;margin-top:4px} .vplayer.full .lv-zones{gap:0 8px;margin-top:2px} .vplayer.full .lv h4{margin-bottom:3px} }
 
 /* joueurs en tableau compact (une ligne par joueur) */
 .lv-pl{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:8px 0;border-top:1px solid var(--line)}

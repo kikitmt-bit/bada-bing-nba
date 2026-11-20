@@ -433,7 +433,7 @@ function playVideo(vid, label, gid) { // lecteur intégré, sans quitter le site
     <div class="vfoot"><span>${label}</span>
       ${vid ? `<a href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a>` : ""}</div></div>
     ${live ? `<aside class="lv" id="lvpanel"></aside><section class="lv-below" id="lvbelow"></section>` : ""}`;
-  vidovl.classList.add("open"); document.body.style.overflow = "hidden";
+  vidovl.classList.add("open"); document.body.style.overflow = "hidden"; document.body.classList.add("vidon");
   if (full && vidovl.requestFullscreen && !document.fullscreenElement) vidovl.requestFullscreen().catch(() => {}); // pendant le clic : le navigateur l'exige
   if (live) Chrono.attach(gid, $("#lvpanel"), vplayer.querySelector(".vframe"), vid, $("#lvbelow"));
 }
@@ -452,7 +452,7 @@ async function openResume(id, extra) {
 function closeResume() {
   if (typeof Chrono !== "undefined") Chrono.close();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  vplayer.innerHTML = ""; vplayer.classList.remove("full"); vidovl.classList.remove("open", "full"); document.body.style.overflow = "";
+  vplayer.innerHTML = ""; vplayer.classList.remove("full"); vidovl.classList.remove("open", "full"); document.body.style.overflow = ""; document.body.classList.remove("vidon");
 }
 
 /* ---------- briques d'affichage ---------- */

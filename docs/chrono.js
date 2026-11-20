@@ -635,7 +635,15 @@ const Chrono = (() => {
     if (!sc || !D || !at) return at;
     const P = D.plays;
     let i0 = -1;
-    if (sc[0] + sc[1] > 0) { i0 = P.findIndex(p => p.as === sc[0] && p.hs === sc[1]); if (i0 < 0) return at; }
+    if (sc[0] + sc[1] > 0) {
+      i0 = P.findIndex(p => p.as === sc[0] && p.hs === sc[1]);
+      if (i0 < 0) { // score de l'écran absent du fil ESPN (panier corrigé après coup) : le plus proche
+        let best = 4;
+        P.forEach((p, i) => { const d = Math.abs(p.as - sc[0]) + Math.abs(p.hs - sc[1]); if (d < best) { best = d; i0 = i; } });
+        if (i0 < 0) return at;
+        sc = [P[i0].as, P[i0].hs];
+      }
+    }
     const lo = i0 >= 0 ? elapsed(P[i0].per, P[i0].sec) + .01 : 0;
     let hi = Infinity;
     for (let i = i0 + 1; i < P.length; i++) if (P[i].as !== sc[0] || P[i].hs !== sc[1]) { hi = elapsed(P[i].per, P[i].sec) - .3; break; }
@@ -671,7 +679,8 @@ const Chrono = (() => {
   function chapAt(c, t) {
     if (!c.pts || !c.pts.length || !c.gid) return null;
     const m = momentAt(c.pts, t); if (!m) return null;
-    return clampAt(S.D[c.gid], m, m.sc);
+    const at = clampAt(S.D[c.gid], m, m.sc);
+    return at ? { ...at, sc: m.sc } : at; // sc : le score de l'écran, affiché tel quel
   }
   function nightState() {
     const N = S.night, t = nowT();
@@ -729,7 +738,7 @@ const Chrono = (() => {
         if (x.st === "past") { as = A.score; hs = H.score; lab = g.ot ? "Final · prol." : "Final"; }
         else if (x.st === "skip") lab = "Pas encore vu";
         else if (x.st === "cur") {
-          if (x.at && D) { const F = flow(D, x.at); as = F.as; hs = F.hs; lab = clockTxt(x.at.per, x.at.sec); }
+          if (x.at && D) { const F = flow(D, x.at); [as, hs] = x.at.sc || [F.as, F.hs]; lab = clockTxt(x.at.per, x.at.sec); }
           else lab = "En cours";
         }
         const win = as === null ? "" : as > hs ? "a" : hs > as ? "h" : "";

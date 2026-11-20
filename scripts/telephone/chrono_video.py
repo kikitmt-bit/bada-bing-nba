@@ -271,6 +271,188 @@ def nettoyer(lectures):
     return out[::-1]
 
 
+# ---------- les cases de score du bandeau (22/11) ----------
+# Le bandeau montre les sigles des deux équipes ; chaque score est dans une case collée à son sigle (côté centre quand les
+# équipes sont côte à côte, à droite quand elles sont l'une sous l'autre). On repère les sigles une fois, puis on lit
+# chaque case seule, avec un seuil adapté à SON fond (chiffres blancs sur fond sombre, ou noirs sur fond blanc).
+ALIAS = {"NY": ["NYK", "NY"], "GS": ["GSW", "GS"], "SA": ["SAS", "SA"], "NO": ["NOP", "NO"], "UTAH": ["UTA", "UTAH"],
+         "WSH": ["WAS", "WSH"], "PHX": ["PHX", "PHO"], "BKN": ["BKN", "BRK"], "CHA": ["CHA", "CHO"]}
+
+
+def _binaire(g, thr, clairs_minoritaires):
+    b = g.point(lambda v: 0 if v > thr else 255) if clairs_minoritaires else g.point(lambda v: 255 if v > thr else 0)
+    # les bords de la case (traits qui la traversent de part en part) ne sont pas des chiffres : on les efface
+    W, H = b.size
+    px = b.load()
+    for y in range(H):
+        if sum(1 for x in range(W) if px[x, y] == 0) > W * .8:
+            for x in range(W):
+                px[x, y] = 255
+    for x in range(W):
+        if sum(1 for y in range(H) if px[x, y] == 0) > H * .85:
+            for y in range(H):
+                px[x, y] = 255
+    return ImageOps.expand(b, 24, 255)
+
+
+def chiffres(img):
+    """Les lectures possibles d'une case de score, avec leurs voix : {valeur: voix} (vide si illisible).
+    Plusieurs seuils × plusieurs réglages de tesseract : un « 2 » lu « 9 » une fois sur six ne l'emporte pas."""
+    g = ImageOps.grayscale(img)
+    g = g.resize((max(8, g.width * 3), max(8, g.height * 3)), Image.LANCZOS)
+    h = g.histogram()
+    tot = sum(h)
+    acc, lo, hi = 0, 0, 255
+    for v in range(256):
+        acc += h[v]
+        if acc >= tot * .05:
+            lo = v
+            break
+    acc = 0
+    for v in range(255, -1, -1):
+        acc += h[v]
+        if acc >= tot * .05:
+            hi = v
+            break
+    if hi - lo < 60:
+        return {}  # case unie : pas de chiffre
+    votes = Counter()
+    tmp = _tmp()
+    for f in (.4, .5, .6):
+        thr = lo + (hi - lo) * f
+        clairs = sum(h[int(thr) + 1:])
+        _binaire(g, thr, clairs < tot / 2).save(tmp)
+        for psm in (7, 8, 13):
+            out = subprocess.run(["tesseract", tmp, "stdout", "--psm", str(psm), "-c", "tessedit_char_whitelist=0123456789"],
+                                 capture_output=True, text=True).stdout.strip()
+            if re.fullmatch(r"\d{1,3}", out):
+                votes[int(out)] += 1
+        if f == .4 and len(votes) == 1 and sum(votes.values()) == 3:
+            return {k: v * 3 for k, v in votes.items()}  # unanimes du premier coup : inutile d'insister
+    return dict(votes)
+
+
+def panneaux(row, hmin):
+    """Découpe une ligne du bandeau en panneaux de couleur unie (fond de chaque case) : [(x0, x1)]."""
+    W, H = row.size
+    px = row.load()
+    ys = [int(H * f) for f in (.12, .2, .8, .88)]  # bords haut/bas des cases : le fond, pas les chiffres
+    cols = []
+    for x in range(W):
+        cs = [px[x, y] for y in ys]
+        cols.append(tuple(sorted(c[k] for c in cs)[1] for k in range(3)))
+    dist = lambda a, b: abs(a[0] - b[0]) + abs(a[1] - b[1]) + abs(a[2] - b[2])
+    cuts = [0]
+    x = 3
+    while x < W - 3:
+        g = [sum(cols[x - 3 + i][k] for i in range(3)) / 3 for k in range(3)]
+        d = [sum(cols[x + i][k] for i in range(3)) / 3 for k in range(3)]
+        if dist(g, d) > 70:
+            cuts.append(x)
+            x += 4
+        else:
+            x += 1
+    cuts.append(W)
+    return [(a, b) for a, b in zip(cuts, cuts[1:]) if b - a >= hmin]
+
+
+def bordure(c):
+    """Couleur moyenne des bords haut et bas d'une case (son fond)."""
+    c = c.convert("RGB")
+    W, H = c.size
+    px = [c.getpixel((x, y)) for y in (1, 2, H - 3, H - 2) for x in range(0, W, max(1, W // 12))]
+    return tuple(sum(p[i] for p in px) / len(px) for i in range(3))
+
+
+class Tableau:
+    """Lit les deux scores du bandeau d'un match (D = déroulé ESPN : les sigles des équipes).
+    Le bandeau ne bouge pas pendant un match : on repère les deux sigles (sur une ou plusieurs images : le sigle noir sur
+    fond blanc se lit moins bien), et chaque score est dans la case collée à son sigle, côté chrono (visiteurs à gauche)."""
+
+    def __init__(self, D):
+        self.sig = {k: set(ALIAS.get(D["ab"][k], [D["ab"][k]])) for k in ("away", "home")}
+        self.vu = {"away": [], "home": []}   # positions des sigles du tableau, image après image
+        self.box = None
+        self.miss = 0
+        self.n = 0
+        self.fond = {}   # couleur des bords de chaque case quand elle porte un score
+        self.memo = {}   # la dernière image de chaque case et sa lecture : une case ne change qu'à chaque panier
+
+    def chercher(self, band):
+        W, H = band.size
+        scale = max(.8, min(2.4, 2000 / W))
+        best = {}
+        for mode in ("gray", "inv"):
+            for w in ocr(prep(band, scale, mode), 11):
+                t = re.sub(r"[^A-Z]", "", w["t"].upper())
+                for k in ("away", "home"):
+                    if t in self.sig[k]:
+                        b = (w["x0"] / scale, w["y0"] / scale, w["x1"] / scale, w["y1"] / scale)
+                        if k not in best or b[3] - b[1] > best[k][3] - best[k][1]:
+                            best[k] = b  # le plus gros : celui du tableau (pas du petit bandeau « NYK 12-0 RUN »)
+        for k, b in best.items():
+            self.vu[k].append(b)
+        self.caler()
+
+    def caler(self):
+        if not self.vu["away"] or not self.vu["home"]:
+            return
+        med = lambda xs: sorted(xs)[len(xs) // 2]
+        A = [med([b[i] for b in self.vu["away"]]) for i in range(4)]
+        Hm = [med([b[i] for b in self.vu["home"]]) for i in range(4)]
+        h = min(A[3] - A[1], Hm[3] - Hm[1])  # la hauteur du texte du sigle (la boîte d'un sigle avalant son logo est plus haute)
+        cyA, cyH = (A[1] + A[3]) / 2, (Hm[1] + Hm[3]) / 2
+        if abs(cyA - cyH) > h * 2.5:
+            return
+        def case(b, cy, droite):
+            y0, y1 = cy - h * .75, cy + h * .75
+            return (b[2] + h * .15, y0, b[2] + h * 2.2, y1) if droite else (b[0] - h * 2.2, y0, b[0] - h * .15, y1)
+        if abs(cyA - cyH) > h * .8:            # l'une sous l'autre : les scores à droite des sigles
+            self.box = {"away": case(A, cyA, True), "home": case(Hm, cyH, True)}
+        else:  # côte à côte : les scores vers le centre, sur la même ligne (celle du sigle le mieux cadré)
+            cy = cyA if A[3] - A[1] <= Hm[3] - Hm[1] else cyH
+            gA = A[0] < Hm[0]
+            self.box = {"away": case(A, cy, gA), "home": case(Hm, cy, not gA)}
+
+    def lire(self, band, horloge=None):
+        self.n += 1
+        if self.box is None or self.miss >= 12:
+            if self.miss >= 12:  # le bandeau a changé (autre chaîne, autre plan) : on repart de zéro
+                self.vu, self.box, self.miss, self.memo, self.fond = {"away": [], "home": []}, None, 0, {}, {}
+            if self.n % 2 == 1:  # la recherche coûte : une image sur deux
+                self.chercher(band)
+        if self.box is None:
+            return None
+        W, H = band.size
+        out = []
+        for k in ("away", "home"):
+            x0, y0, x1, y1 = self.box[k]
+            c = band.crop((max(0, int(x0)), max(0, int(y0)), min(W, int(x1)), min(H, int(y1))))
+            if c.width < 6 or c.height < 6:
+                out.append({})
+                continue
+            bord = bordure(c)
+            ref = self.fond.get(k)
+            if ref and sum(abs(x - y) for x, y in zip(bord, ref)) > 90:
+                out.append({})  # le fond de la case n'est plus celui du tableau : gros plan, ralenti, autre image
+                continue
+            vig = list(ImageOps.grayscale(c).resize((24, 12)).getdata())
+            m = self.memo.get(k)
+            if m and m[0] and sum(abs(x - y) for x, y in zip(vig, m[0])) / len(vig) < 5:
+                out.append(m[1])  # case inchangée : même lecture, sans relancer tesseract
+                continue
+            r = chiffres(c)
+            self.memo[k] = (vig, r)
+            if r and k not in self.fond:
+                self.fond[k] = bord  # la couleur du fond de la case, la première fois qu'elle est lue
+            out.append(r)
+        if not out[0] or not out[1]:
+            self.miss += 1
+            return None
+        self.miss = 0
+        return tuple(out)  # ({valeur: voix} visiteurs, {valeur: voix} domicile)
+
+
 # ---------- les scores lus à l'écran, recoupés avec la suite des scores ESPN (22/11) ----------
 # Le chrono seul ne suffit pas : le minutage ESPN des paniers ne colle pas toujours au bandeau, et bien des images n'ont
 # pas de chrono lisible. Le score affiché, lui, se lit bien et ne peut prendre que les valeurs successives du match.
@@ -351,90 +533,105 @@ RETARD = 3.5  # le bandeau change de score ~2 s (de chrono) avant l'horaire not�
 
 
 def caler(lectures, D):
-    """lectures : [(t, quart|None, secondes|None, variante, mots)]. Renvoie des points [t, quart, secondes(, visiteurs, domicile)].
-    Le chrono lu donne le moment (décalé de RETARD pour coller au bandeau) ; quand l'image montre un score lisible et sûr,
-    le moment est borné à l'intérieur de ce score (et le point le porte : le site ne fera jamais passer un panier pas vu)."""
+    """lectures : [(t, quart|None, secondes|None, variante, mots, cases)] ; cases = ({visiteurs: voix}, {domicile: voix}) ou None.
+    Renvoie [t, quart, secondes(, visiteurs, domicile)] : le score affiché est CELUI DE L'ÉCRAN quand les cases sont lues
+    (validé par la suite des scores ESPN : exact, ou à 3 points près quand ESPN a corrigé un panier après coup), et le
+    moment du match (chrono lu + RETARD) reste à l'intérieur de ce score."""
     E = D["etats"]
     K = {p[0]: (p[1], p[2]) for p in nettoyer([l[:4] for l in lectures if l[2] is not None])}
     Kt = sorted(K)
-    items = []  # (t, score possible, poids)
-    for t, _, _, _, mots in lectures:
-        nums = nombres(mots)
-        for k in soutenus(D, nums):
-            a, h = E[k]["as"], E[k]["hs"]
-            fin = E[k + 1]["el"] if k + 1 < len(E) else 1e9
-            if t in K:
-                el = ecoule(*K[t]) + RETARD
-                # le chrono prime : un score lu qui ne colle pas au chrono, ce sont d'autres nombres (chrono des tirs, fautes…)
-                if not (E[k]["el"] - 10 <= el <= fin + .5):
-                    continue
-                w = 3.0
-            else:
-                # sans chrono sur l'image : le score doit coller aux chronos lus juste avant et juste après
-                av = [x for x in Kt if x < t][-1:]
-                ap = [x for x in Kt if x > t][:1]
-                if av and fin < ecoule(*K[av[0]]) + RETARD - 30:
-                    continue
-                if ap and E[k]["el"] > ecoule(*K[ap[0]]) + RETARD + 30:
-                    continue
-                w = 1.0 if max(a, h) >= 10 else .5  # tout petits nombres (début de match) : moins sûr
-            items.append((t, k, w))
+    items = []  # (t, état ESPN, poids, score de l'écran)
+    for lec in lectures:
+        t, cases = lec[0], (lec[5] if len(lec) > 5 else None)
+        if not cases:
+            continue
+        A, Hm = ({int(k): v for k, v in c.items()} for c in cases)  # (relu depuis un JSON : clés en texte)
+        ta, th = sum(A.values()) or 1, sum(Hm.values()) or 1
+        for a, va in A.items():
+            for h, vh in Hm.items():
+                conf = (va / ta) * (vh / th)  # la part des voix de cette lecture
+                ex = [k for k, e in enumerate(E) if e["as"] == a and e["hs"] == h]
+                if ex:
+                    k, w = ex[0], 2 + 2 * conf
+                else:
+                    near = [(abs(e["as"] - a) + abs(e["hs"] - h), k) for k, e in enumerate(E)]
+                    dmin, k = min(near)
+                    if dmin > 3 or conf < .5:
+                        continue
+                    w = .8 * conf
+                fin = E[k + 1]["el"] if k + 1 < len(E) else 1e9
+                if t in K:
+                    el = ecoule(*K[t]) + RETARD
+                    if not (E[k]["el"] - 25 <= el <= fin + 25):
+                        continue
+                    w += 1
+                else:
+                    av = [x for x in Kt if x < t][-1:]
+                    ap = [x for x in Kt if x > t][:1]
+                    if av and fin < ecoule(*K[av[0]]) + RETARD - 30:
+                        continue
+                    if ap and E[k]["el"] > ecoule(*K[ap[0]]) + RETARD + 30:
+                        continue
+                items.append((t, k, w, (a, h)))
     items.sort()
     n = len(items)  # plus longue suite chronologique : le score ne recule jamais
     best, prev = [0.0] * n, [-1] * n
     for i in range(n):
-        ti, ki, wi = items[i]
+        ti, ki, wi, _ = items[i]
         best[i] = wi
         for j in range(i):
-            tj, kj, wj = items[j]
+            tj, kj, wj, _ = items[j]
             if tj < ti and kj <= ki and best[j] + wi > best[i]:
                 best[i], prev[i] = best[j] + wi, j
     vu = {}
     if n:
         i = max(range(n), key=lambda x: best[x])
         while i >= 0:
-            vu[items[i][0]] = items[i][1]
+            vu[items[i][0]] = (items[i][1], items[i][3])
             i = prev[i]
     pts = []
     for t in sorted(set(K) | set(vu)):
         if t in vu:
-            k = vu[t]
+            k, sc = vu[t]
             deb = E[k]["el"] + .01
             fin = (E[k + 1]["el"] - .3) if k + 1 < len(E) else 1e9
             el = min(max(ecoule(*K[t]) + RETARD, deb), fin) if t in K else deb
-            pts.append((t, el, k))
+            pts.append((t, el, k, sc))
         else:
-            pts.append((t, ecoule(*K[t]) + RETARD, None))
-    # cohérence : un point au chrono seul ne doit pas contredire les scores vus avant/après lui
-    vus = [(t, el, k) for t, el, k in pts if k is not None]
+            pts.append((t, ecoule(*K[t]) + RETARD, None, None))
+    vus = [p for p in pts if p[2] is not None]
     res, last = [], -1.0
-    for t, el, k in pts:
-        if k is None:
+    for t, el, k, sc in pts:
+        if k is None:  # chrono seul : il ne doit pas contredire les scores vus juste avant / après
             av = [v for v in vus if v[0] < t]
             ap = [v for v in vus if v[0] > t]
             if av and el < av[-1][1]:
                 continue
-            if ap:
-                nk = ap[0][2]
-                if el >= ap[0][1] + 30:  # bien plus loin que le score vu juste après : chrono mal lu
-                    continue
+            if ap and el >= ap[0][1] + 30:
+                continue
+        if k is None:  # chrono seul : on garde le dernier score vu à l'écran, le moment reste dans ce score
+            av = [v for v in vus if v[0] < t]
+            if av:
+                k, sc = av[-1][2], av[-1][3]
+                fin = (E[k + 1]["el"] - .3) if k + 1 < len(E) else 1e9
+                el = min(el, fin)
         if el + .001 < last:
             continue
         last = el
         per, sec = moment(el)
-        res.append([t, per, sec, E[k]["as"], E[k]["hs"]] if k is not None else [t, per, sec])
+        res.append([t, per, sec, sc[0], sc[1]] if sc else [t, per, sec])
     return res
 
 
 def lire_plage(frames_dir, frames, t0, t1, D):
-    """Lit les images [t0, t1) (une par seconde) : chrono + ligne du bandeau, puis calage sur les scores ESPN."""
-    lec, brut = Lecteur(), []
+    """Lit les images [t0, t1) (une par seconde) : le chrono (Lecteur) et les deux cases de score (Tableau), puis calage."""
+    lec, tab, brut = Lecteur(), (Tableau(D) if D else None), []
     for t in range(t0, min(t1, len(frames) * PAS), PAS):
         band = Image.open(os.path.join(frames_dir, frames[t // PAS]))
         r = lec.lire(band)
-        mots = lec.ligne(band) if D else []
-        if r or mots:
-            brut.append((t,) + (tuple(r) if r else (None, None, None)) + (mots,))
+        cases = tab.lire(band) if tab else None
+        if r or cases:
+            brut.append((t,) + (tuple(r) if r else (None, None, None)) + ([], cases))
     return caler(brut, D) if D else nettoyer([b[:4] for b in brut if b[2] is not None]), brut
 
 

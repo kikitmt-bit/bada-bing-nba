@@ -1307,3 +1307,6 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .np-card.tall .np-ph img{width:auto;height:100%;left:50%;margin-left:0;transform:translateX(-50%)}
 .nps>.np-card:only-child{flex:1;align-content:start}
 .nps>.np-card:only-child .np-ph{height:clamp(160px,46vh,480px)}
+.np-top.gm{background:linear-gradient(160deg,color-mix(in srgb,var(--ca) 40%,#05060c) 0 50%,color-mix(in srgb,var(--cb) 40%,#05060c) 50%);justify-content:center;align-items:center;text-align:center}
+.np-gl{display:flex;gap:14px;margin-bottom:8px}
+.np-gl .lg{width:clamp(40px,4vw,64px);height:clamp(40px,4vw,64px)}

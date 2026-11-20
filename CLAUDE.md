@@ -199,6 +199,15 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   « Choisi par la NBA », supprimée) et « ▶ Les 5 plus belles actions » ouvrent l'EXTRAIT SEUL (`openNightPlus(key, solo)`,
   `&start=&end=`, classe `.solo`) : vidéo + colonne de droite (`.nps` : carte + terrain, ou grande carte de l'action) +
   dessous (film de son match, ou les 5 cartes).
+- **Réglages du calage (22/11 soir, mesurés sur la nuit du 19)** : les chiffres du bandeau se lisent MAL (tesseract rate
+  souvent le « 7 »), le chrono bien ; le bandeau change de score ~3 s de chrono AVANT l'horaire ESPN → `RETARD = 3.5` ajouté
+  au chrono lu ; le chrono prime, un score lu ne sert de borne que sur sa propre image (et sans chrono, il doit coller aux
+  chronos voisins). Limite connue : ESPN corrige parfois des paniers (le bandeau a montré 37-30 puis 97-90, scores absents du
+  fil ESPN) → écart d'un panier possible. Lectures brutes gardées par nuit.py (`brut_<vid>.json` à côté du script) pour
+  recaler sans relire la vidéo. **Top 5** : les cartons bleus « 5 »… « 1 » découpent les actions (`carton` : couleur moyenne
+  b > 70, r < 60, b > r + 40) ; dans chaque action, le bandeau (sigles, chrono « m:ss » uniquement — « 123 » = bilan 12-3 —,
+  scores ≥ 10) donne le moment, l'action = le panier ESPN suivant ; non reconnue → carte du match (`gameCard`). Nuit du 19 :
+  2 joueurs sur 5 reconnus.
 - **Mode démo** : `?demo=1` = fausse saison stable (`demo.js`), l'équivalent de `BB_FAUX_ESPN=1`. Test local :
   `python3 -m http.server 8777` dans `docs/` puis `http://localhost:8777/?demo=1` (Playwright : PC 1400px + téléphone 393px,
   vérifier zéro erreur JS et zéro défilement horizontal).

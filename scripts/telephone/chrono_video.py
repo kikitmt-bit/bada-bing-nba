@@ -347,7 +347,7 @@ def soutenus(D, nums):
     return out
 
 
-RETARD = 2.5  # le bandeau change de score ~2 s (de chrono) avant l'horaire noté par ESPN (vérifié : 14-7 à l'écran à 6:25, ESPN 6:24)
+RETARD = 3.5  # le bandeau change de score ~2 s (de chrono) avant l'horaire noté par ESPN (vérifié : 14-7 à l'écran à 6:25, ESPN 6:24)
 
 
 def caler(lectures, D):
@@ -356,19 +356,28 @@ def caler(lectures, D):
     le moment est borné à l'intérieur de ce score (et le point le porte : le site ne fera jamais passer un panier pas vu)."""
     E = D["etats"]
     K = {p[0]: (p[1], p[2]) for p in nettoyer([l[:4] for l in lectures if l[2] is not None])}
+    Kt = sorted(K)
     items = []  # (t, score possible, poids)
     for t, _, _, _, mots in lectures:
         nums = nombres(mots)
         for k in soutenus(D, nums):
             a, h = E[k]["as"], E[k]["hs"]
+            fin = E[k + 1]["el"] if k + 1 < len(E) else 1e9
             if t in K:
                 el = ecoule(*K[t]) + RETARD
-                fin = E[k + 1]["el"] if k + 1 < len(E) else 1e9
-                if not (E[k]["el"] - 25 <= el <= fin + 25):
-                    continue  # le chrono lu dit autre chose : ce sont d'autres nombres (chrono des tirs, fautes…)
+                # le chrono prime : un score lu qui ne colle pas au chrono, ce sont d'autres nombres (chrono des tirs, fautes…)
+                if not (E[k]["el"] - 10 <= el <= fin + .5):
+                    continue
                 w = 3.0
             else:
-                w = 1.0 if max(a, h) >= 10 else .5  # tout petits nombres sans chrono (début de match) : moins sûr
+                # sans chrono sur l'image : le score doit coller aux chronos lus juste avant et juste après
+                av = [x for x in Kt if x < t][-1:]
+                ap = [x for x in Kt if x > t][:1]
+                if av and fin < ecoule(*K[av[0]]) + RETARD - 30:
+                    continue
+                if ap and E[k]["el"] > ecoule(*K[ap[0]]) + RETARD + 30:
+                    continue
+                w = 1.0 if max(a, h) >= 10 else .5  # tout petits nombres (début de match) : moins sûr
             items.append((t, k, w))
     items.sort()
     n = len(items)  # plus longue suite chronologique : le score ne recule jamais

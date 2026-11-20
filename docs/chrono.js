@@ -796,8 +796,9 @@ const Chrono = (() => {
     if (!plays.length) return `<div class="lv-sec np-idle"><span class="lv-kick sm">Les plus belles actions de la nuit</span><p>Profite.</p></div>`;
     const n = plays.filter(a => t >= a.s).length;
     return `<div class="np-tops" style="--n:${plays.length}">${plays.map((a, i) => {
-      const rank = plays.length - i, open = i < n, curr = i === n - 1, P = open ? playStats(a) : null;
+      const rank = a.r || plays.length - i, open = i < n, curr = i === n - 1, P = open ? playStats(a) : null;
       if (!open) return `<div class="np-top off"><span class="np-rk">${rank}</span><span class="np-q">?</span></div>`;
+      if (!P) return gameCard(a, rank, curr); // joueur pas identifié : le match
       const s = P ? P.s : {}, ph = photoURL(a.aid);
       return `<div class="np-top ${curr ? "cur" : ""}" style="--tc:${P ? P.T.color : "#444"}"><span class="np-rk">${rank}</span>
         <div class="np-tph">${ph ? `<img src="${ph}" alt="" onerror="this.remove()">` : ""}</div>
@@ -805,7 +806,18 @@ const Chrono = (() => {
         ${P ? `<div class="npcs mini"><div class="npc"><b>${s.pts || 0}</b><small>Pts</small></div><div class="npc"><b>${s.reb || 0}</b><small>Reb</small></div><div class="npc"><b>${s.ast || 0}</b><small>Pd</small></div><div class="npc"><b>${s.blk || 0}</b><small>Ctr</small></div><div class="npc"><b>${s.fg || 0}/${s.fga || 0}</b><small>Tirs</small></div></div>` : ""}</div>`;
     }).join("")}</div>`;
   }
+  // une action dont le joueur n'a pas été reconnu : les deux équipes du match
+  function gameCard(a, rank, curr) {
+    const D = S.D[a.gid];
+    const A = D ? teamOf(D, D.away) : null, H = D ? team(D.home) : null;
+    return `<div class="np-top gm ${curr ? "cur" : ""}" style="--ca:${A ? A.color : "#333"};--cb:${H ? H.color : "#333"}"><span class="np-rk">${rank}</span>
+      <div class="np-gl">${A ? logoHTML(A) : ""}${H ? logoHTML(H) : ""}</div><b>${A && H ? `${A.name} – ${H.name}` : "Action " + rank}</b><small>Action n° ${rank}</small></div>`;
+  }
   function topBig(a, rank) {
+    if (!playStats(a)) { const D = S.D[a.gid];
+      return `<div class="np-card tall"><span class="np-bigrk">N° ${a.r || rank}</span><div class="np-id"><span class="lv-kick sm">La plus belle action n° ${a.r || rank}</span>
+        <b>${D ? `${team(D.away).name} – ${team(D.home).name}` : "?"}</b><small>Le joueur n'a pas été reconnu dans la vidéo</small></div></div>`; }
+    rank = a.r || rank;
     const P = playStats(a), s = P ? P.s : {}, ph = photoURL(a.aid);
     return `<div class="np-card tall" style="--tc:${P ? P.T.color : "#444"}"><span class="np-bigrk">N° ${rank}</span>
       <div class="np-ph">${ph ? `<img src="${ph}" alt="" onerror="this.remove()">` : ""}${P ? logoHTML(P.T) : ""}</div>

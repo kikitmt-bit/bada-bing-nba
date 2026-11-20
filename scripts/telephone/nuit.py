@@ -171,63 +171,92 @@ def noms(gid):
     return out
 
 
+def carton(img):
+    """Les cartons « 5 », « 4 »… entre deux actions du top : une image presque toute bleue (ou le classement qui suit)."""
+    small = img.convert("RGB").resize((32, 12))
+    px = list(small.getdata())
+    r = sum(p[0] for p in px) / len(px)
+    g = sum(p[1] for p in px) / len(px)
+    b = sum(p[2] for p in px) / len(px)
+    return b > 70 and r < 60 and b > r + 40  # mesuré : cartons b 76-93 / r 15-36 ; classement qui suit b 72 / r 35 (exclu)
+
+
 def actions(frames_dir, frames, ch, Ds):
-    lect = []  # (t, gid, temps de jeu écoulé ou None, nombres à l'écran)
-    for t in range(ch["s"], min(ch["e"], len(frames) * cv.PAS), cv.PAS):
-        band = Image.open(os.path.join(frames_dir, frames[t // cv.PAS]))
-        scale = max(.8, min(2.4, 2000 / band.width))
-        words = []
-        for mode in ("gray", "inv"):
-            words += cv.ocr(cv.prep(band, scale, mode), 11)
-        txt = {re.sub(r"[^A-Z]", "", w["t"].upper()) for w in words}
-        best = None
-        for gid, D in Ds.items():
-            hits = sum(any(x in txt for x in sigles(D["ab"][k])) for k in ("away", "home"))
-            if hits and (best is None or hits > best[0]):
-                best = (hits, gid)
-        if not best:
-            continue
-        q = cv.find_quarter(words)
-        k = cv.find_clock(words, q[1] if q else None, dixiemes=False)
-        el = cv.ecoule(q[0], k[0]) if q and k else None
-        lect.append((t, best[1], el, cv.nombres([w["t"] for w in words])))
-    groupes = []  # une action = des images qui se suivent, même match, même moment
-    for r in lect:
-        g = groupes[-1] if groupes else None
-        if g and g[-1][1] == r[1] and r[0] - g[-1][0] <= 4 and (r[2] is None or g[-1][2] is None or abs(r[2] - g[-1][2]) <= 45):
-            g.append(r)
-        else:
-            groupes.append([r])
-    groupes = [g for g in groupes if len(g) >= 2 and any(r[2] is not None for r in g)]
+    """Le top 5 : les cartons bleus découpent les actions ; dans chacune, le bandeau (sigles, chrono, score) donne le match
+    et le moment, et l'action est le prochain panier ESPN de ce match (le bandeau se voit juste avant le geste)."""
+    ts = list(range(ch["s"], min(ch["e"], len(frames) * cv.PAS), cv.PAS))
+    imgs = {t: Image.open(os.path.join(frames_dir, frames[t // cv.PAS])) for t in ts}
+    bleu = {t: carton(imgs[t]) for t in ts}
+    # les actions : ce qui suit chaque carton, jusqu'au carton suivant
+    seg, cur = [], None
+    for t in ts:
+        if bleu[t]:
+            if cur and cur["t"]:
+                seg.append(cur)
+            cur = {"s": t, "t": []}
+        elif cur is not None:
+            cur["t"].append(t)
+    if cur and cur["t"]:
+        seg.append(cur)
+    seg = [x for x in seg if len(x["t"]) >= 4][:5]
     out = []
-    for n, g in enumerate(groupes):
-        D = Ds[g[0][1]]
-        els = [r[2] for r in g if r[2] is not None]
-        lo, hi = (min(els) - 15, max(els) + 20) if els else (-1, 1e9)
-        vus = set()
-        for r in g:
-            vus.update(cv.soutenus(D, r[3]))
-        E, P = D["etats"], D["plays"]
-        jeu = None
-        # le panier : celui qui fait passer à un score vu à l'écran (le plus tardif), dans la fenêtre du chrono
-        for k in sorted(vus, reverse=True):
-            p = P[E[k]["i"]] if k > 0 else None
-            if p and lo <= E[k]["el"] <= hi and p["a0"] and not re.search(r"free throw", p["tx"], re.I):
-                jeu = p
-                break
-        if jeu is None and els:  # sinon : l'action la plus proche du chrono lu (contre, passe…)
-            m = max(els)  # le dernier chrono lu : juste avant ou après l'action
-            c = [p for p in P if p["a0"] and abs(p["el"] - m - cv.RETARD) <= 12 and not re.search(r"misses|free throw", p["tx"], re.I)
-                 and re.search(r"dunk|block|three|layup|jumper|alley|hook", p["tx"], re.I)]
-            if c:
-                jeu = min(c, key=lambda p: abs(p["el"] - m))
-        a = {"s": max(ch["s"], g[0][0] - 1), "e": groupes[n + 1][0][0] - 1 if n + 1 < len(groupes) else ch["e"], "gid": D["gid"]}
-        if jeu:
-            a.update(aid=str(jeu["a0"]), per=jeu["per"], sec=jeu["sec"], tx=jeu["tx"])
-            try:
-                a["n"] = D.setdefault("noms", noms(D["gid"])).get(str(jeu["a0"]), "")
-            except Exception:
-                pass
+    for n, x in enumerate(seg):
+        a = {"s": x["s"], "e": seg[n + 1]["s"] if n + 1 < len(seg) else (x["t"][-1] + 1), "r": len(seg) - n}
+        lect = []  # (t, gid, quart lu ou None, [chronos possibles], nombres)
+        for t in x["t"][:12]:  # le bandeau apparaît au début de l'action
+            words = []
+            scale = max(.8, min(2.4, 2000 / imgs[t].width))
+            for mode in ("gray", "inv"):
+                words += cv.ocr(cv.prep(imgs[t], scale, mode), 11)
+            txt = {re.sub(r"[^A-Z]", "", w["t"].upper()) for w in words}
+            best = None
+            for gid, D in Ds.items():
+                hits = sum(any(z in txt for z in sigles(D["ab"][k])) for k in ("away", "home"))
+                if hits and (best is None or hits > best[0]):
+                    best = (hits, gid)
+            if not best:
+                continue
+            q = cv.find_quarter(words)
+            horl = set()
+            for w in words:  # « 6:27 » (pas de « 627 » : les bilans « 12-3 » se lisent « 123 »)
+                m = re.search(r"(\d{1,2})[:;](\d{2})(?!\d)", w["t"])
+                if m and int(m.group(2)) < 60 and int(m.group(1)) <= 12:
+                    horl.add(int(m.group(1)) * 60 + int(m.group(2)))
+            lect.append((t, best[1], q[0] if q else None, horl, cv.nombres([w["t"] for w in words])))
+        if lect:
+            gid = max({r[1] for r in lect}, key=lambda g: sum(1 for r in lect if r[1] == g))
+            D, L = Ds[gid], [r for r in lect if r[1] == gid]
+            a["gid"] = gid
+            E, P = D["etats"], D["plays"]
+            nums = {}
+            for r in L:
+                for v, c in r[4].items():
+                    nums[v] = nums.get(v, 0) + c
+            quarts = {r[2] for r in L if r[2]}
+            cands = []  # (soutien, quart lu ?, temps de jeu) : le moment du bandeau
+            for r in L:
+                for sec in r[3]:
+                    for per in (quarts or {1, 2, 3, 4}):
+                        el = cv.ecoule(per, sec) + cv.RETARD
+                        k = max(i for i, e in enumerate(E) if e["el"] <= el)
+                        sout = sum(1 for v in (E[k]["as"], E[k]["hs"]) if v >= 10 and nums.get(v))
+                        cands.append((sout, per in quarts, el))
+            jeu = None
+            if cands:
+                sout, lu, el = max(cands)
+                if sout or lu:
+                    # l'action : le panier suivant dans ce match (ni lancer franc), dans la minute
+                    for p in P:
+                        if p["pts"] and p["a0"] and p["el"] >= el - 2 and not re.search(r"free throw", p["tx"], re.I):
+                            if p["el"] - el <= 60:
+                                jeu = p
+                            break
+            if jeu:
+                a.update(aid=str(jeu["a0"]), per=jeu["per"], sec=jeu["sec"], tx=jeu["tx"])
+                try:
+                    a["n"] = D.setdefault("noms", noms(gid)).get(str(jeu["a0"]), "")
+                except Exception:
+                    pass
         out.append(a)
     return out
 

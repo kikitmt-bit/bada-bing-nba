@@ -355,4 +355,6 @@ if __name__ == "__main__":
                 passage()
             except Exception as ex:
                 log("erreur :", ex)
-            time.sleep(1200)
+            # de 2h à 10h (heure du téléphone, Paris) les résumés tombent : on repasse toutes les 5 min pour les avoir
+            # au petit déjeuner ; le reste du temps, toutes les 20 min suffit
+            time.sleep(300 if 2 <= time.localtime().tm_hour < 10 else 1200)

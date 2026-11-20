@@ -92,6 +92,7 @@ def candidats(chs):
         except Exception:
             continue
         for side in (j.get("boxscore") or {}).get("players", []):
+            ab = (side.get("team") or {}).get("abbreviation", "").upper()
             st = side["statistics"][0]
             names = st.get("names", [])
             for a in st.get("athletes", []):
@@ -100,25 +101,30 @@ def candidats(chs):
                 v = dict(zip(names, a["stats"]))
                 f = lambda k: float(v.get(k) or 0) if re.match(r"^-?\d+(\.\d+)?$", str(v.get(k) or "")) else 0
                 gs = f("PTS") + 1.2 * f("REB") + 1.5 * f("AST") + 2 * f("BLK") + 2 * f("STL")
-                out.append({"aid": str(a["athlete"].get("id")), "n": a["athlete"].get("displayName", ""), "gs": gs, "gid": c["gid"]})
+                out.append({"aid": str(a["athlete"].get("id")), "n": a["athlete"].get("displayName", ""), "gs": gs, "gid": c["gid"], "ab": ab})
     out.sort(key=lambda p: -p["gs"])
-    return out[:14]  # le joueur de la nuit est forcément parmi les grosses perfs : moins de fausses lectures
+    return out[:14], out  # le nom est cherché parmi les 14 grosses perfs (moins de fausses lectures) ; la liste complète sert au repli
 
 
-def joueur_de_la_nuit(video, ch, cands, tmp):
+def joueur_de_la_nuit(video, ch, cands_tous, tmp):
     """Lit le texte à l'écran pendant le chapitre « Player of the Night » (une image toutes les 2 s) et y cherche
     les noms des grosses perfs de la nuit. Le nom le plus souvent lu l'emporte (au moins 2 images)."""
     d = os.path.join(tmp, "potn")
     os.makedirs(d, exist_ok=True)
     subprocess.run(["ffmpeg", "-loglevel", "error", "-ss", str(ch["s"]), "-to", str(ch["e"]), "-i", video,
                     "-vf", "fps=1/2", os.path.join(d, "%04d.png")], check=True)
+    cands, tous = cands_tous
     score = {p["aid"]: 0 for p in cands}
+    sigles = {}  # sigles d'équipe lus dans le bandeau (« POR 14 1ST 4:05 19 MIL ») : le match du joueur, en repli
     for name in sorted(os.listdir(d)):
         img = Image.open(os.path.join(d, name))
         mots = set()
         for mode in ("gray", "inv"):
             for w in cv.ocr(cv.prep(img, 1, mode), 11):
                 mots.add(re.sub(r"[^A-Z'-]", "", sans_accents(w["t"])))
+        for ab in {p["ab"] for p in tous if p["ab"]}:
+            if ab in mots:
+                sigles[ab] = sigles.get(ab, 0) + 1
         for p in cands:
             parts = [x for x in re.split(r"[\s.]+", sans_accents(p["n"])) if len(x) >= 3]
             if parts and parts[-1] in mots:
@@ -126,6 +132,15 @@ def joueur_de_la_nuit(video, ch, cands, tmp):
     best = max(cands, key=lambda p: (score[p["aid"]], p["gs"]), default=None)
     if best and score[best["aid"]] >= 2:
         return {"aid": best["aid"], "n": best["n"], "gid": best["gid"], "lu": score[best["aid"]]}
+    # repli : le match dont les sigles reviennent le plus dans le bandeau, et sa meilleure perf
+    par_match = {}
+    for p in tous:
+        if p["ab"]:
+            par_match.setdefault(p["gid"], set()).add(p["ab"])
+    gid = max(par_match, key=lambda g: sum(sigles.get(a, 0) for a in par_match[g]), default=None)
+    if gid and sum(sigles.get(a, 0) for a in par_match[gid]) >= 4:
+        p = max((p for p in tous if p["gid"] == gid), key=lambda p: p["gs"])
+        return {"aid": p["aid"], "n": p["n"], "gid": gid, "lu": 0, "par": "bandeau"}
     return None
 
 

@@ -703,7 +703,7 @@ function skyHTML(games, hero, scored) {
       ${started ? `<button class="btn amber big" id="revall" ${left ? "" : "disabled"}>${left ? "🎬 Révéler la nuit" : "✓ Nuit révélée"}</button>` : ""}
       ${nplus ? `<button class="btn" data-nuitplus="${state.night}" title="Le résumé de la nuit, avec la liste des matchs et les scores qui suivent la vidéo"><span class="pl">▶</span>Résumé de la nuit<span class="plus">+</span></button>`
         : nr ? `<button class="btn" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
-      ${jr ? `<button class="btn" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin"><span class="pl">▶</span>NBA Extra · le journal</button>` : ""}
+      ${jr ? `<button class="btn" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin"><span class="pl">▶</span>NBA Extra</button>` : ""}
       </div>` : ""}
     </div>
   </section>`;

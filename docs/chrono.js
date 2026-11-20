@@ -84,9 +84,9 @@ const Chrono = (() => {
   /* ---------- les stats jusqu'au moment affiché ---------- */
   function statsAt(D, per, sec) {
     const T = {}; const P = {};
-    for (const t of [D.home, D.away]) T[t] = { fg: 0, fga: 0, tp: 0, tpa: 0, ftm: 0, fta: 0, reb: 0, ast: 0, to: 0, pf: 0 };
+    for (const t of [D.home, D.away]) T[t] = { fg: 0, fga: 0, tp: 0, tpa: 0, ftm: 0, fta: 0, reb: 0, ast: 0, to: 0, pf: 0, blk: 0 };
     let hs = 0, as = 0, last = [];
-    const pl = id => P[id] || (P[id] = { pts: 0, reb: 0, ast: 0, fg: 0, fga: 0 });
+    const pl = id => P[id] || (P[id] = { pts: 0, reb: 0, ast: 0, blk: 0, fg: 0, fga: 0 });
     for (const p of D.plays) {
       if (p.per > per || (p.per === per && p.sec <= sec)) break; // strictement avant le moment affiché : jamais en avance
       hs = p.hs; as = p.as;
@@ -97,6 +97,7 @@ const Chrono = (() => {
         else { t.fga++; if (p.made) t.fg++; if (p.three) { t.tpa++; if (p.made) t.tp++; } }
         if (p.a0) { const q = pl(p.a0); if (!p.ft) { q.fga++; if (p.made) q.fg++; } if (p.made) q.pts += p.ft ? 1 : p.three ? 3 : 2; }
         if (p.made && p.ast && p.a1) { pl(p.a1).ast++; t.ast++; }
+        if (!p.made && p.blk && p.a1) { pl(p.a1).blk++; const o = T[p.tid === D.home ? D.away : D.home]; if (o) o.blk++; } // le contreur est le 2e nommé, dans l'autre équipe
       } else if (/rebound/i.test(p.tt)) { if (p.a0) { t.reb++; pl(p.a0).reb++; } } // rebonds « d'équipe » exclus, comme la feuille ESPN
       else if (/turnover/i.test(p.tt)) t.to++;
       else if (/foul/i.test(p.tt) && !/technical/i.test(p.tt)) t.pf++;
@@ -352,16 +353,16 @@ const Chrono = (() => {
     const pc = (m, n) => n ? Math.round(100 * m / n) + " %" : "–";
     const row = (lab, va, vh, sa, sh) => { const tot = (sa + sh) || 1;
       return `<div class="lv-row"><b data-k="${lab}a">${va}</b><span>${lab}</span><b data-k="${lab}h">${vh}</b><i style="--a:${a.color};--h:${h.color};--p:${(sa / tot * 100).toFixed(1)}%"></i></div>`; };
-    const Z0 = { pts: 0, reb: 0, ast: 0 };
+    const Z0 = { pts: 0, reb: 0, ast: 0, blk: 0 };
     const top = t => {
       const ids = Object.keys(D.names).filter(id => D.names[id].t === t);
       const val = id => A.P[id] || Z0;
       ids.sort((x, y) => (val(y).pts - val(x).pts) || ((val(y).reb + val(y).ast) - (val(x).reb + val(x).ast))
         || (D.names[y].st - D.names[x].st) || (D.names[x].o - D.names[y].o));
       return ids.slice(0, 5).map(id => { const p = val(id);
-        return `<tr><td>${D.names[id].n}</td><td><b data-k="p${id}">${p.pts}</b></td><td><b data-k="r${id}">${p.reb}</b></td><td><b data-k="a${id}">${p.ast}</b></td></tr>`; }).join("");
+        return `<tr><td>${D.names[id].n}</td><td><b data-k="p${id}">${p.pts}</b></td><td><b data-k="r${id}">${p.reb}</b></td><td><b data-k="a${id}">${p.ast}</b></td><td><b data-k="b${id}">${p.blk}</b></td></tr>`; }).join("");
     };
-    const ptab = (tm, t) => `<table><thead><tr><th style="--mc:${tm.color}">${tm.name}</th><th>Pts</th><th>Reb</th><th>Pd</th></tr></thead><tbody>${top(t)}</tbody></table>`;
+    const ptab = (tm, t) => `<table><thead><tr><th style="--mc:${tm.color}">${tm.name}</th><th>Pts</th><th>Reb</th><th>Pd</th><th title="Contres">Ctr</th></tr></thead><tbody>${top(t)}</tbody></table>`;
     el.innerHTML = head + (DEBUG || !S.map ? `
       <div class="lv-score"><span class="lv-t" style="--mc:${a.color}">${a.tri}</span><span class="led">${A.as}</span><span class="lv-dash">–</span><span class="led">${A.hs}</span><span class="lv-t" style="--mc:${h.color}">${h.tri}</span></div>` : "") + `
       <div class="lv-rows">
@@ -371,6 +372,7 @@ const Chrono = (() => {
         ${row("Lancers", `${ta.ftm}/${ta.fta}`, `${th.ftm}/${th.fta}`, ta.ftm, th.ftm)}
         ${row("Rebonds", ta.reb, th.reb, ta.reb, th.reb)}
         ${row("Passes", ta.ast, th.ast, ta.ast, th.ast)}
+        ${row("Contres", ta.blk, th.blk, ta.blk, th.blk)}
         ${row("Balles perdues", ta.to, th.to, ta.to, th.to)}
       </div>
       <div class="lv-pl">${ptab(a, D.away)}${ptab(h, D.home)}</div>`;
@@ -460,7 +462,7 @@ const Chrono = (() => {
     const dots = []; let last = null;
     for (const p of D.plays) {
       if (p.per > at.per || (p.per === at.per && p.sec <= at.sec)) break;
-      if (!p.shoot || p.ft || p.sx === null || !Z[p.tid]) continue;
+      if (!p.shoot || p.ft || p.sx == null || !Z[p.tid]) continue;
       const zone = p.three ? 2 : (p.sx >= 17 && p.sx <= 33 && p.sy <= 19) ? 0 : 1;
       Z[p.tid][zone][1]++; if (p.made) Z[p.tid][zone][0]++;
       const home = p.tid === D.home, X = home ? 94 - p.sy : p.sy, Y = home ? p.sx : 50 - p.sx, col = home ? h.color : a.color;

@@ -208,6 +208,19 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   b > 70, r < 60, b > r + 40) ; dans chaque action, le bandeau (sigles, chrono « m:ss » uniquement — « 123 » = bilan 12-3 —,
   scores ≥ 10) donne le moment, l'action = le panier ESPN suivant ; non reconnue → carte du match (`gameCard`). Nuit du 19 :
   2 joueurs sur 5 reconnus.
+- **Scores lus CASE PAR CASE (22/11, nuit)** : la vidéo est bien en 720p, c'est la lecture qui était mauvaise (toute la ligne
+  d'un bloc, même traitement pour la case blanche aux chiffres noirs et la case sombre aux chiffres blancs). `Tableau(D)` :
+  repère les sigles des deux équipes (le plus gros = celui du tableau, pas du petit bandeau « NYK 12-0 RUN… » ; plusieurs
+  images au besoin, le sigle noir sur blanc se lit mal), en déduit les deux cases (collées au sigle côté centre, ±0,58 h en
+  hauteur pour ne pas attraper la ligne « FOULS | 1 »), cherche le bord exact de chaque case (`affiner` : changement de
+  couleur qui dure ≥ 12 px, à plus de 1,5 h du sigle), puis `chiffres` : fond décidé par les bords haut/bas, 3 seuils × 3
+  réglages tesseract (chiffres seuls) qui VOTENT, traits fins et aplats collés aux côtés effacés ; une case inchangée n'est
+  pas relue (`memo`), une case dont le fond a changé (gros plan) est sautée. `caler` : `etendre` (« 907 » → 90 + 07 à
+  demi-voix), score exact ESPN (poids fort) ou à 3 points près (ESPN a corrigé un panier : on affiche QUAND MÊME le score
+  de l'écran), le chrono seul garde le dernier score vu tant qu'il reste dans ce score (+20 s). Site : `sc` affiché tel quel.
+  Résultat nuit du 19 : Knicks-Wolves 4/5 instants de contrôle exacts (2-5, 14-7, 37-30, 71-57 ; 97-91 au lieu de 97-90),
+  points avec score lu : 52/58, 75/77, 58/80, 47/63. `test_cases.py` = test sur images de référence (lancer DÉTACHÉ sur le
+  téléphone : les longues sessions SSH coupent). ~15 min par chapitre de 3 min.
 - **Mode démo** : `?demo=1` = fausse saison stable (`demo.js`), l'équivalent de `BB_FAUX_ESPN=1`. Test local :
   `python3 -m http.server 8777` dans `docs/` puis `http://localhost:8777/?demo=1` (Playwright : PC 1400px + téléphone 393px,
   vérifier zéro erreur JS et zéro défilement horizontal).

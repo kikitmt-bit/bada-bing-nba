@@ -1060,6 +1060,7 @@ async function openFiche(id) {
             <span class="led ${win === "away" ? "win" : win ? "lose" : ""}"><span class="v">${a.score}</span></span>
             <span class="led ${win === "home" ? "win" : win ? "lose" : ""}"><span class="v">${h.score}</span></span></div>
           <div class="fstat">${statusText(g, true)}</div></div>
+        ${g.state === "post" ? `<button class="btn amber fhrep" data-resume="${g.id}">${replayLabel(g)}</button>` : ""}
         <div class="fteam">${logoHTML(h)}<b>${h.name}</b><small>${h.city} ${h.record ? `(${h.record})` : ""}</small></div>
       </div>
     </div>
@@ -1070,15 +1071,26 @@ async function openFiche(id) {
   try { s = await summary(id); }
   catch (e) { sheet.querySelector(".fbody").innerHTML = `<p class="loadmsg">Impossible de charger les détails. Réessaie dans un instant.</p>`; return; }
   const body = sheet.querySelector(".fbody");
-  // sur PC : un tableau de bord sans défilement (à gauche le match, à droite les deux feuilles de match côte à côte)
+  // sur PC : un tableau de bord sans défilement — à gauche le film du match (qui remplit la hauteur) et les quarts-temps ;
+  // à droite les deux feuilles de match, et dessous un grand demi-terrain : les tirs du joueur touché (au départ, le meilleur marqueur)
+  const dash = DASH();
   body.innerHTML = `<div class="fcol fa">
-    ${s.series ? `<div class="fsect"><h3><span class="tag">Le film du match</span><i></i></h3>${chartHTML(g, s.series, s.span)}</div>` : ""}
-    ${s.quarters ? `<div class="fsect"><h3><span class="tag">Par quart-temps</span><i></i></h3>${quartersHTML(g, s)}</div>` : ""}
+    ${s.series ? `<div class="fsect ffilm"><h3><span class="tag">Le film du match</span><i></i></h3><div class="ffilmbox">${chartHTML(g, s.series, s.span)}</div></div>` : ""}
+    ${dash ? `<div class="fsect fshots"><div class="fshot" id="fshot"></div></div>` : ""}
+    ${s.quarters && !dash ? `<div class="fsect"><h3><span class="tag">Par quart-temps</span><i></i></h3>${quartersHTML(g, s)}</div>` : ""}
     ${s.players.length ? `<div class="fsect"><h3><span class="tag">Les patrons du match</span><i></i></h3>${prosHTML(s.players.slice(0, 6), g)}</div>` : ""}
     ${g.state === "post" ? `<div class="fbtns"><button class="btn amber big" data-resume="${g.id}">${replayLabel(g)}</button></div>` : ""}</div>
     ${s.players.length ? `<div class="fcol fb"><div class="fsect"><h3><span class="tag">La feuille de match</span><i></i><small class="bx-hint">Touche un joueur : tous ses tirs 🎯</small></h3>
-      <div class="bxpair">${boxHTML(g, s, "away")}${boxHTML(g, s, "home")}</div></div></div>` : ""}`;
+      <div class="bxpair">${boxHTML(g, s, "away")}${boxHTML(g, s, "home")}</div></div>
+      ${s.quarters && dash ? `<div class="fsect fqt"><h3><span class="tag">Par quart-temps</span><i></i></h3>${quartersHTML(g, s)}</div>` : ""}</div>` : ""}`;
   state.fiche = s; state.ficheG = g; // pour la carte de tirs
+  if (dash) {
+    // le film du match à la taille de sa place (le SVG garde ses textes nets : on change sa hauteur, pas son étirement)
+    const fb = body.querySelector(".ffilmbox");
+    if (fb && s.series) { const r = fb.getBoundingClientRect(); if (r.width > 100 && r.height > 80) fb.innerHTML = chartHTML(g, s.series, s.span, Math.max(180, Math.round(720 * (r.height - 24) / r.width))); }
+    const top = [...s.players].filter(p => p.shots.length).sort((a, b) => b.pts - a.pts)[0];
+    if (top) shotPanel(top);
+  }
   requestAnimationFrame(() => {
     body.querySelectorAll(".fl").forEach(b => b.style.width = b.dataset.w + "%");
     const line = body.querySelector(".filmline");
@@ -1097,8 +1109,8 @@ function filmPts(pts, span) { // [[secondes, écart]] ; l'ancien format (un éca
   const P = typeof pts[0] === "number" ? pts.map((v, i) => [i * 60, v]) : pts;
   return { P, span: span || P[P.length - 1][0] || 2880 };
 }
-function chartHTML(g, pts, span0) {
-  const W = 720, H = 230, P = { l: 34, r: 14, t: 18, b: 26 };
+function chartHTML(g, pts, span0, H0) {
+  const W = 720, H = H0 || 230, P = { l: 34, r: 14, t: 18, b: 26 };
   const { P: pp, span } = filmPts(pts, span0);
   const vals = pp.map(q => q[1]);
   const mx = Math.max(4, ...vals.map(Math.abs));
@@ -1186,7 +1198,7 @@ function boxHTML(g, s, side) {
 
 /* ---------- la carte de tirs (tous les tirs du joueur, dans l'ordre du match) ---------- */
 const shotovl = $("#shotovl"), shotsheet = $("#shotsheet");
-function courtSVG(shots, color) {
+function courtSVG(shots, color, still) {
   // repère de la carte : panier en (25, 5.25), x sur la largeur (0-50 pieds), y depuis la ligne de fond (ESPN + 5,25 : voir normSummary)
   const S = 10, W = 500, H = 400; // on montre jusqu'à 40 pieds (au-delà : exploits de fin de quart)
   const hoop = { x: 25 * S, y: 5.25 * S };
@@ -1201,7 +1213,7 @@ function courtSVG(shots, color) {
     <path d="M ${3 * S} ${14 * S} A ${23.75 * S} ${23.75 * S} 0 0 0 ${47 * S} ${14 * S}" fill="none" stroke="rgba(255,255,255,.18)"/>`;
   const step = Math.max(130, Math.min(260, Math.floor(5200 / Math.max(1, shots.length)))); // ~5 s de replay
   const marks = shots.map((sh, i) => {
-    const cx = sh.x * S, cy = Math.min(sh.y, 39) * S, d = RM ? 0 : i * step;
+    const cx = sh.x * S, cy = Math.min(sh.y, 39) * S, d = RM || still ? 0 : i * step;
     return sh.m
       ? `<circle class="ring" cx="${cx}" cy="${cy}" r="7" fill="none" stroke="${color}" stroke-width="2" style="animation-delay:${d}ms"/><circle class="shot" cx="${cx}" cy="${cy}" r="7" fill="${color}" stroke="#fff" stroke-width="2" style="animation-delay:${d}ms"/>`
       : `<g class="shot" style="animation-delay:${d}ms"><line x1="${cx - 6}" y1="${cy - 6}" x2="${cx + 6}" y2="${cy + 6}" stroke="#8a8fa8" stroke-width="2.5"/><line x1="${cx - 6}" y1="${cy + 6}" x2="${cx + 6}" y2="${cy - 6}" stroke="#8a8fa8" stroke-width="2.5"/></g>`;
@@ -1209,9 +1221,26 @@ function courtSVG(shots, color) {
   return { svg: `<svg class="court" viewBox="0 0 ${W} ${H}">${lines}${marks}</svg>`, step };
 }
 let shotTimer = null;
+const DASH = () => matchMedia("(min-width:1100px) and (min-height:600px)").matches; // la fiche en tableau de bord (PC)
+// les tirs d'un joueur dans la fiche (PC) : le demi-terrain en bas à droite, mis à jour au clic sur un joueur
+function shotPanel(p) {
+  const el = $("#fshot"); if (!el) return;
+  const t = teamIn(state.ficheG, p.tid);
+  const made = p.shots.filter(x => x.m).length, three = p.shots.filter(x => x.v === 3);
+  const { svg } = courtSVG(p.shots, t.color, true);
+  el.innerHTML = `<div class="fsi" style="--mc:${t.color}"><span class="tag">Les tirs</span>
+      <div class="fsn">${logoHTML(t)}<b>${p.full || p.name}</b></div>
+      <div class="fss"><div><b>${p.pts}</b><small>points</small></div><div><b>${made}/${p.shots.length}</b><small>tirs</small></div>
+        <div><b>${three.filter(x => x.m).length}/${three.length}</b><small>à 3 pts</small></div><div><b>${p.reb}</b><small>rebonds</small></div></div>
+      <div class="clegend"><span><i style="background:${t.color}"></i>Panier</span><span style="color:#8a8fa8">✕ Raté</span></div>
+      <small class="fsh">Touche un autre joueur dans la feuille de match</small></div>
+    <div class="fsc">${svg}</div>`;
+  sheet.querySelectorAll("tr.shootable").forEach(r => r.classList.toggle("sel", r.dataset.shot === (p.aid || p.name)));
+}
 function openShots(key) {
   const s = state.fiche; if (!s) return;
   const p = s.players.find(q => q.aid === key || q.name === key); if (!p) return;
+  if ($("#fshot") && DASH()) { shotPanel(p); return; } // PC : dans la fiche, pas de nouvelle fenêtre
   const t = teamIn(state.ficheG, p.tid);
   const made = p.shots.filter(x => x.m).length, three = p.shots.filter(x => x.v === 3);
   const { svg, step } = courtSVG(p.shots, t.color);

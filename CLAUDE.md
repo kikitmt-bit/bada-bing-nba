@@ -263,13 +263,18 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     (GoatCounter n'en garde pas ; ne pas croiser avec le site NFL). Pas de comptage en démo, en local, sur ?admin, ni sur un appareil exclu (`skipgc`,
     réglé dans la page admin). **Page admin = `?admin=<code secret>`** (23/11 : verrouillée ; seule l'empreinte SHA-256 `ADMIN_HASH` est dans app.js, le code est connu de Kiki seulement, NE JAMAIS l'écrire dans le dépôt ; un appareil qui a donné le bon code est retenu (`bb2_admin`) et exclu des stats : `?admin` seul lui suffit ensuite ; sans code = le site normal) (`renderAdmin`) : lien vers le tableau de bord, explication « qui est venu » + le
     code de cet appareil, interrupteur « Ne pas compter mes visites ».
-  - **Fiche du match (23/11, demande de Kiki : « tout sur une page sans défiler »)** : sur PC (≥ 1100 × 680) `.sheet.fiche` =
-    tableau de bord 97 vw × 95 vh sans défilement : en-tête compact, à gauche (`.fcol.fa`) film du match + quarts-temps +
-    patrons (3 × 2, barres masquées sous 930 px de haut) + Replay ; à droite (`.fcol.fb`) les DEUX feuilles de match côte à côte
-    (`.bxpair`). Feuille de match **triée par points**, colonnes **Pts · Tirs · 3 pts · Reb · Pd · Ctr · Min** (points en
-    ambre, minutes en gris). Téléphone : la fiche défile comme avant. Mention « Bientôt dans la fiche… » retirée.
-    **Carte de tirs** (`.shots`) : sur PC infos à gauche (nom, 4 afficheurs en 2 × 2, compteur, légende, Rejouer) et terrain à
-    droite à la hauteur de l'écran ; sur téléphone tout tient sans défiler (légende masquée, terrain ≤ 44 vh).
+  - **Fiche du match = TABLEAU DE BORD sur PC (23/11, demandes de Kiki : « tout sur une page sans défiler, aucun trou, plus
+    gros, le terrain des tirs DANS la fiche »)** : dès 1100 × 600 (`DASH()`), `.sheet.fiche` 98 vw × 96 vh sans défilement.
+    En-tête compact (logos, noms, score LED, **Replay dans l'en-tête** `.fhrep`). À gauche (`.fa`) : le film du match, dont la
+    hauteur du SVG est recalculée à la place disponible (`chartHTML(..., H)`, textes jamais étirés), puis **le grand
+    demi-terrain des tirs** (`#fshot`, `shotPanel(p)`) : au départ le meilleur marqueur ; **un clic sur un joueur de la feuille
+    met à jour ce terrain** (plus de fenêtre, ligne surlignée `.sel`) ; infos à côté du terrain si le bloc est large, en
+    bandeau au-dessus s'il est haut (`@container`, `.fshots{container-type:size}`). À droite (`.fb`) : les DEUX feuilles de
+    match côte à côte, lignes étirées pour remplir la hauteur (aucun trou), puis les quarts-temps. Tailles en `vh`
+    (`--fs:clamp(12.5px,1.8vh,21px)`). Patrons du match masqués sur PC (doublon avec les feuilles triées). Testé 1920×1080,
+    1333×821, 1366×650, 1280×600 avec 12 joueurs par équipe. Feuille **triée par points**, colonnes **Pts · Tirs · 3 pts ·
+    Reb · Pd · Ctr · Min**. Téléphone : la fiche défile comme avant, le clic sur un joueur ouvre la carte de tirs (`.shots`,
+    qui tient sur l'écran).
   - Banc d'essai sans ESPN : Playwright qui détourne ESPN (faux scoreboard/summary), `v2/nuit/` (vrai fichier de la branche
     data) et l'embed YouTube (fausse page qui envoie `infoDelivery` avec `currentTime`) : on pilote la position de la vidéo.
 - **Réglages du calage (22/11 soir, mesurés sur la nuit du 19)** : les chiffres du bandeau se lisent MAL (tesseract rate

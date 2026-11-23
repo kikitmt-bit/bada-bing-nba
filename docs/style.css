@@ -1486,48 +1486,70 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 @media (max-width:900px){ .adm{margin-bottom:110px} .adl{flex-wrap:wrap} .adl input{max-width:100%} }
 @media (max-width:600px){ .adcard .btn.big{font-size:15px;padding-left:18px;padding-right:18px;max-width:100%} }
 
-/* ---- fiche du match (23/11, demande de Kiki : tout sur un écran, sans défiler, sur PC) ---- */
+/* ---- fiche du match (23/11, demande de Kiki : tout sur un écran, sans défiler, sans trou, sur PC) ---- */
 .fcol{min-width:0;display:grid;gap:24px;align-content:start}
 .fsect h3 .bx-hint{margin:0;font-size:12px;white-space:nowrap;color:var(--ink3)}
 .qt.bx td.tot{color:var(--amber)}
 .qt.bx td.mn{color:var(--ink3);font-size:14px}
 .qt.bx th:nth-child(2){color:var(--amber)}
-@media (min-width:1100px) and (min-height:680px){
+.fhrep{display:none}
+@media (min-width:1100px) and (min-height:600px){
   #ovl{align-items:center}
-  .sheet.fiche{width:min(1560px,97vw);height:min(980px,95vh);max-height:none;display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
-  .fiche .fh{flex:none;padding:12px 26px 10px}
+  .sheet.fiche{width:min(1700px,98vw);height:96vh;max-height:none;display:flex;flex-direction:column;overflow:hidden;padding-bottom:0;
+    --fs:clamp(12.5px,1.55vh,18px)}
+  .fiche .fh{flex:none;padding:clamp(6px,1vh,12px) 70px clamp(6px,1vh,12px) 26px}
+  .fiche .fgrid{grid-template-columns:1fr auto 1fr auto;gap:18px}
   .fiche .fteam{flex-direction:row;justify-content:center;gap:12px}
-  .fiche .fteam .lg{width:52px;height:52px}
-  .fiche .fteam:last-child{flex-direction:row-reverse}
+  .fiche .fteam .lg{width:clamp(36px,5vh,56px);height:clamp(36px,5vh,56px)}
+  .fiche .fteam:nth-child(3){flex-direction:row-reverse}
   .fiche .fteam small{display:none}
-  .fiche .fmid{padding:8px 14px;gap:4px}
-  .fiche .fmid .led{height:50px;font-size:38px}
-  .fiche .fbody{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.35fr);gap:26px;padding:16px 24px 18px;align-items:stretch}
-  .fiche .fcol{min-height:0;gap:16px;overflow-y:auto;scrollbar-width:thin}
-  .fiche .fsect h3{margin-bottom:8px}
-  .fiche .chart{max-height:clamp(140px,24vh,250px)}
-  .fiche .qt td{padding:6px 10px;font-size:17px}
-  .fiche .pros{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-  .fiche .pro{padding:9px 11px}
-  .fiche .pro .who b{font-size:15px}
-  .fiche .pro .big{font-size:30px;margin-top:4px}
-  .fiche .pro .bars{gap:4px;margin-top:6px}
-  .fiche .pro .pteam{display:none}
-  .fiche .fbtns .btn.big{padding-top:10px;padding-bottom:10px}
-  .fiche .bxpair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+  .fiche .fmid{padding:6px 14px;gap:3px}
+  .fiche .fmid .led{height:clamp(36px,5vh,52px);font-size:clamp(26px,3.8vh,40px)}
+  .fiche .fhrep{display:inline-flex;align-self:center}
+  .fiche .fbody{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr);gap:clamp(16px,1.6vw,28px);
+    padding:clamp(10px,1.4vh,18px) clamp(16px,1.4vw,26px) clamp(12px,1.6vh,20px)}
+  .fiche .fcol{min-height:0;display:flex;flex-direction:column;gap:clamp(10px,1.6vh,18px);overflow:hidden}
+  .fiche .fsect h3{margin:0 0 clamp(4px,.8vh,10px)}
+  /* à gauche : le film remplit toute la hauteur libre, les quarts-temps dessous */
+  .fiche .ffilm{flex:1;min-height:0;display:flex;flex-direction:column}
+  .fiche .ffilmbox{flex:1;min-height:0;display:flex;flex-direction:column}
+  .fiche .ffilmbox .chartbox{flex:1;min-height:0;display:flex;flex-direction:column}
+  .fiche .ffilmbox .chart{flex:1;min-height:0;width:100%;height:100%}
+  .fiche .fa .fsect:has(.pros),.fiche .fa .fbtns{display:none}
+  .fiche .qt td{padding:clamp(4px,.8vh,9px) 10px;font-size:calc(var(--fs) + 3px)}
+  .fiche .qt th{font-size:calc(var(--fs) - 2px)}
+  /* à droite : les deux feuilles de match, puis le demi-terrain qui prend le reste */
+  .fiche .fb > .fsect:first-child{flex:none}
+  .fiche .bxpair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(14px,1.4vw,24px)}
   .fiche .bxteam{margin:0}
-  .fiche .qt.bx th{padding:4px 5px;font-size:10.5px;letter-spacing:.08em}
-  .fiche .qt.bx td{padding:5px 5px;font-size:15px}
-  .fiche .qt.bx td:first-child{font-size:13.5px}
+  .fiche .bxh{margin-bottom:2px}
+  .fiche .qt.bx th{padding:3px 5px;font-size:calc(var(--fs) - 3px);letter-spacing:.08em}
+  .fiche .qt.bx td{padding:clamp(1px,.35vh,5px) 5px;font-size:var(--fs)}
+  .fiche .qt.bx td:first-child{font-size:calc(var(--fs) - 1px);font-weight:600}
   .fiche .qt.bx .bxn{max-width:none}
-  .fiche .qt.bx td.tot{font-size:17px}
-  .fiche .qt.bx td.mn{font-size:12.5px}
+  .fiche .qt.bx td.tot{font-size:calc(var(--fs) + 3px)}
+  .fiche .qt.bx td.mn{font-size:calc(var(--fs) - 2px)}
+  .fiche .qt.bx .tgt{display:none}
+  .fiche .qt.bx tr.sel td{background:color-mix(in srgb,var(--amber) 14%,transparent)}
+  .fiche .qt.bx tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--amber)}
+  .fiche .fshots{flex:1;min-height:150px;display:flex}
+  .fshot{flex:1;min-height:0;display:grid;grid-template-columns:minmax(190px,.42fr) minmax(0,1fr);gap:18px;
+    background:var(--panel2);padding:clamp(8px,1.2vh,14px) 16px;clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%)}
+  .fsi{min-width:0;display:flex;flex-direction:column;justify-content:center;gap:clamp(6px,1vh,12px)}
+  .fsi .tag{align-self:flex-start;font-size:11px}
+  .fsn{display:flex;align-items:center;gap:10px;min-width:0}
+  .fsn .lg{width:34px;height:34px;flex:none}
+  .fsn b{font:900 clamp(18px,2.6vh,28px)/1.05 var(--disp);text-transform:uppercase;min-width:0}
+  .fss{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .fss div{display:flex;flex-direction:column;align-items:flex-start;padding:clamp(3px,.6vh,8px) 10px;background:rgba(0,0,0,.35)}
+  .fss b{font:900 clamp(18px,2.8vh,30px)/1 var(--disp);color:var(--amber);font-variant-numeric:tabular-nums}
+  .fss small{font:700 10px var(--disp);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+  .fsi .clegend{margin:0}
+  .fsh{color:var(--ink3);font-size:11.5px}
+  .fsc{min-width:0;min-height:0;display:flex;align-items:center;justify-content:center}
+  .fsc .court{width:auto;height:100%;max-width:100%;aspect-ratio:500/400}
 }
-@media (min-width:1100px) and (min-height:680px) and (max-height:930px){
-  .fiche .pro .bars{display:none}
-  .fiche .qt.bx td{padding:3px 5px}
-}
-
+@media (min-width:1100px) and (min-height:600px) and (max-height:760px){ .fsh,.fsi .clegend{display:none} }
 /* ---- la carte de tirs d'un joueur : sur un seul écran (infos à gauche, terrain à droite sur PC) ---- */
 .shots .sinfo{display:grid;gap:14px;min-width:0}
 .shots .sinfo .replay{justify-self:start}
@@ -1549,3 +1571,45 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .shots .scount{white-space:normal;text-align:left;font-size:15px;line-height:1.35}
 @media (max-width:899px){ .shots .court{max-height:46vh} .shots .scount{text-align:center} .shots .sinfo .replay{justify-self:center} }
 @media (max-width:899px){ .shots .clegend{display:none} .shots .sinfo{gap:10px} .shots .court{max-height:44vh} }
+@media (min-width:1100px) and (min-height:600px){
+  .fiche .fhrep{order:4;justify-self:end}
+  .fiche .fteam:nth-child(3){order:3}
+  .fiche .fshots{min-height:0}
+  .fshot{grid-template-rows:minmax(0,1fr);min-height:0;height:100%}
+  .fsi{min-height:0;overflow:hidden}
+  .fsc{height:100%;overflow:hidden}
+  .fsc .court{max-height:100%}
+}
+/* disposition finale (23/11) : à gauche le film puis le terrain des tirs ; à droite les feuilles de match puis les quarts-temps */
+@media (min-width:1100px) and (min-height:600px){
+  .fiche .fbody{grid-template-columns:minmax(0,1fr) minmax(0,1.25fr)}
+  .fiche .ffilm{flex:1 1 0}
+  .fiche .fshots{flex:1.5 1 0}
+  .fiche .fb{justify-content:space-between}
+  .fiche .fqt{flex:none}
+  .fiche .fqt .qt td{padding:clamp(3px,.7vh,9px) 10px}
+}
+@media (min-width:1100px) and (min-height:600px){
+  .fiche .fb > .fsect:first-child{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+  .fiche .bxpair{flex:1;min-height:0}
+  .fiche .bxteam{display:flex;flex-direction:column;min-height:0}
+  .fiche .bxteam .qtwrap{flex:1;min-height:0}
+  .fiche .bxteam table.bx{height:100%}
+  .fiche .qt.bx tbody tr{height:auto}
+}
+@media (min-width:1100px) and (min-height:600px){
+  .sheet.fiche{--fs:clamp(12.5px,1.8vh,21px)}
+  .fiche .qt.bx td{vertical-align:middle}
+  .fiche .qt.bx td:first-child{display:table-cell;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0;width:34%}
+  .fiche .fshots{container-type:size}
+  .fshot{height:100%;box-sizing:border-box}
+}
+/* le bloc des tirs selon sa forme : haut = les infos en bandeau au-dessus du terrain ; large = à côté */
+@container (max-aspect-ratio: 7/4){
+  .fshot{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr);gap:10px}
+  .fsi{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px 14px;overflow:visible}
+  .fsi .tag,.fsi .clegend,.fsh{display:none}
+  .fsn b{font-size:clamp(18px,2.4vh,26px)}
+  .fss{display:flex;gap:6px;margin-left:auto}
+  .fss div{padding:4px 10px}
+}

@@ -86,6 +86,7 @@ const Note = (() => {
     const s = score(f);
     return { s, lvl: level(s), f };
   }
-  return { rate, score, level, features, CUT };
+  const V = 2; // à augmenter à chaque changement des règles : les notes gardées sur les appareils sont alors recalculées
+  return { rate, score, level, features, CUT, V };
 })();
 if (typeof module !== "undefined") module.exports = Note;

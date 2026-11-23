@@ -247,7 +247,7 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     total ≥ 240. Seuils `CUT = [0, 1.3, 3.0, 5.0, 7.2]` (23/11 soir : prolongation moins payée, +1 au lieu de +1,8, pour qu'« Immanquable » ne soit pas réservé aux prolongations ; niveau 4 renommé « Génial », ex « À voir », demande de Kiki ; carte blanche pour réajuster en cours de saison), étalonnés sur les 248 matchs du 20/10 au 22/11 : 6 % Immanquable,
     14 % À voir, 20 % Sympa, 20 % Sans plus, 12 % Bof, 27 % À fuir (toutes les raclées). Plus de flou aléatoire (`jitter`)
     pour les matchs notés ainsi. Site : `loadNotes` télécharge le déroulé des matchs terminés (gardé ensuite dans
-    `SUMCACHE`), note gardée par appareil (`bb2_notes`, 400 matchs) ; la page attend 2,5 s au plus puis se remet en ordre ;
+    `SUMCACHE`), note gardée par appareil (`bb2_notes<V>`, 400 matchs ; **augmenter `Note.V` à chaque changement des règles**) ; la page attend 2,5 s au plus puis se remet en ordre ;
     tri sur la note exacte (`watchScore`), plus sur les 6 niveaux. Sans déroulé : l'ancienne note sur le score final.
     Réétalonner : Actions → « Étalonnage des notes » (`scripts/notes_calib.js`, ESPN joignable depuis GitHub). Le téléphone
     (`boucle.py` → `note`) choisit encore les matchs à analyser avec l'ancienne formule.

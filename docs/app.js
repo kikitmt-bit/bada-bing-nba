@@ -236,7 +236,8 @@ function normSummary(j) {
 function jitter(id) { let s = 0; for (const c of String(id)) s = (s * 31 + c.charCodeAt(0)) % 997; return (s / 997 - .5) * .7; }
 function winpct(rec) { const m = /^(\d+)-(\d+)/.exec(rec || ""); if (!m) return .5; const w = +m[1], l = +m[2]; return (w + l) ? w / (w + l) : .5; }
 // la note fine d'un match terminé : calculée sur son déroulé ESPN (docs/note.js), gardée sur l'appareil (un match fini ne change plus)
-const NOTES = store.get("notes", {});
+const NOTE_KEY = "notes" + (typeof Note !== "undefined" ? Note.V : 0); // nouvelle version des règles = notes recalculées
+const NOTES = store.get(NOTE_KEY, {});
 const noteOf = g => g.state === "post" && typeof NOTES[g.id] === "number" ? NOTES[g.id] : null;
 async function loadNotes(games) {
   if (DEMO || typeof Note === "undefined") return false;
@@ -250,7 +251,7 @@ async function loadNotes(games) {
     } catch (e) { /* ESPN muet : la note simple en attendant */ }
   }));
   const ks = Object.keys(NOTES); if (ks.length > 400) ks.slice(0, ks.length - 400).forEach(k => delete NOTES[k]);
-  store.set("notes", NOTES);
+  store.set(NOTE_KEY, NOTES);
   return true;
 }
 // pour trier : la note fine si on l'a, sinon le milieu de la tranche du niveau simple

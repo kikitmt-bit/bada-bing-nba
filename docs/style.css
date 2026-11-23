@@ -1620,3 +1620,5 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
   .fiche .fhrep{position:absolute;right:64px;top:50%;transform:translateY(-50%);z-index:2}
 }
 @media (min-width:1100px) and (min-height:600px){ .fiche .fgrid{position:static} .fiche .fgrid > *{position:relative} .fiche .fgrid > .fhrep{position:absolute} }
+/* fiche (PC) : la croix centrée verticalement sur la ligne de l'en-tête, comme le Replay */
+@media (min-width:1100px) and (min-height:600px){ .sheet.fiche > .fh > .x{top:50%;transform:translateY(-50%)} }

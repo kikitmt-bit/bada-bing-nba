@@ -233,6 +233,11 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     `playVideo` (postMessage). Replay + : colonne des stats 390-480 px, tableau des 5 joueurs sans les contres, noms en entier
     (attention : `.vplayer.full .lv-pl th{width}` doit laisser `th:first-child{width:auto}`). Liste de gauche : le mode
     dense se décide sur la hauteur réelle de la colonne et ses lignes grandissent aussi pour remplir toute la hauteur.
+  - **23/11 (4e passage)** : Replay + : la légende des couleurs (■ Nuggets ■ Bulls · replay GameTime) passe dans le bandeau
+    sous la vidéo (`opts.labHTML` de `playVideo`, `.vleg`) ; le film du match n'a plus de légende (sauf dans le résumé de la
+    nuit +), « temps en tête / changements de leader » remonte sur la ligne du titre. L'essentiel : ordre = MVP et grosses
+    perfs · Français · faits marquants (puis la nuit prochaine) ; la perf du MVP n'est plus dans les faits marquants ;
+    `loadMVP` attend `loadVideos` pour que le bouton dise 5 ou 10 selon la vidéo NBA.
   - Banc d'essai sans ESPN : Playwright qui détourne ESPN (faux scoreboard/summary), `v2/nuit/` (vrai fichier de la branche
     data) et l'embed YouTube (fausse page qui envoie `infoDelivery` avec `currentTime`) : on pilote la position de la vidéo.
 - **Réglages du calage (22/11 soir, mesurés sur la nuit du 19)** : les chiffres du bandeau se lisent MAL (tesseract rate

@@ -1458,3 +1458,8 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .np.dense .npi.m:not(.cur){flex:1 1 0;height:auto;min-height:38px;max-height:84px}
 .np.dense .npi.xt{flex:.9 1 0;height:auto;min-height:40px;max-height:84px}
 .np.dense .npi.m.cur{flex:1.5 1 auto}
+/* légende des couleurs du film du match, dans le bandeau sous la vidéo (Replay +) */
+.vfoot .vleg{display:inline-block;width:13px;height:10px;background:var(--mc);margin:0 7px 0 14px;vertical-align:0}
+.vfoot .vleg:first-child{margin-left:0}
+.vfoot em{font-style:normal;margin:0 8px;color:var(--ink3)}
+@media (min-width:901px){ .lv-filmh{flex-wrap:nowrap} .lv-fx{flex-wrap:nowrap;min-width:0} }

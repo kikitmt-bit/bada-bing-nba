@@ -464,7 +464,7 @@ function playVideo(vid, label, gid, opts) { // lecteur intégré, sans quitter l
     <button class="x" aria-label="Fermer">✕</button>
     ${full && vidovl.requestFullscreen ? `<button class="fsb" aria-label="Plein écran" title="Remettre en plein écran"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg></button>` : ""}
     <div class="vmain"><div class="vframe">${frame}</div>
-    <div class="vfoot"><span>${label}</span>
+    <div class="vfoot"><span>${opts.labHTML || label}</span>
       ${vid ? `<a href="https://www.youtube.com/watch?v=${vid}" target="_blank" rel="noopener">Ouvrir sur YouTube ↗</a>` : ""}</div></div>
     ${night && opts.solo ? `<aside class="nps" id="npside"></aside><section class="lv-below" id="lvbelow"></section>`
       : night ? `<aside class="np" id="nplist"></aside><section class="lv-below" id="lvbelow"></section>`
@@ -489,7 +489,11 @@ async function openResume(id, extra) {
   await loadVideos();
   const v = extra ? findExtra(g) : findVideo(g);
   if (!v) { window.open(ytURL(g), "_blank", "noopener"); return; }
-  playVideo(v.id, `${g.teams.away.name} – ${g.teams.home.name} · ${extra ? "Replay FR (NBA Extra)" : v.c === "gt" ? "replay GameTime" : "replay NBA"}`, extra ? null : g.id);
+  const lab = `${g.teams.away.name} – ${g.teams.home.name} · ${extra ? "Replay FR (NBA Extra)" : v.c === "gt" ? "replay GameTime" : "replay NBA"}`;
+  // la légende du film du match passe dans le bandeau sous la vidéo : ■ Nuggets ■ Bulls · replay GameTime
+  const sq = t => `<i class="vleg" style="--mc:${t.color}"></i>${t.name}`;
+  const labHTML = extra ? null : `${sq(g.teams.away)}${sq(g.teams.home)}<em>·</em>${v.c === "gt" ? "replay GameTime" : "replay NBA"}`;
+  playVideo(v.id, lab, extra ? null : g.id, labHTML ? { labHTML } : undefined);
 }
 // après Échap, le bouton « plein écran » réapparaît (seulement hors plein écran)
 document.addEventListener("fullscreenchange", () => vplayer.classList.toggle("fs", document.fullscreenElement === vidovl));
@@ -888,6 +892,7 @@ async function loadMVP(btn) {
   const lab = btn.querySelector(".btn"); if (lab) lab.textContent = "On fait le tour de la nuit…";
   const posts = state.games.filter(g => g.state === "post");
   const sums = await Promise.all(posts.map(g => cachedSummary(g.id).catch(() => null)));
+  await loadVideos(); // pour le bouton du top de la nuit (5 ou 10 actions selon la vidéo de la NBA)
   const all = [];
   sums.forEach((s, i) => { if (s) for (const p of s.players) all.push({ ...p, g: posts[i] }); });
   if (!all.length) { if (lab) lab.textContent = "Indisponible pour l'instant"; btn.disabled = false; return; }
@@ -955,7 +960,8 @@ async function loadMVP(btn) {
       t, x: `Conférence ${m.conf} : ${m.b + 1}e → ${m.a + 1}e` });
   }
   // les faits marquants
-  const facts = nightFacts(posts, sums, extra);
+  // sans la perf du MVP (doublon avec sa carte juste au-dessus, demande de Kiki)
+  const facts = nightFacts(posts, sums, extra).filter(f => !(f.pl && f.pl.aid && f.pl.aid === mvp.aid));
   const factsBlock = facts.length ? `<div class="ess-h"><span class="tag">Les faits marquants</span><i></i></div><div class="facts">${facts.map(factHTML).join("")}</div>` : "";
   // les Français
   // un MVP français est déjà en vedette juste au-dessus : la rubrique montre alors les AUTRES Français
@@ -972,7 +978,7 @@ async function loadMVP(btn) {
   btn.hidden = true;
   const body = $("#mvpbody");
   body.innerHTML = `<div class="ess"><div class="ess-top"><span class="q">L'essentiel <em>de la nuit</em></span><small>Tout ce qu'il faut retenir, en une minute</small>${topPlay}</div>
-    ${factsBlock}<div class="ess-h"><span class="tag">Le MVP et les grosses perfs</span><i></i></div>${mvpBlock}${frBlock}</div>`;
+    <div class="ess-h"><span class="tag">Le MVP et les grosses perfs</span><i></i></div>${mvpBlock}${frBlock}${factsBlock}</div>`;
   for (const v of body.querySelectorAll("[data-count]")) countUp(v, +v.dataset.count, 1100);
 }
 

@@ -448,7 +448,7 @@ const Chrono = (() => {
     };
     const tmpl = cols.map(q => (q <= 4 ? 720 : 300) + "fr").join(" ");
     return `<div class="lv-sec lv-film">
-      <div class="lv-filmh"><h4>Le film du match</h4><div class="lv-leg"><i style="--mc:${a.color}"></i>${a.name}<i style="--mc:${h.color}"></i>${h.name}</div>
+      <div class="lv-filmh"><h4>Le film du match</h4>${S && S.night ? `<div class="lv-leg"><i style="--mc:${a.color}"></i>${a.name}<i style="--mc:${h.color}"></i>${h.name}</div>` : ""}
         <div class="lv-fx"><span>Temps en tête <b>${F.now > 0 ? `${a.tri} ${pct(F.leadA, F.now)} · ${h.tri} ${pct(F.leadH, F.now)}` : "—"}</b></span>
         <span>Changements de leader <b>${F.leads}</b></span></div></div>
       <div class="lv-plot">${svg}${dot}</div>

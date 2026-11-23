@@ -257,10 +257,12 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     nuits (Paris « 22 → 23 », Montréal « 22 nov. », « Hier soir / Ce soir »), salutation ; `America/Toronto` affiché « Montréal ».
     **Statistiques de visite = GoatCounter** (site `nocturne-nba`, `GC` dans app.js ; compte à créer par Kiki sur
     goatcounter.com avec ce code) : `track` à chaque vue (`/nuit`, `/programme`, `/classement`), `trackVisitor` une fois par
-    jour « qui/<nom> » pour un appareil ouvert avec un lien personnel `?qui=tom` (Tom = Clermont, Busta = Montréal ; nom gardé
-    dans `bb2_qui`, adresse nettoyée). Pas de comptage en démo, en local, sur ?admin, ni sur un appareil exclu (`skipgc`,
-    réglé dans la page admin). **Page admin = `?admin`** (`renderAdmin`) : lien vers le tableau de bord, liens personnels à
-    copier, interrupteur « Ne pas compter mes visites ».
+    jour et par appareil : événement `visiteur/<ville>-<type>-<code>` (« Montréal · iPhone · k3f2 », `deviceTag` : ville d'après
+    le fuseau de l'appareil, type d'après le navigateur, code au hasard gardé dans `bb2_dev`). **UN SEUL LIEN POUR TOUT LE MONDE
+    (choix de Kiki, pas de liens personnels)** ; un ancien `?qui=` reste accepté (nom gardé dans `bb2_qui`). Pas d'adresse IP
+    (GoatCounter n'en garde pas ; ne pas croiser avec le site NFL). Pas de comptage en démo, en local, sur ?admin, ni sur un appareil exclu (`skipgc`,
+    réglé dans la page admin). **Page admin = `?admin`** (`renderAdmin`) : lien vers le tableau de bord, explication « qui est venu » + le
+    code de cet appareil, interrupteur « Ne pas compter mes visites ».
   - Banc d'essai sans ESPN : Playwright qui détourne ESPN (faux scoreboard/summary), `v2/nuit/` (vrai fichier de la branche
     data) et l'embed YouTube (fausse page qui envoie `infoDelivery` avec `currentTime`) : on pilote la position de la vidéo.
 - **Réglages du calage (22/11 soir, mesurés sur la nuit du 19)** : les chiffres du bandeau se lisent MAL (tesseract rate

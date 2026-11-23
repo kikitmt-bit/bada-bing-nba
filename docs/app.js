@@ -1606,30 +1606,42 @@ async function track(path, title, event) {
   const gc = await gcLoad(); if (!gc || !gc.count) return;
   try { gc.count({ path, title: title || path, event: !!event }); } catch (e) { /* tant pis */ }
 }
-function trackVisitor() { // une fois par jour et par appareil : qui est venu
-  const q = store.get("qui", null); if (!q) return;
+// qui est venu, SANS lien personnel (un seul lien pour tout le monde, choix de Kiki) : une fois par jour, chaque appareil se
+// signale par sa ville (d'après son fuseau), son type et un petit code au hasard qui lui reste (« Montréal · iPhone · k3f2 »)
+function deviceTag() {
+  let id = store.get("dev", null);
+  if (!id) { id = Math.random().toString(36).slice(2, 6); store.set("dev", id); }
+  const ua = navigator.userAgent;
+  const kind = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? (/Mobile/.test(ua) ? "Android" : "tablette Android")
+    : /Xbox/.test(ua) ? "Xbox" : /Macintosh/.test(ua) ? "Mac" : /Windows/.test(ua) ? "PC Windows" : /Linux/.test(ua) ? "Linux" : "appareil";
+  const z = TZ_AUTO, city = /Montreal|Toronto/.test(z) ? "Montréal" : /^America\//.test(z) ? "Amérique" : z === "Europe/Paris" ? "France" : z.split("/").pop().replace(/_/g, " ");
+  const q = store.get("qui", null); // un ancien lien personnel (?qui=…) garde son nom
+  return { path: "visiteur/" + (q || `${city}-${kind}-${id}`).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-"),
+    title: q ? q : `${city} · ${kind} · ${id}` };
+}
+function trackVisitor() {
   const day = new Date().toISOString().slice(0, 10);
   if (store.get("quiday", "") === day) return;
   store.set("quiday", day);
-  track("qui/" + q, "Visite de " + q, true);
+  const t = deviceTag();
+  track(t.path, t.title, true);
 }
 
 /* ---------- la page d'administration (?admin) : les visites, les liens personnels, exclure ses appareils ---------- */
 function renderAdmin() {
   const main = $("#main");
   let skip = false; try { skip = localStorage.getItem("skipgc") === "t"; } catch (e) { /* */ }
-  const base = location.origin + location.pathname;
-  const link = (n, who) => `<div class="adl"><span><b>${who}</b><small>${base}?qui=${n}</small></span><button class="btn" data-copy="${base}?qui=${n}">Copier</button></div>`;
   main.innerHTML = `<section class="adm">
     <p class="greet"><i></i>Administration</p>
     <div class="adcard"><h3>Les visites</h3>
-      <p>Le compteur (GoatCounter, gratuit et sans cookie) note chaque page ouverte et, grâce aux liens personnels, qui est venu.
-      Tableau de bord : nombre de visites par jour, pages vues, pays, téléphone ou ordinateur, et les lignes « qui/… » pour chaque ami.</p>
+      <p>Le compteur (GoatCounter, gratuit et sans cookie) note chaque page ouverte et quels appareils sont venus.
+      Tableau de bord : nombre de visites par jour, pages vues, pays, téléphone ou ordinateur, et une ligne par appareil.</p>
       <a class="btn amber big" href="https://${GC}.goatcounter.com" target="_blank" rel="noopener">Ouvrir le tableau de bord ↗</a></div>
-    <div class="adcard"><h3>Les liens à envoyer</h3>
-      <p>Un lien par personne : l'appareil retient le nom à la première ouverture (ensuite, l'adresse normale suffit).</p>
-      ${link("tom", "Tom · Clermont")}${link("busta", "Busta · Montréal")}
-      <div class="adl"><span><b>Quelqu'un d'autre</b><input id="adname" placeholder="son prénom" maxlength="20"></span><button class="btn" id="adnew">Copier</button></div></div>
+    <div class="adcard"><h3>Qui est venu</h3>
+      <p>Un seul lien pour tout le monde. Chaque appareil se signale une fois par jour, dans la rubrique « Events » du tableau
+      de bord, par sa ville (d'après son fuseau horaire), son type et un petit code qui lui reste : par exemple
+      « Montréal · iPhone · k3f2 » ou « France · Android · 7tq1 ». Une fois tes appareils exclus ci-dessous, les autres sont tes amis.</p>
+      <div class="adl"><span><b>Cet appareil</b><small>${deviceTag().title}</small></span></div></div>
     <div class="adcard"><h3>Cet appareil</h3>
       <div class="swrow"><p>Ne pas compter mes visites<small>À activer sur ton téléphone et ton ordinateur, pour que les chiffres ne montrent que tes amis.</small></p>
         <button class="sw ${skip ? "on" : ""}" id="adskip" role="switch" aria-checked="${skip}"></button></div></div>
@@ -1638,9 +1650,6 @@ function renderAdmin() {
     const sw = e.target.closest(".adcard .swrow") ? $("#adskip") : null; // toute la ligne se touche (téléphone)
     if (sw) { skip = !skip; try { skip ? localStorage.setItem("skipgc", "t") : localStorage.removeItem("skipgc"); } catch (x) { /* */ }
       sw.classList.toggle("on", skip); sw.setAttribute("aria-checked", skip); toast(skip ? "Cet appareil n'est plus compté" : "Cet appareil est compté"); return; }
-    let url = e.target.closest("[data-copy]") ? e.target.closest("[data-copy]").dataset.copy : null;
-    if (e.target.closest("#adnew")) { const n = ($("#adname").value || "").toLowerCase().normalize("NFD").replace(/[^a-z0-9-]/g, ""); if (!n) return; url = `${base}?qui=${n}`; }
-    if (url) { try { await navigator.clipboard.writeText(url); toast("Lien copié : " + url); } catch (x) { prompt("Le lien à copier :", url); } }
   };
 }
 

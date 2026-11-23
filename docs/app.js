@@ -1064,20 +1064,20 @@ async function openFiche(id) {
       </div>
     </div>
     <div class="fbody"><p class="loadmsg">Feuille de match en route…</p></div>`;
+  sheet.classList.add("fiche");
   ovl.classList.add("open"); document.body.style.overflow = "hidden";
   let s;
   try { s = await summary(id); }
   catch (e) { sheet.querySelector(".fbody").innerHTML = `<p class="loadmsg">Impossible de charger les détails. Réessaie dans un instant.</p>`; return; }
   const body = sheet.querySelector(".fbody");
-  body.innerHTML = `
+  // sur PC : un tableau de bord sans défilement (à gauche le match, à droite les deux feuilles de match côte à côte)
+  body.innerHTML = `<div class="fcol fa">
     ${s.series ? `<div class="fsect"><h3><span class="tag">Le film du match</span><i></i></h3>${chartHTML(g, s.series, s.span)}</div>` : ""}
     ${s.quarters ? `<div class="fsect"><h3><span class="tag">Par quart-temps</span><i></i></h3>${quartersHTML(g, s)}</div>` : ""}
     ${s.players.length ? `<div class="fsect"><h3><span class="tag">Les patrons du match</span><i></i></h3>${prosHTML(s.players.slice(0, 6), g)}</div>` : ""}
-    ${s.players.length ? `<div class="fsect"><h3><span class="tag">La feuille de match</span><i></i></h3>
-      <p class="bx-hint">Touche un joueur pour voir tous ses tirs sur le terrain 🎯</p>
-      ${boxHTML(g, s, "away")}${boxHTML(g, s, "home")}</div>` : ""}
-    <div class="fbtns">${g.state === "post" ? `<button class="btn amber big" data-resume="${g.id}">${replayLabel(g)}</button>` : ""}</div>
-    <div class="next-note">Bientôt dans la fiche : face-à-face des deux équipes, avant-match détaillé, absents.</div>`;
+    ${g.state === "post" ? `<div class="fbtns"><button class="btn amber big" data-resume="${g.id}">${replayLabel(g)}</button></div>` : ""}</div>
+    ${s.players.length ? `<div class="fcol fb"><div class="fsect"><h3><span class="tag">La feuille de match</span><i></i><small class="bx-hint">Touche un joueur : tous ses tirs 🎯</small></h3>
+      <div class="bxpair">${boxHTML(g, s, "away")}${boxHTML(g, s, "home")}</div></div></div>` : ""}`;
   state.fiche = s; state.ficheG = g; // pour la carte de tirs
   requestAnimationFrame(() => {
     body.querySelectorAll(".fl").forEach(b => b.style.width = b.dataset.w + "%");
@@ -1173,13 +1173,14 @@ function prosHTML(players, g) {
 /* ---------- la feuille de match ---------- */
 function boxHTML(g, s, side) {
   const t = g.teams[side];
-  const list = s.players.filter(p => p.tid === t.id);
+  // classés par points (puis rebonds + passes), comme on lit une feuille de match
+  const list = s.players.filter(p => p.tid === t.id).sort((a, b) => b.pts - a.pts || (b.reb + b.ast) - (a.reb + a.ast));
   if (!list.length) return "";
   const row = p => `<tr class="${p.shots.length ? "shootable" : ""}" ${p.shots.length ? `data-shot="${p.aid || p.name}"` : ""}>
     <td><span class="bxn">${p.name}</span>${p.shots.length ? `<span class="tgt">🎯</span>` : ""}</td>
-    <td>${p.min}</td><td>${p.fg}</td><td>${p.tp}</td><td>${p.reb}</td><td>${p.ast}</td><td>${p.blk || 0}</td><td class="tot">${p.pts}</td></tr>`;
+    <td class="tot">${p.pts}</td><td>${p.fg}</td><td>${p.tp}</td><td>${p.reb}</td><td>${p.ast}</td><td>${p.blk || 0}</td><td class="mn">${p.min}</td></tr>`;
   return `<div class="bxteam"><div class="bxh" style="--mc:${t.color}">${logoHTML(t)}<b>${t.name}</b></div>
-    <div class="qtwrap"><table class="qt bx"><thead><tr><th>Joueur</th><th>Min</th><th>Tirs</th><th>3 pts</th><th>Reb</th><th>Pas</th><th title="Contres">Ctr</th><th>Pts</th></tr></thead>
+    <div class="qtwrap"><table class="qt bx"><thead><tr><th>Joueur</th><th>Pts</th><th>Tirs</th><th>3 pts</th><th>Reb</th><th>Pd</th><th title="Contres">Ctr</th><th title="Minutes jouées">Min</th></tr></thead>
     <tbody>${list.map(row).join("")}</tbody></table></div></div>`;
 }
 
@@ -1214,19 +1215,20 @@ function openShots(key) {
   const t = teamIn(state.ficheG, p.tid);
   const made = p.shots.filter(x => x.m).length, three = p.shots.filter(x => x.v === 3);
   const { svg, step } = courtSVG(p.shots, t.color);
+  shotsheet.classList.add("shots");
   shotsheet.innerHTML = `<div class="setbody">
     <button class="x" aria-label="Fermer">✕</button>
-    <div class="shead" style="--mc:${t.color}">${logoHTML(t)}<div><h2>${p.full || p.name}</h2><small>${t.city} ${t.name}</small></div>
-      <button class="btn replay" data-replay="${key}">↻ Rejouer</button></div>
+    <div class="sinfo"><div class="shead" style="--mc:${t.color}">${logoHTML(t)}<div><h2>${p.full || p.name}</h2><small>${t.city} ${t.name}</small></div></div>
     <div class="stiles">
       <div class="stat"><span class="led"><span class="v">${p.pts}</span></span><small>points</small></div>
       <div class="stat"><span class="led"><span class="v">${made}/${p.shots.length}</span></span><small>aux tirs</small></div>
       <div class="stat"><span class="led"><span class="v">${three.filter(x => x.m).length}/${three.length}</span></span><small>à 3 pts</small></div>
       <div class="stat"><span class="led"><span class="v">${p.reb}</span></span><small>rebonds</small></div>
     </div>
-    ${svg}
     <div class="scount" id="scount">&nbsp;</div>
     <div class="clegend"><span><i style="background:${t.color}"></i>Panier</span><span style="color:#8a8fa8">✕ Tir manqué</span></div>
+    <button class="btn replay" data-replay="${key}">↻ Rejouer</button></div>
+    <div class="scourt">${svg}</div>
   </div>`;
   shotovl.classList.add("open");
   // le compteur suit le replay : quart-temps, tirs, points sur tirs cumulés

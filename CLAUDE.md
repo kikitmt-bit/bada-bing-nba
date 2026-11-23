@@ -263,6 +263,13 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     (GoatCounter n'en garde pas ; ne pas croiser avec le site NFL). Pas de comptage en démo, en local, sur ?admin, ni sur un appareil exclu (`skipgc`,
     réglé dans la page admin). **Page admin = `?admin=<code secret>`** (23/11 : verrouillée ; seule l'empreinte SHA-256 `ADMIN_HASH` est dans app.js, le code est connu de Kiki seulement, NE JAMAIS l'écrire dans le dépôt ; un appareil qui a donné le bon code est retenu (`bb2_admin`) et exclu des stats : `?admin` seul lui suffit ensuite ; sans code = le site normal) (`renderAdmin`) : lien vers le tableau de bord, explication « qui est venu » + le
     code de cet appareil, interrupteur « Ne pas compter mes visites ».
+  - **Fiche du match (23/11, demande de Kiki : « tout sur une page sans défiler »)** : sur PC (≥ 1100 × 680) `.sheet.fiche` =
+    tableau de bord 97 vw × 95 vh sans défilement : en-tête compact, à gauche (`.fcol.fa`) film du match + quarts-temps +
+    patrons (3 × 2, barres masquées sous 930 px de haut) + Replay ; à droite (`.fcol.fb`) les DEUX feuilles de match côte à côte
+    (`.bxpair`). Feuille de match **triée par points**, colonnes **Pts · Tirs · 3 pts · Reb · Pd · Ctr · Min** (points en
+    ambre, minutes en gris). Téléphone : la fiche défile comme avant. Mention « Bientôt dans la fiche… » retirée.
+    **Carte de tirs** (`.shots`) : sur PC infos à gauche (nom, 4 afficheurs en 2 × 2, compteur, légende, Rejouer) et terrain à
+    droite à la hauteur de l'écran ; sur téléphone tout tient sans défiler (légende masquée, terrain ≤ 44 vh).
   - Banc d'essai sans ESPN : Playwright qui détourne ESPN (faux scoreboard/summary), `v2/nuit/` (vrai fichier de la branche
     data) et l'embed YouTube (fausse page qui envoie `infoDelivery` avec `currentTime`) : on pilote la position de la vidéo.
 - **Réglages du calage (22/11 soir, mesurés sur la nuit du 19)** : les chiffres du bandeau se lisent MAL (tesseract rate

@@ -265,7 +265,7 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     code de cet appareil, interrupteur « Ne pas compter mes visites ».
   - **Fiche du match = TABLEAU DE BORD sur PC (23/11, demandes de Kiki : « tout sur une page sans défiler, aucun trou, plus
     gros, le terrain des tirs DANS la fiche »)** : dès 1100 × 600 (`DASH()`), `.sheet.fiche` 98 vw × 96 vh sans défilement.
-    En-tête compact (logos, noms, score LED, **Replay dans l'en-tête** `.fhrep`). À gauche (`.fa`) : le film du match, dont la
+    En-tête compact (logos, noms, score LED, **Replay dans l'en-tête** `.fhrep`, posé en absolu à droite de `.fh`, hors de la grille : marges gauche/droite égales pour que le score soit PILE au centre, `.fgrid` en position static). À gauche (`.fa`) : le film du match, dont la
     hauteur du SVG est recalculée à la place disponible (`chartHTML(..., H)`, textes jamais étirés), puis **le grand
     demi-terrain des tirs** (`#fshot`, `shotPanel(p)`) : au départ le meilleur marqueur ; **un clic sur un joueur de la feuille
     met à jour ce terrain** (plus de fenêtre, ligne surlignée `.sel`) ; infos à côté du terrain si le bloc est large, en

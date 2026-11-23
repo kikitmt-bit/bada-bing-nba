@@ -1613,3 +1613,10 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
   .fss{display:flex;gap:6px;margin-left:auto}
   .fss div{padding:4px 10px}
 }
+/* en-tête de la fiche : le score pile au milieu (le Replay est posé à droite, hors de la grille, marges égales des deux côtés) */
+@media (min-width:1100px) and (min-height:600px){
+  .fiche .fh{padding-left:clamp(150px,13vw,230px);padding-right:clamp(150px,13vw,230px)}
+  .fiche .fgrid{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+  .fiche .fhrep{position:absolute;right:64px;top:50%;transform:translateY(-50%);z-index:2}
+}
+@media (min-width:1100px) and (min-height:600px){ .fiche .fgrid{position:static} .fiche .fgrid > *{position:relative} .fiche .fgrid > .fhrep{position:absolute} }

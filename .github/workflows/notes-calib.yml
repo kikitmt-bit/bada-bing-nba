@@ -1,0 +1,15 @@
+# Étalonnage ponctuel de la note « à voir » (docs/note.js) sur les vrais matchs ESPN. À supprimer une fois les seuils réglés.
+name: Étalonnage des notes
+on:
+  push:
+    branches: [claude/dreamy-mayer-3z0fm9]
+    paths: [docs/note.js, scripts/notes_calib.js, .github/workflows/notes-calib.yml]
+jobs:
+  calib:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/notes_calib.js 20261020

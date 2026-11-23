@@ -256,7 +256,7 @@ async function loadNotes(games) {
 // pour trier : la note fine si on l'a, sinon le milieu de la tranche du niveau simple
 function watchScore(g) {
   const n = noteOf(g); if (n !== null) return n;
-  const C = typeof Note !== "undefined" ? Note.CUT : [1, 2.2, 3.6, 5.2, 7.2], l = watchLevel(g);
+  const C = typeof Note !== "undefined" ? Note.CUT : [0, 1.3, 3.0, 5.0, 7.2], l = watchLevel(g);
   return l === 0 ? C[0] - .5 : l >= 5 ? C[4] + .5 : (C[l - 1] + C[l]) / 2;
 }
 function watchLevel(g) {
@@ -281,7 +281,7 @@ function watchLevel(g) {
 }
 const RAR = [
   ["nop", "⛔ À fuir"], ["low", "💤 Bof"], ["mid", "😐 Sans plus"],
-  ["rar", "🔥 Sympa"], ["epi", "🔥🔥 À voir"], ["leg", "🔥🔥🔥 Immanquable"],
+  ["rar", "🔥 Sympa"], ["epi", "🔥🔥 Génial"], ["leg", "🔥🔥🔥 Immanquable"],
 ];
 
 /* ---------- les infos clés d'avant-match : jusqu'à 3 par match, aussi sur les matchs joués, JAMAIS de spoil ----------
@@ -529,7 +529,7 @@ function closeResume() {
 }
 
 /* ---------- briques d'affichage ---------- */
-const RARL = ["À fuir", "Bof", "Sans plus", "Sympa", "À voir", "Immanquable"];
+const RARL = ["À fuir", "Bof", "Sans plus", "Sympa", "Génial", "Immanquable"];
 function ledHTML(g, side) {
   const t = g.teams[side];
   return `<span class="led hid" data-g="${g.id}" data-side="${side}" role="button" tabindex="0" aria-label="Révéler le score des ${t.name}"><span class="v">??</span></span>`;

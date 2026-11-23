@@ -3,13 +3,13 @@
    Nocturne — la note « à voir » d'un match terminé, calculée sur son déroulé ESPN (action par action).
    Mêmes règles sur le site (navigateur) et dans l'étalonnage (node scripts/notes_calib.js).
    Entrée : le JSON brut de summary?event=… ; sortie : { s (note continue), lvl (0 à 5), f (les ingrédients) }.
-   Niveaux : 0 À fuir · 1 Bof · 2 Sans plus · 3 Sympa · 4 À voir · 5 Immanquable.
+   Niveaux : 0 À fuir · 1 Bof · 2 Sans plus · 3 Sympa · 4 Génial · 5 Immanquable.
    ============================================================ */
 const Note = (() => {
   const secOf = d => { let m = /^(\d+):(\d+)/.exec(d || ""); if (m) return +m[1] * 60 + +m[2]; m = /^(\d+(?:\.\d)?)$/.exec(d || ""); return m ? +m[1] : 0; };
   const el = (per, sec) => per <= 4 ? (per - 1) * 720 + 720 - sec : 2880 + (per - 5) * 300 + 300 - sec; // secondes de jeu écoulées
   // seuils des niveaux (étalonnés sur les matchs de la saison 2026-27, voir scripts/notes_calib.js)
-  const CUT = [0, 1.3, 3.0, 5.0, 7.4];
+  const CUT = [0, 1.3, 3.0, 5.0, 7.2];
 
   function features(j) {
     const comps = j.header.competitions[0].competitors;
@@ -63,7 +63,7 @@ const Note = (() => {
     let s = 0;
     // la fin de match
     const c = Math.min(f.close, f.m2);
-    if (f.ot) s += 3 + 1.8 + (f.ot - 1) * 1.2;
+    if (f.ot) s += 3 + 1 + (f.ot - 1) * 1; // une prolongation ne suffit pas à être « Immanquable » : il faut aussi le scénario
     else s += c <= 3 ? 3 : c <= 6 ? 2.2 : c <= 9 ? 1.3 : c <= 12 ? .6 : 0;
     s += f.fm <= 3 ? 1 : f.fm <= 5 ? .5 : 0;
     s += Math.min(2, .45 * f.clutch); // retournements et égalités dans les 5 dernières minutes (et la prolongation)

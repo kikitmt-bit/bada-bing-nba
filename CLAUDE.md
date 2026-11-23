@@ -244,7 +244,7 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     après un +13), écart à 2 min, prolongations, retournements/égalités dans les 5 dernières minutes (`clutch`), panier qui
     donne l'avance pour de bon (`go`, au buzzer = gros bonus), remontée du vainqueur (`maxDef`), changements de leader,
     **plié tôt** (écart toujours ≥ 11/15/20 pendant les 8 dernières minutes = malus), perf (35 à 55 pts), triple-double,
-    total ≥ 240. Seuils `CUT = [0, 1.3, 3.0, 5.0, 7.4]`, étalonnés sur les 248 matchs du 20/10 au 22/11 : 6 % Immanquable,
+    total ≥ 240. Seuils `CUT = [0, 1.3, 3.0, 5.0, 7.2]` (23/11 soir : prolongation moins payée, +1 au lieu de +1,8, pour qu'« Immanquable » ne soit pas réservé aux prolongations ; niveau 4 renommé « Génial », ex « À voir », demande de Kiki ; carte blanche pour réajuster en cours de saison), étalonnés sur les 248 matchs du 20/10 au 22/11 : 6 % Immanquable,
     14 % À voir, 20 % Sympa, 20 % Sans plus, 12 % Bof, 27 % À fuir (toutes les raclées). Plus de flou aléatoire (`jitter`)
     pour les matchs notés ainsi. Site : `loadNotes` télécharge le déroulé des matchs terminés (gardé ensuite dans
     `SUMCACHE`), note gardée par appareil (`bb2_notes`, 400 matchs) ; la page attend 2,5 s au plus puis se remet en ordre ;

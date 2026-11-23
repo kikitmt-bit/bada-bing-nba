@@ -1627,6 +1627,18 @@ function trackVisitor() {
   track(t.path, t.title, true);
 }
 
+const ADMIN_HASH = "683dc3cbd81afd097ea1e08ae9527547f68a5ccc50770ef55c65fe564367d0fd"; // SHA-256 du code secret de Kiki (le code lui-même n'est pas dans le site)
+async function isAdmin() {
+  if (store.get("admin", false) === ADMIN_HASH) return true;
+  const code = QS.get("admin") || "";
+  if (!code || !(window.crypto && crypto.subtle)) return false;
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(code));
+  const hex = [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+  if (hex !== ADMIN_HASH) return false;
+  store.set("admin", ADMIN_HASH); // cet appareil est celui de Kiki : ?admin suffira désormais
+  try { localStorage.setItem("skipgc", "t"); } catch (e) { /* */ } // et ses visites ne sont pas comptées
+  return true;
+}
 /* ---------- la page d'administration (?admin) : les visites, les liens personnels, exclure ses appareils ---------- */
 function renderAdmin() {
   const main = $("#main");
@@ -1660,8 +1672,14 @@ function renderAdmin() {
   state.night = nuit && /^\d{4}-\d{2}-\d{2}$/.test(nuit) ? nuit.replaceAll("-", "") : defaultNight();
   welcome();
   loadVideos(); // en avance, pour que le premier clic « Résumé » soit instantané
-  if (QS.has("admin")) { renderAdmin(); return; }
+  if (QS.has("admin")) { // page admin verrouillée : ?admin=<code secret> (seule son empreinte est dans le code) ; ensuite l'appareil est reconnu
+    isAdmin().then(ok => { if (ok) renderAdmin(); else { history.replaceState(null, "", location.pathname); startSite(); } });
+    return;
+  }
+  startSite();
+})();
+function startSite() {
   trackVisitor();
   const vue = QS.get("vue");
   go(vue === "programme" ? "programme" : "nuit");
-})();
+}

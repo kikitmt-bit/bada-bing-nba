@@ -261,7 +261,7 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     le fuseau de l'appareil, type d'après le navigateur, code au hasard gardé dans `bb2_dev`). **UN SEUL LIEN POUR TOUT LE MONDE
     (choix de Kiki, pas de liens personnels)** ; un ancien `?qui=` reste accepté (nom gardé dans `bb2_qui`). Pas d'adresse IP
     (GoatCounter n'en garde pas ; ne pas croiser avec le site NFL). Pas de comptage en démo, en local, sur ?admin, ni sur un appareil exclu (`skipgc`,
-    réglé dans la page admin). **Page admin = `?admin`** (`renderAdmin`) : lien vers le tableau de bord, explication « qui est venu » + le
+    réglé dans la page admin). **Page admin = `?admin=<code secret>`** (23/11 : verrouillée ; seule l'empreinte SHA-256 `ADMIN_HASH` est dans app.js, le code est connu de Kiki seulement, NE JAMAIS l'écrire dans le dépôt ; un appareil qui a donné le bon code est retenu (`bb2_admin`) et exclu des stats : `?admin` seul lui suffit ensuite ; sans code = le site normal) (`renderAdmin`) : lien vers le tableau de bord, explication « qui est venu » + le
     code de cet appareil, interrupteur « Ne pas compter mes visites ».
   - Banc d'essai sans ESPN : Playwright qui détourne ESPN (faux scoreboard/summary), `v2/nuit/` (vrai fichier de la branche
     data) et l'embed YouTube (fausse page qui envoie `infoDelivery` avec `currentTime`) : on pilote la position de la vidéo.

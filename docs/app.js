@@ -235,7 +235,32 @@ function normSummary(j) {
 /* ---------- note « à voir » (volontairement floue : ne jamais trahir le scénario) ---------- */
 function jitter(id) { let s = 0; for (const c of String(id)) s = (s * 31 + c.charCodeAt(0)) % 997; return (s / 997 - .5) * .7; }
 function winpct(rec) { const m = /^(\d+)-(\d+)/.exec(rec || ""); if (!m) return .5; const w = +m[1], l = +m[2]; return (w + l) ? w / (w + l) : .5; }
+// la note fine d'un match terminé : calculée sur son déroulé ESPN (docs/note.js), gardée sur l'appareil (un match fini ne change plus)
+const NOTES = store.get("notes", {});
+const noteOf = g => g.state === "post" && typeof NOTES[g.id] === "number" ? NOTES[g.id] : null;
+async function loadNotes(games) {
+  if (DEMO || typeof Note === "undefined") return false;
+  const todo = games.filter(g => g.state === "post" && noteOf(g) === null);
+  if (!todo.length) return false;
+  await Promise.all(todo.map(async g => {
+    try {
+      const j = await fetchJSON(API + "summary?event=" + g.id);
+      const r = Note.rate(j); if (r) NOTES[g.id] = r.s;
+      if (!SUMCACHE.has(g.id)) SUMCACHE.set(g.id, normSummary(j)); // déjà téléchargé : resservira (l'essentiel, la fiche)
+    } catch (e) { /* ESPN muet : la note simple en attendant */ }
+  }));
+  const ks = Object.keys(NOTES); if (ks.length > 400) ks.slice(0, ks.length - 400).forEach(k => delete NOTES[k]);
+  store.set("notes", NOTES);
+  return true;
+}
+// pour trier : la note fine si on l'a, sinon le milieu de la tranche du niveau simple
+function watchScore(g) {
+  const n = noteOf(g); if (n !== null) return n;
+  const C = typeof Note !== "undefined" ? Note.CUT : [1, 2.2, 3.6, 5.2, 7.2], l = watchLevel(g);
+  return l === 0 ? C[0] - .5 : l >= 5 ? C[4] + .5 : (C[l - 1] + C[l]) / 2;
+}
 function watchLevel(g) {
+  const nt = noteOf(g); if (nt !== null) return Note.level(nt);
   const pa = winpct(g.teams.away.record), ph = winpct(g.teams.home.record);
   if (g.state === "pre") { // affiche d'avant-match : la qualité des deux équipes
     let n = 1.8 + (pa + ph - 1) * 3 + jitter(g.id);
@@ -749,11 +774,16 @@ async function renderNight(soft) {
     games.some(g => g.state !== "pre") ? loadAvant(state.night) : null, games.some(g => g.state === "post") ? loadNuit(state.night) : null]);
   if (tok !== state.tok) return;
 
-  const scored = games.map(g => ({ g, lvl: watchLevel(g) })).sort((x, y) => y.lvl - x.lvl || jitter(x.g.id) - jitter(y.g.id));
+  // la note fine des matchs terminés (déroulé ESPN) : on l'attend 2,5 s au plus, sinon la page se remet en ordre à son arrivée
+  const notes = loadNotes(games);
+  const late = await Promise.race([notes.then(() => false), new Promise(r => setTimeout(() => r(true), 2500))]);
+  if (tok !== state.tok) return;
+  if (late) notes.then(ch => { if (ch && tok === state.tok && !document.body.classList.contains("vidon")) renderNight(true); });
+  const scored = games.map(g => ({ g, lvl: watchLevel(g), s: watchScore(g) })).sort((x, y) => y.s - x.s || jitter(x.g.id) - jitter(y.g.id));
   const hero = scored.length && scored[0].lvl >= 4 ? scored[0] : null;
   const isFav = g => settings.fav && (g.teams.away.id === settings.fav || g.teams.home.id === settings.fav) ? 1 : 0;
   const rest = games.filter(g => !hero || g.id !== hero.g.id)
-    .sort((x, y) => isFav(y) - isFav(x) || watchLevel(y) - watchLevel(x) || x.date - y.date);
+    .sort((x, y) => isFav(y) - isFav(x) || watchScore(y) - watchScore(x) || x.date - y.date);
   const nPost = games.filter(g => g.state === "post").length;
 
   main.innerHTML = `${skyHTML(games, hero, scored)}
@@ -774,7 +804,7 @@ async function renderNight(soft) {
   const all = $("#revall");
   if (all) all.addEventListener("click", () => {
     // la cérémonie : du moins bon au meilleur, le match de la nuit en dernier
-    let order = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).sort((x, y) => watchLevel(x) - watchLevel(y));
+    let order = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).sort((x, y) => watchScore(x) - watchScore(y));
     if (hero) order = order.filter(g => g.id !== hero.g.id).concat(order.filter(g => g.id === hero.g.id));
     // 21/11 (Kiki : « ça descend tout en bas, ça ne s'arrête pas ») : on reste où on est, tous les scores s'allument ensemble
     // en moins d'une seconde (petit décalage de 60 ms d'un match à l'autre), sans course quart-temps par quart-temps

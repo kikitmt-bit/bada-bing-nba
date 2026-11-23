@@ -238,6 +238,19 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     nuit +), « temps en tête / changements de leader » remonte sur la ligne du titre. L'essentiel : ordre = MVP et grosses
     perfs · Français · faits marquants (puis la nuit prochaine) ; la perf du MVP n'est plus dans les faits marquants ;
     `loadMVP` attend `loadVideos` pour que le bouton dise 5 ou 10 selon la vidéo NBA.
+  - **NOTE « À VOIR » SUR LE DÉROULÉ (23/11, demande de Kiki : « ne jamais passer à côté d'un bon match, ne jamais surcoter
+    un match nul »)** : `docs/note.js` (`Note.rate(summary brut)` → `{s, lvl, f}`), mêmes règles pour le site et l'étalonnage.
+    Ingrédients (action par action) : le plus petit écart des 3 dernières minutes (`close`, une égalité tardive compte même
+    après un +13), écart à 2 min, prolongations, retournements/égalités dans les 5 dernières minutes (`clutch`), panier qui
+    donne l'avance pour de bon (`go`, au buzzer = gros bonus), remontée du vainqueur (`maxDef`), changements de leader,
+    **plié tôt** (écart toujours ≥ 11/15/20 pendant les 8 dernières minutes = malus), perf (35 à 55 pts), triple-double,
+    total ≥ 240. Seuils `CUT = [0, 1.3, 3.0, 5.0, 7.4]`, étalonnés sur les 248 matchs du 20/10 au 22/11 : 6 % Immanquable,
+    14 % À voir, 20 % Sympa, 20 % Sans plus, 12 % Bof, 27 % À fuir (toutes les raclées). Plus de flou aléatoire (`jitter`)
+    pour les matchs notés ainsi. Site : `loadNotes` télécharge le déroulé des matchs terminés (gardé ensuite dans
+    `SUMCACHE`), note gardée par appareil (`bb2_notes`, 400 matchs) ; la page attend 2,5 s au plus puis se remet en ordre ;
+    tri sur la note exacte (`watchScore`), plus sur les 6 niveaux. Sans déroulé : l'ancienne note sur le score final.
+    Réétalonner : Actions → « Étalonnage des notes » (`scripts/notes_calib.js`, ESPN joignable depuis GitHub). Le téléphone
+    (`boucle.py` → `note`) choisit encore les matchs à analyser avec l'ancienne formule.
   - Banc d'essai sans ESPN : Playwright qui détourne ESPN (faux scoreboard/summary), `v2/nuit/` (vrai fichier de la branche
     data) et l'embed YouTube (fausse page qui envoie `infoDelivery` avec `currentTime`) : on pilote la position de la vidéo.
 - **Réglages du calage (22/11 soir, mesurés sur la nuit du 19)** : les chiffres du bandeau se lisent MAL (tesseract rate

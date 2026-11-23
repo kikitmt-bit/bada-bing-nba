@@ -1,9 +1,12 @@
-# Étalonnage ponctuel de la note « à voir » (docs/note.js) sur les vrais matchs ESPN. À supprimer une fois les seuils réglés.
+# Étalonnage de la note « à voir » (docs/note.js) sur les vrais matchs ESPN : à lancer à la main (onglet Actions)
+# quand on retouche les règles ou les seuils ; affiche chaque match, sa note et la répartition par niveau.
 name: Étalonnage des notes
 on:
-  push:
-    branches: [claude/dreamy-mayer-3z0fm9]
-    paths: [docs/note.js, scripts/notes_calib.js, .github/workflows/notes-calib.yml]
+  workflow_dispatch:
+    inputs:
+      debut:
+        description: "Première nuit (AAAAMMJJ)"
+        default: "20261020"
 jobs:
   calib:
     runs-on: ubuntu-latest
@@ -12,4 +15,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: node scripts/notes_calib.js 20261020
+      - run: node scripts/notes_calib.js ${{ inputs.debut }}

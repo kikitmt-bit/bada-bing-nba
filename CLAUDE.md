@@ -8,6 +8,11 @@ Projet à part du site NFL (`nfl_pronos`) ; utilisé par Kiki (Paris) et un ami 
 Grande refonte décidée avec Kiki : **le site quitte Streamlit** et s'appelle désormais **Nocturne** (nom validé par Kiki).
 La v2 est un site statique dans `docs/` (`index.html`, `style.css`, `app.js`, `demo.js`), servi par **GitHub Pages**
 (Pages suit la branche de travail `claude/...` + `/docs` : chaque push y est en ligne ~1 min après ; `main` porte les robots).
+**MISE EN LIGNE AUTOMATIQUE (règle de Kiki, 23/11 : « je ne veux rien avoir à faire »)** : le site publié = la branche
+`claude/nice-hypatia-e5cnkd` (dossier `/docs`). Après chaque modif testée, Claude, SANS demander : 1) pousse sa branche de travail,
+2) pousse le même commit sur `claude/nice-hypatia-e5cnkd` (`git push origin HEAD:claude/nice-hypatia-e5cnkd`, en avance rapide :
+fusionner d'abord cette branche si elle a avancé), 3) fusionne aussi dans `main` (demande de fusion puis fusion, pour les robots).
+Ne jamais laisser Kiki publier ou fusionner à la main. Penser au `?v=` du cache dans `index.html`.
 **DA « broadcast de minuit » (17/11, après le retour Kiki « encore trop Streamlit, pas d'effet waouh, boutons arrondis d'appli IA,
 liseré de côté ») — à respecter dans toute nouvelle page** : l'habillage d'une retransmission NBA vue de nuit.
 - Logo : croissant de lune-ballon (`<symbol id="moonball">` dans index.html, réutilisé par `<use>`), qui remplace le O du mot-symbole

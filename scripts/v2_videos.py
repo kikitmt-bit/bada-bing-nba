@@ -2,7 +2,9 @@
 
 Lit les flux RSS publics des chaînes YouTube (15 dernières vidéos chacune,
 aucune clé nécessaire) et accumule le tout dans v2/videos.json (branche data).
-En tournant toutes les 20 minutes, on garde la trace de toutes les vidéos
+Lancé toutes les 20 minutes par le téléphone-serveur (boucle.py, qui importe refresh)
+et, en secours, par le robot GitHub (que GitHub ne lance en réalité que toutes les 6 à 9 h).
+En tournant souvent, on garde la trace de toutes les vidéos
 même quand une chaîne en publie plus de 15 dans la nuit.
 
 Usage : python scripts/v2_videos.py <chemin/videos.json>
@@ -38,12 +40,9 @@ def feed_videos(channel_id):
     return out
 
 
-def main(path):
-    try:
-        with open(path, encoding="utf-8") as f:
-            old = {v["id"]: v for v in json.load(f).get("videos", [])}
-    except (OSError, json.JSONDecodeError):
-        old = {}
+def refresh(data):
+    """Ajoute aux vidéos déjà connues (data = ancien contenu de videos.json) celles des flux, garde 10 jours."""
+    old = {v["id"]: v for v in (data or {}).get("videos", [])}
     for ch in CHANNELS:
         try:
             for v in feed_videos(ch):
@@ -54,11 +53,19 @@ def main(path):
     cutoff = (datetime.now(timezone.utc) - timedelta(days=KEEP_DAYS)).isoformat()
     videos = sorted((v for v in old.values() if v.get("p", "") >= cutoff),
                     key=lambda v: v.get("p", ""), reverse=True)
-    data = {"updated": datetime.now(timezone.utc).isoformat(timespec="seconds"), "videos": videos}
+    return {"updated": datetime.now(timezone.utc).isoformat(timespec="seconds"), "videos": videos}
+
+
+def main(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    data = refresh(data)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-    print(f"{len(videos)} vidéos gardées ({KEEP_DAYS} jours)")
-
+    print(f"{len(data['videos'])} vidéos gardées ({KEEP_DAYS} jours)")
 
 if __name__ == "__main__":
     main(sys.argv[1])

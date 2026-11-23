@@ -64,7 +64,10 @@ function logoHTML(t, extra) {
 }
 
 /* ---------- dates : « jour du match » = calendrier de New York ---------- */
-const TZ = (Intl.DateTimeFormat().resolvedOptions().timeZone) || "Europe/Paris";
+// fuseau : réglable (Paris / Montréal) dans les réglages, sinon celui de l'appareil. Il change les heures, les titres des nuits
+// (« Nuit du … au … » à Paris, « Mercredi 21 » à Montréal) et les étiquettes (« Cette nuit » / « Ce soir »)
+const TZ_AUTO = (Intl.DateTimeFormat().resolvedOptions().timeZone) || "Europe/Paris";
+const TZ = store.get("tz", null) || TZ_AUTO;
 const EURO = !/^America\//.test(TZ);
 function nyKey(date) { // AAAAMMJJ à New York
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" })
@@ -100,7 +103,7 @@ function nightTitle(key) {
 }
 const ledColon = t => String(t).replace(/:/g, '<i class="cl">:</i>'); // deux-points calés sur la hauteur des chiffres
 function hourLocal(date) {
-  return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(date).replace(":", "h");
+  return new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" }).format(date).replace(":", "h");
 }
 
 /* ---------- état ---------- */
@@ -171,7 +174,7 @@ async function scoreboard(key) {
     return games;
   } catch (e) {
     const c = store.get("sb_" + key, null);
-    if (c) { alertBar("ESPN ne répond pas : scores de " + new Date(c.t).toLocaleTimeString("fr-FR") + "."); return c.games.map(g => pairColors({ ...g, date: new Date(g.date) })); }
+    if (c) { alertBar("ESPN ne répond pas : scores de " + new Date(c.t).toLocaleTimeString("fr-FR", { timeZone: TZ }) + "."); return c.games.map(g => pairColors({ ...g, date: new Date(g.date) })); }
     throw e;
   }
 }
@@ -696,7 +699,7 @@ function updateRevealAll() {
 
 /* ---------- le brief : la nuit, comme une retransmission ---------- */
 function greeting() {
-  const hr = new Date().getHours();
+  const hr = +new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, hour: "numeric", hourCycle: "h23" }).format(new Date());
   return hr < 5 ? "Bonne nuit" : hr < 12 ? "Bonjour" : hr < 18 ? "Bon après-midi" : "Bonsoir";
 }
 const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
@@ -1293,7 +1296,7 @@ function markAffiches(games) { // au plus 2 affiches par nuit, les meilleures, e
 /* ---------- vue « Programme » : la grille télé (une colonne par nuit, les matchs sous leur heure) ---------- */
 function tzName() { // « heure de Paris », « heure de Montréal »…
   const c = (TZ.split("/").pop() || "").replace(/_/g, " ");
-  const fr = { Paris: "Paris", Montreal: "Montréal", Toronto: "Toronto", Brussels: "Bruxelles", Zurich: "Zurich", London: "Londres", New_York: "New York", "New York": "New York" };
+  const fr = { Paris: "Paris", Montreal: "Montréal", Toronto: "Montréal", Brussels: "Bruxelles", Zurich: "Zurich", London: "Londres", New_York: "New York", "New York": "New York" };
   return c ? `heure de ${fr[c] || c}` : "heure locale";
 }
 function progNight(key) { // « Nuit du jeudi 19 » / « au vendredi 20 novembre » (2 lignes), ou « Jeudi 19 novembre » au Québec
@@ -1425,6 +1428,9 @@ function openSettings() {
     <h2>Réglages</h2>
     <div><h3>Mon équipe</h3><div class="tpick">${picker}</div>
       ${settings.fav ? `<p style="margin:10px 0 0"><button class="btn" id="nofav">Ne plus suivre d'équipe</button></p>` : ""}</div>
+    <div><h3>Fuseau horaire</h3>
+      <div class="tzpick">${[[null, "Automatique", TZ_AUTO.split("/").pop().replace(/_/g, " ")], ["Europe/Paris", "Paris", "Nuit du … au …"], ["America/Montreal", "Montréal", "Mercredi 21 …"]]
+        .map(([z, l, sub]) => `<button class="tzb ${(store.get("tz", null) || null) === z ? "on" : ""}" data-tz="${z || ""}"><b>${l}</b><small>${sub}</small></button>`).join("")}</div></div>
     <div><h3>Spoilers</h3>
       <div class="swrow"><p>Toujours montrer les scores<small>Pour ceux qui ne craignent pas le spoil : tout est révélé d'office.</small></p>
         <button class="sw ${settings.showAll ? "on" : ""}" id="swall" role="switch" aria-checked="${settings.showAll}"></button></div></div>
@@ -1438,6 +1444,8 @@ function openSettings() {
       sw.classList.toggle("on", settings.showAll); sw.setAttribute("aria-checked", settings.showAll);
       return;
     }
+    const tz = e.target.closest("[data-tz]");
+    if (tz) { store.set("tz", tz.dataset.tz || null); location.reload(); return; } // toutes les dates changent : on recharge
     const f = e.target.closest("[data-fav]");
     if (f) { settings.fav = +f.dataset.fav; store.set("fav", settings.fav); openSettings(); return; }
     if (e.target.closest("#nofav")) { settings.fav = null; store.set("fav", null); openSettings(); }
@@ -1492,6 +1500,7 @@ function setURL() {
 }
 function go(vue) {
   state.vue = vue;
+  track("/" + vue, { nuit: "Les nuits", programme: "Le programme", classement: "Le classement" }[vue] || vue);
   $$(".tab[data-vue]").forEach(t => t.classList.toggle("on", t.dataset.vue === vue));
   if (vue === "nuit") renderNight();
   else if (vue === "classement") renderStandings(); else renderProgramme();
@@ -1566,6 +1575,75 @@ function welcome() {
   $("#hellok").addEventListener("click", () => { store.set("hello", true); w.hidden = true; });
 }
 
+/* ---------- statistiques de visite (GoatCounter : gratuit, sans cookie, sans compte pour les visiteurs) ----------
+   Le tableau de bord est sur https://<GC>.goatcounter.com (compte de Kiki). On compte : chaque page vue (« /nuit »,
+   « /programme »…), et une fois par jour « qui/<nom> » pour les appareils ouverts avec un lien personnel (?qui=tom).
+   Les appareils de Kiki sont exclus (page ?admin → « Ne pas compter cet appareil »). */
+const GC = "nocturne-nba";
+const LOCALHOST = /^(localhost|127\.|192\.168\.)/.test(location.hostname);
+(function personalLink() { // ?qui=tom : on retient le nom sur l'appareil, puis on nettoie l'adresse
+  const q = (QS.get("qui") || "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 20);
+  if (!q) return;
+  store.set("qui", q);
+  const u = new URL(location.href); u.searchParams.delete("qui"); history.replaceState(null, "", u.pathname + u.search + u.hash);
+})();
+const statsOff = () => DEMO || LOCALHOST || QS.has("admin") || (() => { try { return localStorage.getItem("skipgc") === "t"; } catch (e) { return false; } })();
+let gcReady = null;
+function gcLoad() {
+  if (gcReady || statsOff()) return gcReady;
+  gcReady = new Promise(res => {
+    const sc = document.createElement("script");
+    sc.async = true; sc.src = "https://gc.zgo.at/count.js";
+    sc.dataset.goatcounter = `https://${GC}.goatcounter.com/count`;
+    sc.dataset.goatcounterSettings = JSON.stringify({ no_onload: true });
+    sc.onload = () => res(window.goatcounter || null); sc.onerror = () => res(null);
+    document.head.appendChild(sc);
+  });
+  return gcReady;
+}
+async function track(path, title, event) {
+  if (statsOff()) return;
+  const gc = await gcLoad(); if (!gc || !gc.count) return;
+  try { gc.count({ path, title: title || path, event: !!event }); } catch (e) { /* tant pis */ }
+}
+function trackVisitor() { // une fois par jour et par appareil : qui est venu
+  const q = store.get("qui", null); if (!q) return;
+  const day = new Date().toISOString().slice(0, 10);
+  if (store.get("quiday", "") === day) return;
+  store.set("quiday", day);
+  track("qui/" + q, "Visite de " + q, true);
+}
+
+/* ---------- la page d'administration (?admin) : les visites, les liens personnels, exclure ses appareils ---------- */
+function renderAdmin() {
+  const main = $("#main");
+  let skip = false; try { skip = localStorage.getItem("skipgc") === "t"; } catch (e) { /* */ }
+  const base = location.origin + location.pathname;
+  const link = (n, who) => `<div class="adl"><span><b>${who}</b><small>${base}?qui=${n}</small></span><button class="btn" data-copy="${base}?qui=${n}">Copier</button></div>`;
+  main.innerHTML = `<section class="adm">
+    <p class="greet"><i></i>Administration</p>
+    <div class="adcard"><h3>Les visites</h3>
+      <p>Le compteur (GoatCounter, gratuit et sans cookie) note chaque page ouverte et, grâce aux liens personnels, qui est venu.
+      Tableau de bord : nombre de visites par jour, pages vues, pays, téléphone ou ordinateur, et les lignes « qui/… » pour chaque ami.</p>
+      <a class="btn amber big" href="https://${GC}.goatcounter.com" target="_blank" rel="noopener">Ouvrir le tableau de bord ↗</a></div>
+    <div class="adcard"><h3>Les liens à envoyer</h3>
+      <p>Un lien par personne : l'appareil retient le nom à la première ouverture (ensuite, l'adresse normale suffit).</p>
+      ${link("tom", "Tom · Clermont")}${link("busta", "Busta · Montréal")}
+      <div class="adl"><span><b>Quelqu'un d'autre</b><input id="adname" placeholder="son prénom" maxlength="20"></span><button class="btn" id="adnew">Copier</button></div></div>
+    <div class="adcard"><h3>Cet appareil</h3>
+      <div class="swrow"><p>Ne pas compter mes visites<small>À activer sur ton téléphone et ton ordinateur, pour que les chiffres ne montrent que tes amis.</small></p>
+        <button class="sw ${skip ? "on" : ""}" id="adskip" role="switch" aria-checked="${skip}"></button></div></div>
+  </section>`;
+  main.onclick = async e => {
+    const sw = e.target.closest(".adcard .swrow") ? $("#adskip") : null; // toute la ligne se touche (téléphone)
+    if (sw) { skip = !skip; try { skip ? localStorage.setItem("skipgc", "t") : localStorage.removeItem("skipgc"); } catch (x) { /* */ }
+      sw.classList.toggle("on", skip); sw.setAttribute("aria-checked", skip); toast(skip ? "Cet appareil n'est plus compté" : "Cet appareil est compté"); return; }
+    let url = e.target.closest("[data-copy]") ? e.target.closest("[data-copy]").dataset.copy : null;
+    if (e.target.closest("#adnew")) { const n = ($("#adname").value || "").toLowerCase().normalize("NFD").replace(/[^a-z0-9-]/g, ""); if (!n) return; url = `${base}?qui=${n}`; }
+    if (url) { try { await navigator.clipboard.writeText(url); toast("Lien copié : " + url); } catch (x) { prompt("Le lien à copier :", url); } }
+  };
+}
+
 /* ---------- démarrage ---------- */
 (function init() {
   if (DEMO) $("#demopill").hidden = false;
@@ -1573,6 +1651,8 @@ function welcome() {
   state.night = nuit && /^\d{4}-\d{2}-\d{2}$/.test(nuit) ? nuit.replaceAll("-", "") : defaultNight();
   welcome();
   loadVideos(); // en avance, pour que le premier clic « Résumé » soit instantané
+  if (QS.has("admin")) { renderAdmin(); return; }
+  trackVisitor();
   const vue = QS.get("vue");
   go(vue === "programme" ? "programme" : "nuit");
 })();

@@ -251,6 +251,16 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     tri sur la note exacte (`watchScore`), plus sur les 6 niveaux. Sans déroulé : l'ancienne note sur le score final.
     Réétalonner : Actions → « Étalonnage des notes » (`scripts/notes_calib.js`, ESPN joignable depuis GitHub). Le téléphone
     (`boucle.py` → `note`) choisit encore les matchs à analyser avec l'ancienne formule.
+  - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
+    `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
+    Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des
+    nuits (Paris « 22 → 23 », Montréal « 22 nov. », « Hier soir / Ce soir »), salutation ; `America/Toronto` affiché « Montréal ».
+    **Statistiques de visite = GoatCounter** (site `nocturne-nba`, `GC` dans app.js ; compte à créer par Kiki sur
+    goatcounter.com avec ce code) : `track` à chaque vue (`/nuit`, `/programme`, `/classement`), `trackVisitor` une fois par
+    jour « qui/<nom> » pour un appareil ouvert avec un lien personnel `?qui=tom` (Tom = Clermont, Busta = Montréal ; nom gardé
+    dans `bb2_qui`, adresse nettoyée). Pas de comptage en démo, en local, sur ?admin, ni sur un appareil exclu (`skipgc`,
+    réglé dans la page admin). **Page admin = `?admin`** (`renderAdmin`) : lien vers le tableau de bord, liens personnels à
+    copier, interrupteur « Ne pas compter mes visites ».
   - Banc d'essai sans ESPN : Playwright qui détourne ESPN (faux scoreboard/summary), `v2/nuit/` (vrai fichier de la branche
     data) et l'embed YouTube (fausse page qui envoie `infoDelivery` avec `currentTime`) : on pilote la position de la vidéo.
 - **Réglages du calage (22/11 soir, mesurés sur la nuit du 19)** : les chiffres du bandeau se lisent MAL (tesseract rate

@@ -1427,3 +1427,11 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .nps>.np-card.gmb{align-content:center;gap:14px}
 .np-card.gmb .np-gl .lg{width:clamp(64px,6vw,110px);height:clamp(64px,6vw,110px)}
 .np-card.gmb .np-id>b{font-size:clamp(26px,2.4vw,40px)}
+/* plus belles actions : seulement le rang (ni joueur ni match, la lecture n'est pas assez sûre) */
+.np-top.rk{justify-content:center;align-items:center;gap:2px;background:linear-gradient(180deg,rgba(255,176,46,.14),#0b0d18)}
+.np-top.rk .np-rkbig{font:900 clamp(60px,6vw,110px)/1 var(--disp);color:var(--amber);text-shadow:0 0 24px rgba(255,176,46,.5)}
+.np-top.rk>b{font:800 15px var(--disp);letter-spacing:.2em;color:var(--ink2)}
+.np-top.rk .np-rk{display:none}
+/* liste de gauche : sur un grand écran, les cases grandissent pour remplir toute la hauteur (plus de vide en bas) */
+.np:not(.dense) .npi.m{flex:1 1 0;max-height:none}
+.np:not(.dense) .npi.xt{flex:.5 1 0;height:auto;max-height:none}

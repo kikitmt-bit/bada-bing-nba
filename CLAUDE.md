@@ -220,6 +220,13 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   - Plus belles actions : **seulement le match (les deux équipes)**, jamais le joueur : la lecture du joueur (panier ESPN qui
     suit le bandeau) se trompait trop souvent (1 sur 5 juste la nuit du 22). `nuit.py` calcule encore `aid`/`n`, le site
     l'ignore. Action sans match reconnu = « Action n° X ».
+  - **23/11 (2e passage)** : top 5 = **seulement le rang** (« 5 », « Top 5 »…) : même le match lu était faux (Denver-Bulls
+    affiché Pacers-Knicks). Liste de gauche : hors mode dense, les cases grandissent pour remplir toute la hauteur.
+    « Ses meilleures actions » et « Les 5 plus belles actions » de l'essentiel = **la vidéo seule** (extrait `start/end`, sans
+    stats ni panneaux). Replay + d'un match : **pause juste avant le tableau des stats** de fin (`endT` = dernier point du
+    chrono + 3 s, commande `pauseVideo`, re-pause si on relance), puis match « terminé » (`finalAt` : `sec:-1, fin:true`,
+    tous les quarts avec leur score, plus de « Prol. en cours ») ; même chose pour un chapitre du résumé de la nuit quand
+    son dernier point est dans les 60 dernières secondes. Frise des nuits : **plus aucune pastille** (ni dorée ni rouge).
   - Banc d'essai sans ESPN : Playwright qui détourne ESPN (faux scoreboard/summary), `v2/nuit/` (vrai fichier de la branche
     data) et l'embed YouTube (fausse page qui envoie `infoDelivery` avec `currentTime`) : on pilote la position de la vidéo.
 - **Réglages du calage (22/11 soir, mesurés sur la nuit du 19)** : les chiffres du bandeau se lisent MAL (tesseract rate

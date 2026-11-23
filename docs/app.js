@@ -433,7 +433,7 @@ function openNightPlus(key, solo) {
   const c = solo ? N.ch.find(x => x.k === solo) : null;
   if (solo && !c) return;
   playVideo(N.v, solo === "potn" ? `${c.n || "Le joueur de la nuit"} · ses meilleures actions` : solo === "top" ? "Les plus belles actions de la nuit" : "Le résumé de la nuit NBA",
-    null, c ? { night: N, solo, start: c.s, end: c.e } : { night: N });
+    null, c ? { start: c.s, end: c.e } : { night: N }); // extrait seul (depuis l'essentiel) : la vidéo, sans stats (choix de Kiki)
 }
 function playVideo(vid, label, gid, opts) { // lecteur intégré, sans quitter le site ; opts : { start, end } (un extrait), { night } (résumé de la nuit +)
   // beIN SPORTS interdit la lecture de ses vidéos hors de YouTube (« Vidéo non disponible ») : NBA Extra s'ouvre sur YouTube.
@@ -1407,9 +1407,7 @@ function renderChips() {
   el.innerHTML = cal + keys.map(k => {
     const c = chipText(k);
     const cur = k === state.night;
-    let dot = "";
-    if (k === tonight && k === state.night && live) dot = `<span class="dot red"></span>`;
-    else if (k < tonight && !seen.has(k)) dot = `<span class="dot gold"></span>`;
+    const dot = ""; // plus aucune pastille de notification sur la frise des nuits (demande de Kiki, 23/11)
     // seule la dernière nuit (celle d'il y a quelques heures) et la suivante ont un nom ; la veille passe en « Retour sur la nuit »
     // comme les autres (« Nuit dernière » prêtait à confusion avec « Cette nuit »)
     // la suivante : « La nuit à venir » (21/11 : « Demain » tombait sur l'après-demain une fois la nuit jouée)

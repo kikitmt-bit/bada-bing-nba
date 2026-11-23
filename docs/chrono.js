@@ -325,7 +325,7 @@ const Chrono = (() => {
   }
 
   /* ---------- le panneau ---------- */
-  const clockTxt = (per, sec) => `${per > 4 ? "Prol." + (per > 5 ? per - 4 : "") : "Q" + per} · ${sec >= 60 ? Math.floor(sec / 60) + ":" + String(Math.floor(sec % 60)).padStart(2, "0") : sec.toFixed(1)}`;
+  const clockTxt = (per, sec) => sec < 0 ? "Final" : `${per > 4 ? "Prol." + (per > 5 ? per - 4 : "") : "Q" + per} · ${sec >= 60 ? Math.floor(sec / 60) + ":" + String(Math.floor(sec % 60)).padStart(2, "0") : sec.toFixed(1)}`;
   function panelIdle() {
     const auto = store.get("live", true);
     return `<div class="lv-idle">
@@ -339,7 +339,7 @@ const Chrono = (() => {
   const STXT = { load: "Préparation…", seek: "Recherche du bandeau…", ok: "● Synchro", lost: "Bandeau caché", pause: "En pause", prep: "● Synchro", wait: "En attente du chrono…" };
   function render(force) {
     const el = S && S.el; if (!el) return;
-    const key = [S.on, S.status, S.at && S.at.per, S.at && (S.map && !DEBUG ? playIndex(S.D, S.at) : S.at.sec), S.diag && S.reads].join("|");
+    const key = [S.on, S.status, S.at && S.at.per, S.at && S.at.fin, S.at && (S.map && !DEBUG ? playIndex(S.D, S.at) : S.at.sec), S.diag && S.reads].join("|");
     if (!force && key === S.key) return;
     S.key = key;
     if (!S.on) { el.innerHTML = panelIdle(); return; }
@@ -440,7 +440,7 @@ const Chrono = (() => {
     const cols = Array.from({ length: nq }, (_, i) => i + 1);
     const qcell = q => {
       const lab = q <= 4 ? "Q" + q : "Prol." + (q > 5 ? q - 4 : "");
-      if (q < at.per && F.qEnd[q]) {
+      if ((q < at.per || (at.fin && q === at.per)) && F.qEnd[q]) {
         const pr = q > 1 && F.qEnd[q - 1] ? F.qEnd[q - 1] : [0, 0], va = F.qEnd[q][0] - pr[0], vh = F.qEnd[q][1] - pr[1];
         return `<div class="lv-q"><span>${lab}</span><b class="${va > vh ? "w" : ""}" style="--mc:${a.color}">${va}</b><b class="${vh > va ? "w" : ""}" style="--mc:${h.color}">${vh}</b></div>`;
       }
@@ -572,6 +572,12 @@ const Chrono = (() => {
     }
     return { per: p[1], sec, sc: p.length >= 5 ? [p[3], p[4]] : null }; // sc : le score lu à l'écran (tables récentes)
   }
+  function ytCmd(my, func, args) {
+    const f = my && my.iframe && my.iframe.querySelector("iframe");
+    if (f && f.contentWindow) f.contentWindow.postMessage(JSON.stringify({ event: "command", func, args: args || [], id: 1, channel: "widget" }), "*");
+  }
+  // le match fini : dernier quart-temps joué, chrono à zéro (fin = tout le déroulé)
+  function finalAt(D) { return { per: Math.max(4, ...D.plays.map(p => p.per)), sec: -1, fin: true }; }
   async function prepLoop(my) {
     let n = 0;
     while (S === my) {
@@ -581,6 +587,12 @@ const Chrono = (() => {
       // avant le premier chrono lu (ou avant le lancement) : le début du match, stats à zéro (rien ne peut être spoilé)
       const m0 = t === null ? null : momentAt(my.map, t), m = m0 && clampAt(my.D, m0, m0.sc);
       my.at = m || { per: 1, sec: 720 };
+      // la fin du match : le dernier bandeau lu + 3 s. Au-delà, le résumé GameTime/NBA montre son tableau des stats
+      // (demande de Kiki) : on met la vidéo en pause juste avant, et le match passe en « terminé » (score final, tous les quarts)
+      if (t !== null && t >= my.endT) {
+        if (my.ytState === 1) ytCmd(my, "pauseVideo");
+        my.at = finalAt(my.D);
+      }
       my.status = my.ytState === 2 ? "pause" : m ? "prep" : "wait";
       render();
       await wait(150);
@@ -610,7 +622,7 @@ const Chrono = (() => {
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     };
     if (!my.D || my.D.plays.length < 20) { if (CAN) panel.innerHTML = `<p class="lv-wait">Pas de déroulé ESPN pour ce match : pas de stats en direct.</p>`; else hide(); return; }
-    if (map && map.pts && map.pts.length >= 5) { my.map = map.pts; my.on = true; my.status = "prep"; render(true); prepLoop(my); return; }
+    if (map && map.pts && map.pts.length >= 5) { my.map = map.pts; my.endT = map.pts[map.pts.length - 1][0] + 3; my.on = true; my.status = "prep"; render(true); prepLoop(my); return; }
     if (!CAN) { hide(); return; } // téléphone sans table préparée : pas de panneau
     render(true);
     if (STREAM && STREAM.active) start(false); // déjà partagé pendant cette visite : rien à redemander
@@ -679,7 +691,10 @@ const Chrono = (() => {
   function chapAt(c, t) {
     if (!c.pts || !c.pts.length || !c.gid) return null;
     const m = momentAt(c.pts, t); if (!m) return null;
-    const at = clampAt(S.D[c.gid], m, m.sc);
+    const D = S.D[c.gid];
+    const last = c.pts[c.pts.length - 1];
+    if (D && t >= last[0] + 2 && (last[1] > 4 || (last[1] === 4 && last[2] < 60))) return finalAt(D); // la fin du match est passée à l'écran
+    const at = clampAt(D, m, m.sc);
     return at ? { ...at, sc: m.sc } : at; // sc : le score de l'écran, affiché tel quel
   }
   function nightState() {
@@ -700,7 +715,7 @@ const Chrono = (() => {
     const L = nightState();
     const cur = L.find(x => x.st === "cur");
     const topI = cur && cur.c.k === "top" ? (cur.c.plays || []).filter(a => cur.t >= a.s).length : 0;
-    const key = L.map(x => x.st[0] + (x.at ? x.at.per + ":" + (my.D[x.c.gid] ? playIndex(my.D[x.c.gid], x.at) : "") : "")).join("|") + "|" + topI;
+    const key = L.map(x => x.st[0] + (x.at ? (x.at.fin ? "F" : "") + x.at.per + ":" + (my.D[x.c.gid] ? playIndex(my.D[x.c.gid], x.at) : "") : "")).join("|") + "|" + topI;
     if (!force && key === my.key) return;
     my.key = key;
     if (my.el) {
@@ -764,7 +779,7 @@ const Chrono = (() => {
         if (x.st === "past") { as = A.score; hs = H.score; lab = g.ot ? "Final · prol." : "Final"; }
         else if (x.st === "skip") lab = "Pas encore vu";
         else if (x.st === "cur") {
-          if (x.at && D) { const F = flow(D, x.at); [as, hs] = x.at.sc || [F.as, F.hs]; lab = clockTxt(x.at.per, x.at.sec); }
+          if (x.at && D) { const F = flow(D, x.at); [as, hs] = x.at.sc || [F.as, F.hs]; lab = x.at.fin ? (x.at.per > 4 ? "Final · prol." : "Final") : clockTxt(x.at.per, x.at.sec); }
           else lab = "En cours";
         }
         const win = as === null ? "" : as > hs ? "a" : hs > as ? "h" : "";
@@ -844,7 +859,7 @@ const Chrono = (() => {
     return `<div class="np-tops" style="--n:${plays.length}">${plays.map((a, i) => {
       const rank = a.r || plays.length - i, open = i < n, curr = i === n - 1;
       if (!open) return `<div class="np-top off"><span class="np-rk">${rank}</span><span class="np-q">?</span></div>`;
-      return gameCard(a, rank, curr);
+      return `<div class="np-top rk ${curr ? "cur" : ""}"><span class="np-rkbig">${rank}</span><b>Top ${rank}</b></div>`; // ni joueur ni match : la lecture n'est pas assez sûre
     }).join("")}</div>`;
   }
   function gameTeams(a) {

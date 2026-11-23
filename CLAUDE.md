@@ -227,6 +227,12 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     chrono + 3 s, commande `pauseVideo`, re-pause si on relance), puis match « terminé » (`finalAt` : `sec:-1, fin:true`,
     tous les quarts avec leur score, plus de « Prol. en cours ») ; même chose pour un chapitre du résumé de la nuit quand
     son dernier point est dans les 60 dernières secondes. Frise des nuits : **plus aucune pastille** (ni dorée ni rouge).
+  - **23/11 (3e passage)** : « Les 5 plus belles actions » de l'essentiel = la vraie vidéo NBA « Top 5 (ou 10) Plays of the Night |
+    <date> » (`findTopPlays`, flux de la chaîne NBA), sinon l'extrait du résumé ; les deux extraits de l'essentiel s'ouvrent
+    **en plein écran** (`opts.fs` : `requestFullscreen` sur `.vframe` pendant le clic) et la lecture est relancée par
+    `playVideo` (postMessage). Replay + : colonne des stats 390-480 px, tableau des 5 joueurs sans les contres, noms en entier
+    (attention : `.vplayer.full .lv-pl th{width}` doit laisser `th:first-child{width:auto}`). Liste de gauche : le mode
+    dense se décide sur la hauteur réelle de la colonne et ses lignes grandissent aussi pour remplir toute la hauteur.
   - Banc d'essai sans ESPN : Playwright qui détourne ESPN (faux scoreboard/summary), `v2/nuit/` (vrai fichier de la branche
     data) et l'embed YouTube (fausse page qui envoie `infoDelivery` avec `currentTime`) : on pilote la position de la vidéo.
 - **Réglages du calage (22/11 soir, mesurés sur la nuit du 19)** : les chiffres du bandeau se lisent MAL (tesseract rate

@@ -428,12 +428,22 @@ function ytURL(g) { // filet de sécurité : la recherche YouTube
   return "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
 }
 const vidovl = $("#vidovl"), vplayer = $("#vplayer");
+// la vidéo « NBA's Top 5 (ou 10) Plays of the Night | <date> » de la chaîne NBA
+function findTopPlays(key) {
+  if (!VIDS) return null;
+  const md = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long", day: "numeric" }).format(keyDate(key)).toLowerCase();
+  return VIDS.find(v => v.c === "nba" && /top (5|10) plays of the night/.test(norm(v.t)) && norm(v.t).includes(md + ",")) || null;
+}
 function openNightPlus(key, solo) {
+  if (solo === "top") { // la vraie vidéo du top de la nuit, en plein écran
+    const v = findTopPlays(key);
+    if (v) { playVideo(v.id, "Les plus belles actions de la nuit", null, { fs: true }); return; }
+  }
   const N = NUIT[key]; if (!N) return;
   const c = solo ? N.ch.find(x => x.k === solo) : null;
   if (solo && !c) return;
   playVideo(N.v, solo === "potn" ? `${c.n || "Le joueur de la nuit"} · ses meilleures actions` : solo === "top" ? "Les plus belles actions de la nuit" : "Le résumé de la nuit NBA",
-    null, c ? { start: c.s, end: c.e } : { night: N }); // extrait seul (depuis l'essentiel) : la vidéo, sans stats (choix de Kiki)
+    null, c ? { start: c.s, end: c.e, fs: true } : { night: N }); // extrait seul (depuis l'essentiel) : la vidéo, sans stats (choix de Kiki)
 }
 function playVideo(vid, label, gid, opts) { // lecteur intégré, sans quitter le site ; opts : { start, end } (un extrait), { night } (résumé de la nuit +)
   // beIN SPORTS interdit la lecture de ses vidéos hors de YouTube (« Vidéo non disponible ») : NBA Extra s'ouvre sur YouTube.
@@ -444,7 +454,7 @@ function playVideo(vid, label, gid, opts) { // lecteur intégré, sans quitter l
   const night = opts.night && typeof Chrono !== "undefined" ? opts.night : null;
   const live = (gid || night) && typeof Chrono !== "undefined"; // stats en direct à côté du résumé (le panneau se retire s'il n'a rien à montrer)
   const cut = (opts.start ? "&start=" + Math.floor(opts.start) : "") + (opts.end ? "&end=" + Math.ceil(opts.end) : "");
-  const frame = vid ? `<iframe src="https://www.youtube.com/embed/${vid}?autoplay=1&rel=0&hl=fr${cut}${live ? "&enablejsapi=1&origin=" + encodeURIComponent(location.origin) : ""}"
+  const frame = vid ? `<iframe src="https://www.youtube.com/embed/${vid}?autoplay=1&rel=0&hl=fr${cut}${live || opts.fs ? "&enablejsapi=1&origin=" + encodeURIComponent(location.origin) : ""}"
       title="${label}" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>`
     : `<div class="vdemo">Démo : la vidéo YouTube serait ici</div>`;
   const full = live && (night || Chrono.wantsFull(vid)); // plein écran d'office quand il y aura des stats (plus immersif, place dessous)
@@ -461,6 +471,11 @@ function playVideo(vid, label, gid, opts) { // lecteur intégré, sans quitter l
       : live ? `<aside class="lv" id="lvpanel"></aside><section class="lv-below" id="lvbelow"></section>` : ""}`;
   vidovl.classList.add("open"); document.body.style.overflow = "hidden"; document.body.classList.add("vidon");
   if (full && vidovl.requestFullscreen && !document.fullscreenElement) vidovl.requestFullscreen().catch(() => {}); // pendant le clic : le navigateur l'exige
+  // extraits de l'essentiel (top de la nuit, actions du MVP) : la vidéo seule, directement en plein écran (demande de Kiki)
+  const vf = vplayer.querySelector(".vframe");
+  if (opts.fs && vf && vf.requestFullscreen && !document.fullscreenElement) vf.requestFullscreen().catch(() => {});
+  if (opts.fs && vf) { const f = vf.querySelector("iframe"); // lecture lancée d'office (au cas où le navigateur ignore autoplay)
+    if (f) f.addEventListener("load", () => setTimeout(() => f.contentWindow && f.contentWindow.postMessage(JSON.stringify({ event: "command", func: "playVideo", args: [], id: 1, channel: "widget" }), "*"), 600)); }
   if (night) Chrono.attachNight(night, $("#nplist"), vplayer.querySelector(".vframe"), $("#lvbelow"), { solo: opts.solo, side: $("#npside") });
   else if (live) Chrono.attach(gid, $("#lvpanel"), vplayer.querySelector(".vframe"), vid, $("#lvbelow"));
 }
@@ -890,7 +905,8 @@ async function loadMVP(btn) {
   const mvp = all[0], t = team(mvp.tid);
   // les extraits du résumé de la nuit, avec leur panneau (ses tirs qui s'ajoutent, les actions qui se dévoilent)
   const mvpPlay = pi >= 0 && N ? `<button class="btn amber mvplay" data-nuitsolo="potn" data-night="${state.night}"><span class="pl">▶</span>Ses meilleures actions</button>` : "";
-  const topPlay = top && N ? `<button class="btn amber" data-nuitsolo="top" data-night="${state.night}"><span class="pl">▶</span>Les ${top.plays && top.plays.length ? top.plays.length + " " : ""}plus belles actions</button>` : "";
+  const topV = findTopPlays(state.night), topN = topV ? (/top 10/i.test(topV.t) ? 10 : 5) : top && top.plays && top.plays.length;
+  const topPlay = topV || (top && N) ? `<button class="btn amber" data-nuitsolo="top" data-night="${state.night}"><span class="pl">▶</span>Les ${topN ? topN + " " : ""}plus belles actions</button>` : "";
   const opp = mvp.g.teams.away.id === mvp.tid ? mvp.g.teams.home : mvp.g.teams.away;
   const photo = /^\d+$/.test(mvp.aid) && !DEMO ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${mvp.aid}.png" alt="" onerror="this.remove()">` : "";
   const stat = (v, l) => `<div class="stat"><span class="led"><span class="v" data-count="${v}">0</span></span><small>${l}</small></div>`;

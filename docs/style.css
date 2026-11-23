@@ -1435,3 +1435,26 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 /* liste de gauche : sur un grand écran, les cases grandissent pour remplir toute la hauteur (plus de vide en bas) */
 .np:not(.dense) .npi.m{flex:1 1 0;max-height:none}
 .np:not(.dense) .npi.xt{flex:.5 1 0;height:auto;max-height:none}
+
+/* ---- 23/11 (3e passage) ---- */
+/* Replay + : la colonne des stats un peu plus large, les 5 joueurs de chaque équipe mis en valeur (sans les contres) */
+@media (min-width:901px){
+  .vplayer.full{grid-template-columns:minmax(0,1fr) clamp(390px,calc(100vw - var(--W)),480px)}
+  .vplayer.full .lv-pl{gap:16px;padding:10px 0}
+  .vplayer.full .lv-pl th{width:28px;font-size:10.5px}
+  .vplayer.full .lv-pl th:first-child{font-size:13px;width:auto}
+  .vplayer.full .lv-pl td{padding:4px 0}
+  .vplayer.full .lv-pl td:first-child{font:700 14.5px var(--body);color:var(--ink)}
+  .vplayer.full .lv-pl td b{font-size:18px}
+}
+@media (min-width:901px) and (min-height:1100px){
+  .vplayer.full .lv-pl td:first-child{font-size:16px}
+  .vplayer.full .lv-pl td b{font-size:20px}
+}
+/* extrait en plein écran : la vidéo occupe tout l'écran */
+.vframe:fullscreen{width:100vw;height:100vh;max-width:none;aspect-ratio:auto;background:#000}
+/* liste de gauche en mode « une ligne par match » : les lignes grandissent aussi pour remplir toute la hauteur */
+.np.dense .npl{gap:6px}
+.np.dense .npi.m:not(.cur){flex:1 1 0;height:auto;min-height:38px;max-height:84px}
+.np.dense .npi.xt{flex:.9 1 0;height:auto;min-height:40px;max-height:84px}
+.np.dense .npi.m.cur{flex:1.5 1 auto}

@@ -361,9 +361,9 @@ const Chrono = (() => {
       ids.sort((x, y) => (val(y).pts - val(x).pts) || ((val(y).reb + val(y).ast) - (val(x).reb + val(x).ast))
         || (D.names[y].st - D.names[x].st) || (D.names[x].o - D.names[y].o));
       return ids.slice(0, 5).map(id => { const p = val(id);
-        return `<tr><td>${D.names[id].n}</td><td><b data-k="p${id}">${p.pts}</b></td><td><b data-k="r${id}">${p.reb}</b></td><td><b data-k="a${id}">${p.ast}</b></td><td><b data-k="b${id}">${p.blk}</b></td></tr>`; }).join("");
+        return `<tr><td>${D.names[id].n}</td><td><b data-k="p${id}">${p.pts}</b></td><td><b data-k="r${id}">${p.reb}</b></td><td><b data-k="a${id}">${p.ast}</b></td></tr>`; }).join("");
     };
-    const ptab = (tm, t) => `<table><thead><tr><th style="--mc:${tm.color}">${tm.name}</th><th>Pts</th><th>Reb</th><th>Pd</th><th title="Contres">Ctr</th></tr></thead><tbody>${top(t)}</tbody></table>`;
+    const ptab = (tm, t) => `<table><thead><tr><th style="--mc:${tm.color}">${tm.name}</th><th>Pts</th><th>Reb</th><th>Pd</th></tr></thead><tbody>${top(t)}</tbody></table>`;
     el.innerHTML = head + (DEBUG || !S.map ? `
       <div class="lv-score"><span class="lv-t" style="--mc:${a.color}">${a.tri}</span><span class="led">${A.as}</span><span class="lv-dash">–</span><span class="led">${A.hs}</span><span class="lv-t" style="--mc:${h.color}">${h.tri}</span></div>` : "") + `
       <div class="lv-rows">
@@ -767,7 +767,8 @@ const Chrono = (() => {
     const nM = L.filter(x => x.c.k === "match").length, seen = L.filter(x => x.c.k === "match" && x.st === "past").length;
     // beaucoup de matchs (ou écran peu haut) : une ligne par match (le match en cours garde ses deux lignes)
     const nX = L.length - nM;
-    const dense = typeof innerHeight !== "number" || innerWidth <= 900 ? nM > 8 : nM * 100 + nX * 58 + 60 > innerHeight;
+    const H = my.el && my.el.clientHeight > 200 ? my.el.clientHeight : innerHeight; // la hauteur réelle de la colonne
+    const dense = innerWidth <= 900 ? nM > 8 : nM * 100 + nX * 58 + 60 > H;
     if (my.el) my.el.classList.toggle("dense", dense);
     const item = x => {
       const c = x.c;

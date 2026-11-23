@@ -9,7 +9,7 @@ const Note = (() => {
   const secOf = d => { let m = /^(\d+):(\d+)/.exec(d || ""); if (m) return +m[1] * 60 + +m[2]; m = /^(\d+(?:\.\d)?)$/.exec(d || ""); return m ? +m[1] : 0; };
   const el = (per, sec) => per <= 4 ? (per - 1) * 720 + 720 - sec : 2880 + (per - 5) * 300 + 300 - sec; // secondes de jeu écoulées
   // seuils des niveaux (étalonnés sur les matchs de la saison 2026-27, voir scripts/notes_calib.js)
-  const CUT = [1.0, 2.2, 3.6, 5.2, 7.2];
+  const CUT = [0, 1.3, 3.0, 5.0, 7.4];
 
   function features(j) {
     const comps = j.header.competitions[0].competitors;
@@ -35,6 +35,10 @@ const Note = (() => {
     }
     // le match plié : l'écart pendant les 8 dernières minutes du temps réglementaire
     for (let t = 2400; t <= 2880; t += 30) { const a = Math.abs(at(t)); minLate = Math.min(minLate, a); maxLate = Math.max(maxLate, a); }
+    // le plus petit écart des 3 dernières minutes du temps réglementaire (une égalité à 30 s de la fin compte, même si l'écart était de 13 à 2 min)
+    let close = Math.abs(at(2700));
+    for (const p of P) { const t = el(p.per, p.sec); if (t > 2700 && t <= 2880) close = Math.min(close, Math.abs(p.hs - p.as)); }
+    if (nper > 4) close = 0;
     // les perfs (feuille de match)
     let top = 0, td = 0;
     try {
@@ -52,24 +56,25 @@ const Note = (() => {
       fm: Math.abs(hs - as), ot: nper - 4, tot: hs + as,
       m5: Math.abs(at(2580)), m2: Math.abs(at(2760)), // écart à 5 min et 2 min de la fin du temps réglementaire
       lc, ties, clutch, maxDef, go: lastGo === null ? null : end - lastGo, // secondes restantes au panier qui donne l'avance pour de bon
-      minLate, maxLate, top, td,
+      minLate, maxLate, top, td, close,
     };
   }
   function score(f) {
     let s = 0;
     // la fin de match
+    const c = Math.min(f.close, f.m2);
     if (f.ot) s += 3 + 1.8 + (f.ot - 1) * 1.2;
-    else s += f.m2 <= 3 ? 3 : f.m2 <= 6 ? 2.2 : f.m2 <= 9 ? 1.3 : f.m2 <= 12 ? .6 : 0;
+    else s += c <= 3 ? 3 : c <= 6 ? 2.2 : c <= 9 ? 1.3 : c <= 12 ? .6 : 0;
     s += f.fm <= 3 ? 1 : f.fm <= 5 ? .5 : 0;
     s += Math.min(2, .45 * f.clutch); // retournements et égalités dans les 5 dernières minutes (et la prolongation)
-    if (f.go !== null) s += f.go <= 5 ? 1.5 : f.go <= 24 ? .8 : f.go <= 60 ? .3 : 0; // panier décisif
+    if (f.go !== null) s += f.go <= 2 ? 2.2 : f.go <= 5 ? 1.5 : f.go <= 24 ? .8 : f.go <= 60 ? .3 : 0; // panier décisif (au buzzer : encore plus)
     // le scénario
     s += f.maxDef >= 20 ? 2 : f.maxDef >= 15 ? 1.4 : f.maxDef >= 10 ? .7 : 0; // remontée du vainqueur
     s += f.lc >= 20 ? .8 : f.lc >= 12 ? .4 : 0;
     // plié tôt : écart toujours ≥ 15 (ou 20) pendant les 8 dernières minutes
     if (!f.ot) s -= f.minLate >= 20 ? 2.5 : f.minLate >= 15 ? 1.5 : f.minLate >= 11 ? .6 : 0;
     // le spectacle
-    s += f.top >= 55 ? 2.2 : f.top >= 50 ? 1.8 : f.top >= 45 ? 1.3 : f.top >= 40 ? .8 : f.top >= 35 ? .3 : 0;
+    s += f.top >= 55 ? 3 : f.top >= 50 ? 2.5 : f.top >= 45 ? 1.6 : f.top >= 40 ? .9 : f.top >= 35 ? .3 : 0;
     s += f.td ? .5 : 0;
     s += f.tot >= 250 ? .5 : f.tot >= 240 ? .25 : 0;
     return Math.round(s * 100) / 100;

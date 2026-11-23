@@ -199,6 +199,24 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   « Choisi par la NBA », supprimée) et « ▶ Les 5 plus belles actions » ouvrent l'EXTRAIT SEUL (`openNightPlus(key, solo)`,
   `&start=&end=`, classe `.solo`) : vidéo + colonne de droite (`.nps` : carte + terrain, ou grande carte de l'action) +
   dessous (film de son match, ou les 5 cartes).
+- **Résumé de la nuit + : retouches du 23/11 (retours de Kiki, carte blanche)** :
+  - Liste de gauche : icônes SVG (`ICO`) dans la même colonne que les logos, titres sur UNE ligne ; « Le joueur de la nuit ? »
+    sur une ligne tant qu'il n'est pas dévoilé (puis titre + nom + photo ronde) ; les autres chapitres = le titre seul, en
+    français (`chapTitle` : « Classement de l'Est / de l'Ouest »), plus de « Pour finir » / « Chapitre ». ⚠️ Le bug des cases
+    décalées venait de la classe `.next` (état « à venir ») déjà prise par le bandeau « prochain match » (marge, bord, retour
+    à la ligne) : neutralisée par `.npi.next`. **Beaucoup de matchs** (`.np.dense`, calculé dans `listHTML` d'après la hauteur
+    d'écran) : une ligne par match `[logo SIGLE ?? | ?? SIGLE logo]`, le match en cours garde ses deux lignes ; la liste défile
+    si besoin et garde le match en cours en vue. Testé à 15 matchs (1920×1080 : tout tient ; 1280×720 : défile).
+  - Tendances : même cadre et même en-tête (`.lv-filmh`) que le film du match, titres alignés, 4 tuiles qui remplissent la
+    hauteur (sans sous-titre sous la vidéo).
+  - Joueur de la nuit (`potnBand`) : une bande sur toute la largeur — photo carrée centrée (`object-fit:cover`), nom, 6 stats
+    en grand (3×2), **tous ses tirs du match affichés d'un coup** (plus d'animation ni de compteur « points vus », demande de
+    Kiki), demi-terrain entier jusqu'à 32 pieds. Extrait seul : même chose en colonne (`potnCard` + `potnCourt`, statiques).
+  - Plus belles actions : **seulement le match (les deux équipes)**, jamais le joueur : la lecture du joueur (panier ESPN qui
+    suit le bandeau) se trompait trop souvent (1 sur 5 juste la nuit du 22). `nuit.py` calcule encore `aid`/`n`, le site
+    l'ignore. Action sans match reconnu = « Action n° X ».
+  - Banc d'essai sans ESPN : Playwright qui détourne ESPN (faux scoreboard/summary), `v2/nuit/` (vrai fichier de la branche
+    data) et l'embed YouTube (fausse page qui envoie `infoDelivery` avec `currentTime`) : on pilote la position de la vidéo.
 - **Réglages du calage (22/11 soir, mesurés sur la nuit du 19)** : les chiffres du bandeau se lisent MAL (tesseract rate
   souvent le « 7 »), le chrono bien ; le bandeau change de score ~3 s de chrono AVANT l'horaire ESPN → `RETARD = 3.5` ajouté
   au chrono lu ; le chrono prime, un score lu ne sert de borne que sur sa propre image (et sans chrono, il doit coller aux

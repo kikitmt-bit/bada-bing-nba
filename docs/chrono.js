@@ -488,7 +488,7 @@ const Chrono = (() => {
   function trendsHTML(D, F) {
     const h = team(D.home), a = { ...team(D.away), color: vsColor(D.away, D.home) }, dNow = F.hs - F.as;
     const tile = (lab, val, sub) => `<div class="lv-tile"><span>${lab}</span><b>${val}</b><small>${sub || "&nbsp;"}</small></div>`;
-    return `<div class="lv-trends"><h4>Les tendances</h4><div class="lv-tiles">
+    return `<div class="lv-trends"><div class="lv-filmh"><h4>Les tendances</h4></div><div class="lv-tiles">
       ${tile("Écart", dNow ? `+${Math.abs(dNow)} ${(dNow > 0 ? h : a).tri}` : "Égalité", dNow ? "en tête" : "")}
       ${tile("Série en cours", F.runP >= 4 ? `${F.runP}-0 ${team(F.runT).tri}` : "—", F.runP >= 4 ? "points d'affilée" : "aucune")}
       ${tile("Plus gros run", F.bestP >= 4 ? `${F.bestP}-0 ${team(F.bestT).tri}` : "—", F.bestP >= 4 ? "depuis le début" : "pas encore")}
@@ -690,7 +690,7 @@ const Chrono = (() => {
       // un match n'est « vu » (score final affiché) que si on a regardé sa fin ; sauté (clic plus loin) = toujours caché
       if (st === "cur" && t >= c.e - 8) S.done.add(i);
       if (st === "past" && !S.done.has(i)) st = "skip";
-      const at = st === "cur" && (c.k === "match" || c.k === "potn") ? chapAt(c, t) : null;
+      const at = st === "cur" && (c.k === "match" || (c.k === "potn" && S.solo)) ? chapAt(c, t) : null;
       return { c, i, st, at, t };
     });
   }
@@ -703,7 +703,15 @@ const Chrono = (() => {
     const key = L.map(x => x.st[0] + (x.at ? x.at.per + ":" + (my.D[x.c.gid] ? playIndex(my.D[x.c.gid], x.at) : "") : "")).join("|") + "|" + topI;
     if (!force && key === my.key) return;
     my.key = key;
-    if (my.el) my.el.innerHTML = listHTML(L);
+    if (my.el) {
+      my.el.innerHTML = listHTML(L);
+      // la liste défile (beaucoup de matchs) : le match en cours reste en vue
+      const l = my.el.querySelector(".npl"), ci = my.el.querySelector(".npi.cur");
+      if (l && ci && l.scrollHeight > l.clientHeight + 2) {
+        const top = ci.offsetTop - l.offsetTop;
+        if (top < l.scrollTop || top + ci.offsetHeight > l.scrollTop + l.clientHeight) l.scrollTop = Math.max(0, top - 40);
+      }
+    }
     if (!cur) {
       if (my.below) my.below.innerHTML = `<div class="lv-sec np-idle"><span class="lv-kick sm">Lance la vidéo</span>
         <p>Les matchs s'allument à gauche au fil du résumé, avec le score qui suit l'écran. Clique sur un match pour y aller.</p></div>`;
@@ -716,23 +724,41 @@ const Chrono = (() => {
     } else if (c.k === "potn" && c.aid) {
       const D = my.D[c.gid];
       if (my.solo) {
-        if (my.side) my.side.innerHTML = potnCard(c, cur.at, true) + potnCourt(c, cur.at);
+        if (my.side) my.side.innerHTML = potnCard(c) + potnCourt(c);
         if (my.below) my.below.innerHTML = D ? curveHTML(D, cur.at || { per: 1, sec: 720 }, flow(D, cur.at || { per: 1, sec: 720 })) : "";
-      } else if (my.below) my.below.innerHTML = `<div class="np-potn">${potnCard(c, cur.at, false)}${potnCourt(c, cur.at)}</div>`;
+      } else if (my.below) my.below.innerHTML = potnBand(c);
     } else if (c.k === "top") {
       const plays = c.plays || [], n = plays.filter(a => cur.t >= a.s).length;
       if (my.below) my.below.innerHTML = topCards(c, cur.t);
       if (my.side) my.side.innerHTML = n ? topBig(plays[n - 1], plays.length - n + 1) : `<div class="np-wait"><span class="lv-kick sm">Les plus belles actions</span><p>Elles se dévoilent une par une.</p></div>`;
     } else if (my.below) my.below.innerHTML = `<div class="lv-sec np-idle"><span class="lv-kick sm">${c.t}</span></div>`;
   }
+  // les icônes de la liste (même boîte, même trait : alignées sur les logos des matchs)
+  const ICO = {
+    star: `<svg viewBox="0 0 24 24"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z"/></svg>`,
+    flame: `<svg viewBox="0 0 24 24"><path d="M12 2.5c.6 3.4 5.5 6 5.5 11.2A5.5 5.5 0 0 1 12 19.2a5.5 5.5 0 0 1-5.5-5.5c0-2.6 1.4-4.2 2.6-5.3.1 1.6.8 2.9 2 3.4-.4-3.3.3-6.4.9-9.3z"/></svg>`,
+    play: `<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg>`,
+    table: `<svg viewBox="0 0 24 24"><path d="M4 6h3M10 6h10M4 12h3M10 12h10M4 18h3M10 18h10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`,
+  };
+  // les titres des chapitres de la NBA, en français
+  function chapTitle(t) {
+    if (/eastern conference standings/i.test(t)) return "Classement de l'Est";
+    if (/western conference standings/i.test(t)) return "Classement de l'Ouest";
+    if (/standings/i.test(t)) return "Le classement";
+    return t;
+  }
   function listHTML(L) {
     const my = S;
     const nM = L.filter(x => x.c.k === "match").length, seen = L.filter(x => x.c.k === "match" && x.st === "past").length;
+    // beaucoup de matchs (ou écran peu haut) : une ligne par match (le match en cours garde ses deux lignes)
+    const nX = L.length - nM;
+    const dense = typeof innerHeight !== "number" || innerWidth <= 900 ? nM > 8 : nM * 100 + nX * 58 + 60 > innerHeight;
+    if (my.el) my.el.classList.toggle("dense", dense);
     const item = x => {
       const c = x.c;
       if (c.k === "match") {
         const g = my.games(c), D = my.D[c.gid];
-        if (!g) return `<button class="npi ${x.st}" data-np-seek="${c.s}"><span class="npt">${c.t}</span></button>`;
+        if (!g) return `<button class="npi ${x.st}" data-np-seek="${c.s}"><span class="npt one">${c.t}</span></button>`;
         const A = g.teams.away, H = g.teams.home;
         let as = null, hs = null, lab = "";
         if (x.st === "past") { as = A.score; hs = H.score; lab = g.ot ? "Final · prol." : "Final"; }
@@ -742,16 +768,21 @@ const Chrono = (() => {
           else lab = "En cours";
         }
         const win = as === null ? "" : as > hs ? "a" : hs > as ? "h" : "";
-        const row = (T, v, side) => `<span class="npr ${win === side ? "w" : ""}" style="--tc:${T.color}"><span class="nplg">${logoHTML(T)}</span><b>${T.name}</b>
+        const row = (T, v, side) => `<span class="npr ${side} ${win === side ? "w" : ""}" style="--tc:${T.color}"><span class="nplg">${logoHTML(T)}</span><b><span class="fn">${T.name}</span><span class="tr">${T.tri}</span></b>
           <span class="led ${v === null ? "off" : ""}"><span class="v">${v === null ? "??" : v}</span></span></span>`;
         return `<button class="npi m ${x.st}" data-np-seek="${c.s}" style="--ca:${A.color};--cb:${H.color}">
           <span class="nph">${x.st === "cur" ? `<i class="npdot"></i>` : ""}${lab || "Match " + (L.filter(y => y.c.k === "match").indexOf(x) + 1)}</span>${row(A, as, "a")}${row(H, hs, "h")}</button>`;
       }
       if (c.k === "potn") {
         const known = x.st !== "next" && x.st !== "skip" && c.aid, ph = known ? photoURL(c.aid) : "";
-        return `<button class="npi xt potn ${x.st}" data-np-seek="${c.s}"><span class="npx">${ph ? `<img src="${ph}" alt="" onerror="this.remove()">` : "★"}</span><span class="npt"><small>Le joueur de la nuit</small>${known ? c.n : "?"}</span></button>`;
+        return `<button class="npi xt potn ${x.st}" data-np-seek="${c.s}"><span class="npx ${ph ? "ph" : ""}">${ph ? `<img src="${ph}" alt="" onerror="this.remove()">` : ""}${ICO.star}</span>`
+          + (known ? `<span class="npt"><small>Le joueur de la nuit</small>${c.n}</span>` : `<span class="npt one">Le joueur de la nuit <em>?</em></span>`) + `</button>`;
       }
-      return `<button class="npi xt ${x.st}" data-np-seek="${c.s}"><span class="npx">${c.k === "top" ? "🔥" : "▶"}</span><span class="npt"><small>${c.k === "top" ? "Pour finir" : "Chapitre"}</small>${c.k === "top" ? `Les ${(c.plays || []).length || ""} plus belles actions`.replace("  ", " ") : c.t}</span></button>`;
+      if (c.k === "top") {
+        const n = (c.plays || []).length;
+        return `<button class="npi xt ${x.st}" data-np-seek="${c.s}"><span class="npx">${ICO.flame}</span><span class="npt one">${n ? `Les ${n} plus belles actions` : "Les plus belles actions"}</span></button>`;
+      }
+      return `<button class="npi xt ${x.st}" data-np-seek="${c.s}"><span class="npx">${/standings/i.test(c.t) ? ICO.table : ICO.play}</span><span class="npt one">${chapTitle(c.t)}</span></button>`;
     };
     return `<div class="nphead"><span class="lv-kick sm">La nuit</span><span class="npcount"><b>${seen}</b> / ${nM} matchs vus</span></div>
       <div class="npl">${L.map(item).join("")}</div>`;
@@ -759,81 +790,81 @@ const Chrono = (() => {
   // le joueur de la nuit : sa carte, ses stats du match, et le compteur de ce qu'on a vu dans la vidéo
   function teamOf(D, tid) { const t = team(tid); return D && tid === D.away ? { ...t, color: vsColor(D.away, D.home) } : t; }
   function playerTid(D, aid) { return D && D.names[aid] ? D.names[aid].t : 0; }
-  function potnCard(c, at, tall) {
-    const D = S.D[c.gid]; if (!D) return "";
+  function potnInfo(c) {
+    const D = S.D[c.gid]; if (!D) return null;
     const tid = playerTid(D, c.aid), T = teamOf(D, tid), O = team(tid === D.home ? D.away : D.home);
-    const fin = statsAt(D, 99, -1).P[c.aid] || {}, now = at ? (statsAt(D, at.per, at.sec).P[c.aid] || {}) : {};
-    const cell = (v, l) => `<div class="npc"><b>${v}</b><small>${l}</small></div>`;
-    const ph = photoURL(c.aid);
-    return `<div class="np-card ${tall ? "tall" : ""}" style="--tc:${T.color}">
-      <div class="np-ph">${ph ? `<img src="${ph}" alt="" onerror="this.remove()">` : ""}${logoHTML(T)}</div>
-      <div class="np-id"><span class="lv-kick sm">Le joueur de la nuit</span><b>${c.n}</b><small>${T.city} ${T.name} · contre ${O.name}</small>
-        <div class="np-live"><span class="led"><span class="v">${now.pts || 0}</span></span><span>points vus<br>dans la vidéo</span>
-          ${at ? `<em>${clockTxt(at.per, at.sec)}</em>` : ""}</div></div>
-      <div class="npcs">${cell(fin.pts || 0, "Points")}${cell(fin.reb || 0, "Rebonds")}${cell(fin.ast || 0, "Passes")}${cell(fin.blk || 0, "Contres")}
-        ${cell(`${fin.fg || 0}/${fin.fga || 0}`, "Tirs")}${cell(`${fin.tp || 0}/${fin.tpa || 0}`, "À 3 pts")}</div></div>`;
+    return { D, T, O, s: statsAt(D, 99, -1).P[c.aid] || {}, ph: photoURL(c.aid) };
   }
-  // ses tirs sur un demi-terrain, ajoutés au fil de la vidéo (jusqu'au moment affiché) ; le dernier panier clignote
-  function potnCourt(c, at) {
+  const potnCells = s => [[s.pts, "Points"], [s.reb, "Rebonds"], [s.ast, "Passes"], [s.blk, "Contres"], [`${s.fg || 0}/${s.fga || 0}`, "Tirs"], [`${s.tp || 0}/${s.tpa || 0}`, "À 3 pts"]]
+    .map(([v, l]) => `<div class="npc"><b>${v || 0}</b><small>${l}</small></div>`).join("");
+  // extrait seul (colonne de droite) : la carte en hauteur
+  function potnCard(c) {
+    const P = potnInfo(c); if (!P) return "";
+    return `<div class="np-card tall" style="--tc:${P.T.color}">
+      <div class="np-ph">${P.ph ? `<img src="${P.ph}" alt="" onerror="this.remove()">` : ""}${logoHTML(P.T)}</div>
+      <div class="np-id"><span class="lv-kick sm">Le joueur de la nuit</span><b>${c.n}</b><small>${P.T.city} ${P.T.name} · contre ${P.O.name}</small></div>
+      <div class="npcs">${potnCells(P.s)}</div></div>`;
+  }
+  // dans le résumé de la nuit (sous la vidéo) : une bande sur toute la largeur — photo, nom, stats en grand, ses tirs
+  function potnBand(c) {
+    const P = potnInfo(c);
+    if (!P) return `<div class="lv-sec np-idle"><span class="lv-kick sm">Le joueur de la nuit</span><p>${c.n || ""}</p></div>`;
+    return `<div class="pn" style="--tc:${P.T.color}">
+      <div class="pn-ph">${P.ph ? `<img src="${P.ph}" alt="" onerror="this.remove()">` : ""}${logoHTML(P.T)}</div>
+      <div class="pn-id"><span class="lv-kick sm">Le joueur de la nuit</span><b>${c.n}</b><small>${P.T.city} ${P.T.name}</small><small>contre les ${P.O.name}</small></div>
+      <div class="pn-st">${potnCells(P.s)}</div>
+      ${potnCourt(c)}</div>`;
+  }
+  // tous ses tirs du match sur un demi-terrain, affichés d'un coup (● réussi, ✕ raté)
+  function potnCourt(c) {
     const D = S.D[c.gid]; if (!D) return "";
     const T = teamOf(D, playerTid(D, c.aid));
-    const shots = [];
-    if (at) for (const p of D.plays) {
-      if (p.per > at.per || (p.per === at.per && p.sec <= at.sec)) break;
-      if (p.shoot && !p.ft && p.a0 === c.aid && p.sx != null) shots.push(p);
-    }
-    const lastMade = [...shots].reverse().find(p => p.made);
+    const shots = D.plays.filter(p => p.shoot && !p.ft && p.a0 === c.aid && p.sx != null);
+    const DEEP = 32; // le demi-terrain jusqu'un peu au-delà de la ligne à 3 pts (les tirs plus lointains posés au bord)
     const dots = shots.map(p => {
-      const x = p.sx, y = Math.min(p.sy, 39);
-      return p.made ? `<circle cx="${x}" cy="${y}" r="1.1" fill="${T.color}" class="mk"/>`
+      const x = p.sx.toFixed(1), y = Math.min(p.sy, DEEP - .8).toFixed(1);
+      return p.made ? `<circle cx="${x}" cy="${y}" r="1.15" fill="${T.color}" class="mk"/>`
         : `<path d="M${x - .8} ${y - .8}l1.6 1.6m0-1.6l-1.6 1.6" class="ms"/>`;
-    }).join("");
-    const ring = lastMade ? `<circle cx="${lastMade.sx}" cy="${Math.min(lastMade.sy, 39)}" r="1.6" stroke="${T.color}" class="ring" key="${shots.length}"/>` : "";
+    });
+    // les ratés d'abord, les paniers par-dessus
+    dots.sort((a, b) => (a[1] === "c") - (b[1] === "c"));
     const made = shots.filter(p => p.made).length;
-    return `<div class="np-court"><div class="lv-courth"><h4>Ses tirs</h4><span>${made}/${shots.length} jusqu'ici</span></div>
-      <svg class="np-hc" viewBox="-1 -1 52 42" role="img" aria-label="Ses tirs jusqu'ici">
-        <g class="ln"><rect x="0" y="0" width="50" height="40"/><rect x="17" y="0" width="16" height="19"/><circle cx="25" cy="19" r="6"/>
-        <path d="M3 0V14A23.75 23.75 0 0 0 47 14V0"/><path d="M22 4H28"/><circle cx="25" cy="5.25" r=".75"/></g>${dots}${ring}</svg></div>`;
+    return `<div class="np-court"><div class="lv-courth"><h4>Ses tirs</h4><span>${made}/${shots.length}</span>
+        <span class="np-key"><i style="--tc:${T.color}"></i>réussi <em>✕</em>raté</span></div>
+      <svg class="np-hc" viewBox="-1 -1 52 ${DEEP + 2}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Ses tirs du match">
+        <g class="ln"><rect x="0" y="0" width="50" height="${DEEP}"/><rect x="17" y="0" width="16" height="19"/><circle cx="25" cy="19" r="6"/>
+        <path d="M3 0V14A23.75 23.75 0 0 0 47 14V0"/><path d="M22 4H28"/><circle cx="25" cy="5.25" r=".75"/></g>${dots.join("")}</svg></div>`;
   }
   // les plus belles actions : une carte par action, dévoilée quand elle passe (n° 5 → n° 1)
-  function playStats(a) {
-    const D = S.D[a.gid]; if (!D || !a.aid) return null;
-    return { D, T: teamOf(D, playerTid(D, a.aid)), s: statsAt(D, 99, -1).P[a.aid] || {} };
-  }
+  // le joueur de chaque action n'est pas assez sûr (lu à l'image) : on montre seulement le match (les deux équipes)
   function topCards(c, t) {
     const plays = c.plays || [];
     if (!plays.length) return `<div class="lv-sec np-idle"><span class="lv-kick sm">Les plus belles actions de la nuit</span><p>Profite.</p></div>`;
     const n = plays.filter(a => t >= a.s).length;
     return `<div class="np-tops" style="--n:${plays.length}">${plays.map((a, i) => {
-      const rank = a.r || plays.length - i, open = i < n, curr = i === n - 1, P = open ? playStats(a) : null;
+      const rank = a.r || plays.length - i, open = i < n, curr = i === n - 1;
       if (!open) return `<div class="np-top off"><span class="np-rk">${rank}</span><span class="np-q">?</span></div>`;
-      if (!P) return gameCard(a, rank, curr); // joueur pas identifié : le match
-      const s = P ? P.s : {}, ph = photoURL(a.aid);
-      return `<div class="np-top ${curr ? "cur" : ""}" style="--tc:${P ? P.T.color : "#444"}"><span class="np-rk">${rank}</span>
-        <div class="np-tph">${ph ? `<img src="${ph}" alt="" onerror="this.remove()">` : ""}</div>
-        <b>${a.n || "Action " + rank}</b><small>${P ? P.T.name : ""}${a.per ? ` · ${clockTxt(a.per, a.sec)}` : ""}</small>
-        ${P ? `<div class="npcs mini"><div class="npc"><b>${s.pts || 0}</b><small>Pts</small></div><div class="npc"><b>${s.reb || 0}</b><small>Reb</small></div><div class="npc"><b>${s.ast || 0}</b><small>Pd</small></div><div class="npc"><b>${s.blk || 0}</b><small>Ctr</small></div><div class="npc"><b>${s.fg || 0}/${s.fga || 0}</b><small>Tirs</small></div></div>` : ""}</div>`;
+      return gameCard(a, rank, curr);
     }).join("")}</div>`;
   }
-  // une action dont le joueur n'a pas été reconnu : les deux équipes du match
+  function gameTeams(a) {
+    const D = a.gid && S.D[a.gid];
+    if (D) return { A: teamOf(D, D.away), H: team(D.home) };
+    const g = a.gid && typeof state !== "undefined" ? state.games.find(x => x.id === a.gid) : null; // déroulé absent : la liste des matchs
+    return g ? { A: g.teams.away, H: g.teams.home } : null;
+  }
   function gameCard(a, rank, curr) {
-    const D = S.D[a.gid];
-    const A = D ? teamOf(D, D.away) : null, H = D ? team(D.home) : null;
-    return `<div class="np-top gm ${curr ? "cur" : ""}" style="--ca:${A ? A.color : "#333"};--cb:${H ? H.color : "#333"}"><span class="np-rk">${rank}</span>
-      <div class="np-gl">${A ? logoHTML(A) : ""}${H ? logoHTML(H) : ""}</div><b>${A && H ? `${A.name} – ${H.name}` : "Action " + rank}</b><small>Action n° ${rank}</small></div>`;
+    const M = gameTeams(a);
+    if (!M) return `<div class="np-top gm none ${curr ? "cur" : ""}"><span class="np-rk">${rank}</span><b>Action n° ${rank}</b></div>`;
+    return `<div class="np-top gm ${curr ? "cur" : ""}" style="--ca:${M.A.color};--cb:${M.H.color}"><span class="np-rk">${rank}</span>
+      <div class="np-gl">${logoHTML(M.A)}${logoHTML(M.H)}</div><b>${M.A.name} – ${M.H.name}</b><small>Action n° ${rank}</small></div>`;
   }
   function topBig(a, rank) {
-    if (!playStats(a)) { const D = S.D[a.gid];
-      return `<div class="np-card tall"><span class="np-bigrk">N° ${a.r || rank}</span><div class="np-id"><span class="lv-kick sm">La plus belle action n° ${a.r || rank}</span>
-        <b>${D ? `${team(D.away).name} – ${team(D.home).name}` : "?"}</b><small>Le joueur n'a pas été reconnu dans la vidéo</small></div></div>`; }
     rank = a.r || rank;
-    const P = playStats(a), s = P ? P.s : {}, ph = photoURL(a.aid);
-    return `<div class="np-card tall" style="--tc:${P ? P.T.color : "#444"}"><span class="np-bigrk">N° ${rank}</span>
-      <div class="np-ph">${ph ? `<img src="${ph}" alt="" onerror="this.remove()">` : ""}${P ? logoHTML(P.T) : ""}</div>
-      <div class="np-id"><span class="lv-kick sm">La plus belle action n° ${rank}</span><b>${a.n || "?"}</b><small>${P ? `${P.T.city} ${P.T.name}` : ""}${a.per ? ` · ${clockTxt(a.per, a.sec)}` : ""}</small>
-        ${a.tx ? `<p class="np-tx">${fr(a.tx)}</p>` : ""}</div>
-      ${P ? `<div class="npcs">${[[s.pts, "Points"], [s.reb, "Rebonds"], [s.ast, "Passes"], [s.blk, "Contres"], [`${s.fg || 0}/${s.fga || 0}`, "Tirs"], [`${s.tp || 0}/${s.tpa || 0}`, "À 3 pts"]]
-        .map(([v, l]) => `<div class="npc"><b>${v || 0}</b><small>${l}</small></div>`).join("")}</div>` : ""}</div>`;
+    const M = gameTeams(a);
+    return `<div class="np-card tall gmb" ${M ? `style="--ca:${M.A.color};--cb:${M.H.color}"` : ""}><span class="np-bigrk">N° ${rank}</span>
+      ${M ? `<div class="np-gl">${logoHTML(M.A)}${logoHTML(M.H)}</div>` : ""}
+      <div class="np-id"><span class="lv-kick sm">La plus belle action n° ${rank}</span><b>${M ? `${M.A.name} – ${M.H.name}` : "Action n° " + rank}</b></div></div>`;
   }
   document.addEventListener("click", e => {
     const b = e.target.closest("[data-np-seek]"); if (!b || !S || !S.night) return;

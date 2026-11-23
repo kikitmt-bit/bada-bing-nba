@@ -1310,3 +1310,120 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .np-top.gm{background:linear-gradient(160deg,color-mix(in srgb,var(--ca) 40%,#05060c) 0 50%,color-mix(in srgb,var(--cb) 40%,#05060c) 50%);justify-content:center;align-items:center;text-align:center}
 .np-gl{display:flex;gap:14px;margin-bottom:8px}
 .np-gl .lg{width:clamp(40px,4vw,64px);height:clamp(40px,4vw,64px)}
+
+/* ---- Résumé de la nuit + : retouches du 23/11 (retours de Kiki) ---- */
+/* les tendances : même cadre et même en-tête que le film du match, tuiles qui remplissent la hauteur */
+.lv-filmh{min-height:22px}
+.lv-filmh h4{margin:0;line-height:22px}
+.lv-trends{display:flex;flex-direction:column;gap:6px}
+@media (min-width:901px){
+  .lv-below .lv-trends,.vplayer.full .lv-below .lv-trends{margin:0;padding:12px 16px;gap:6px}
+  .lv-below .lv-trends .lv-filmh h4{display:block}
+  .lv-below .lv-tiles{flex:1;min-height:0;grid-template-rows:1fr 1fr;gap:8px;margin-top:2px}
+  .lv-below .lv-tile{display:flex;flex-direction:column;justify-content:center;gap:3px;padding:6px 12px}
+  .lv-below .lv-tile b{font-size:clamp(16px,1.3vw,22px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lv-below .lv-tile small{display:none}
+  .lv-below .lv-trends{flex-basis:clamp(260px,21vw,380px)}
+}
+
+/* la liste de gauche : icônes dans la même colonne que les logos, titres sur une ligne */
+.np .npl{gap:6px}
+.npi{justify-content:center;align-items:stretch}
+.npi.m{flex:1 1 0;min-height:88px;max-height:132px;gap:4px;padding:7px 12px}
+.npi.m .npr{grid-template-columns:30px minmax(0,1fr) auto;gap:10px}
+.npi.m .nplg .lg{width:30px;height:30px}
+.npi.m .npr b{font-size:17px}
+.npi.m .npr .led{height:30px;font-size:21px}
+.npr .tr{display:none}
+.npi.xt{flex:none;height:54px;min-height:54px;max-height:54px;display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;align-items:center;justify-items:start;padding:0 12px}
+.npx{width:30px;height:30px;display:grid;place-items:center;background:none;clip-path:none;color:var(--amber);position:relative;overflow:visible}
+.npx svg{width:24px;height:24px;fill:currentColor}
+.npi.next .npx,.npi.skip .npx{color:var(--ink3)}
+.npx.ph{width:34px;height:34px;margin:-2px;overflow:hidden;border-radius:50%;background:color-mix(in srgb,var(--amber) 22%,#05060c)}
+.npx.ph svg{display:none}
+.npx.ph img{position:absolute;inset:0;width:100%;height:100%;margin:0;object-fit:cover;object-position:50% 0}
+.npt{font:800 16px/1.15 var(--disp);width:100%;align-items:flex-start;justify-content:center}
+.npt small{line-height:1.3}
+.npt.one{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.npt em{font-style:normal;color:var(--amber)}
+.npi.xt.cur{box-shadow:inset 0 0 0 1px rgba(255,176,46,.55);background:rgba(255,176,46,.1)}
+@media (min-height:800px){ .npi.m .npr{grid-template-columns:32px minmax(0,1fr) auto} .npi.m .nplg .lg{width:32px;height:32px} .npi.m .npr b{font-size:18px} .npi.m .npr .led{height:32px;font-size:22px} }
+/* beaucoup de matchs : une ligne par match [logo SIGLE ?? | ?? SIGLE logo], le match en cours garde ses deux lignes */
+.np.dense .npi.m:not(.cur){flex:none;min-height:0;height:44px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:12px;align-items:center;padding:0 10px}
+.np.dense .npi.m:not(.cur) .nph{display:none}
+.np.dense .npi.m:not(.cur) .npr{grid-template-columns:26px minmax(0,1fr) auto;gap:7px}
+.np.dense .npi.m:not(.cur) .npr.h{grid-template-columns:auto minmax(0,1fr) 26px}
+.np.dense .npi.m:not(.cur) .npr.h .nplg{order:3}
+.np.dense .npi.m:not(.cur) .npr.h b{order:2;text-align:right}
+.np.dense .npi.m:not(.cur) .npr.h .led{order:1}
+.np.dense .npi.m:not(.cur) .nplg .lg{width:26px;height:26px}
+.np.dense .npi.m:not(.cur) .npr b{font-size:16px}
+.np.dense .npi.m:not(.cur) .npr .fn{display:none}
+.np.dense .npi.m:not(.cur) .npr .tr{display:inline}
+.np.dense .npi.m:not(.cur) .npr .led{min-width:calc(3ch + 10px);height:28px;font-size:19px;padding:0 5px}
+.np.dense .npi.m.cur{flex:none;height:auto;min-height:0;max-height:none}
+.np.dense .npi.xt{height:46px;min-height:46px;max-height:46px}
+.np.dense .nphead{padding-bottom:8px}
+
+/* le joueur de la nuit (sous la vidéo) : une bande — photo, nom, stats en grand, tous ses tirs */
+.pn{flex:1;min-height:0;display:grid;grid-template-columns:auto minmax(180px,1fr) minmax(0,1.5fr) minmax(230px,.9fr);gap:14px;align-items:stretch;
+  padding:12px;background:linear-gradient(110deg,color-mix(in srgb,var(--tc) 34%,#05060c),#0b0d18 70%);
+  clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%)}
+.pn-ph{position:relative;height:100%;aspect-ratio:1;min-height:0;overflow:hidden;background:color-mix(in srgb,var(--tc) 50%,#05060c);
+  clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
+.pn-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 15%}
+.pn-ph .lg{position:absolute;left:7px;top:7px;width:28px;height:28px;font-size:8px}
+.pn-id{min-width:0;display:flex;flex-direction:column;justify-content:center;gap:4px}
+.pn-id>b{font:900 clamp(26px,2.4vw,44px)/1 var(--disp);text-transform:uppercase;margin:4px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pn-id>small{color:var(--ink2);font:700 14px var(--disp);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pn-st{min-width:0;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:1fr 1fr;gap:8px}
+.pn-st .npc{justify-content:center;gap:2px;padding:4px;background:rgba(0,0,0,.38);clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%)}
+.pn-st .npc b{font-size:clamp(22px,2.1vw,38px);line-height:1}
+.pn-st .npc small{font-size:10.5px}
+.pn .np-court{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column;padding:6px 8px;background:rgba(0,0,0,.3)}
+@media (min-width:901px){ .pn .np-court .lv-courth{display:none} .pn .np-court{padding:8px} }
+.pn .np-hc{flex:1;min-height:0;width:100%;height:auto}
+.np-court .lv-courth{align-items:center;gap:8px;flex-wrap:nowrap}
+.np-court .lv-courth h4{margin:0}
+.np-court .lv-courth span{margin-right:0}
+.np-court .lv-courth span:first-of-type{margin-right:auto;color:var(--amber);filter:none}
+.np-key{display:flex;align-items:center;gap:5px;color:var(--ink3)!important;filter:none!important;font:700 10px var(--disp)!important;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.np-key i{width:9px;height:9px;border-radius:50%;background:var(--tc);border:1px solid #fff}
+.np-key em{font-style:normal;color:#8a8fa8;margin-left:6px}
+.np-hc .mk{stroke:#fff;stroke-width:.3}
+.np-hc .ms{stroke:#9aa0b8;stroke-width:.55;fill:none}
+@media (min-width:901px) and (max-height:820px){ .pn-id>small:last-child{display:none} .pn-st .npc small{font-size:9.5px} }
+@media (max-width:900px){
+  .pn{grid-template-columns:96px minmax(0,1fr);grid-template-areas:"ph id" "st st" "ct ct"}
+  .pn-ph{grid-area:ph;height:96px;width:96px;align-self:center}
+  .pn-id{grid-area:id}
+  .pn-st{grid-area:st;grid-template-rows:auto}
+  .pn-st .npc{padding:8px 4px}
+  .pn .np-court{grid-area:ct;height:auto;aspect-ratio:auto}
+  .pn .np-hc{flex:none;height:auto}
+}
+/* extrait seul : la carte du joueur (photo centrée), ses tirs en entier */
+.np-card.tall .np-ph img{position:absolute;inset:0;width:100%;height:100%;left:0;margin:0;transform:none;object-fit:cover;object-position:50% 15%}
+.nps .np-court{flex:1;min-height:0;padding:10px 12px;background:rgba(0,0,0,.25)}
+.nps .np-hc{flex:1;min-height:0;height:auto}
+/* plus belles actions : le match seulement */
+.np-top.gm.none{background:rgba(255,255,255,.05)}
+.np-card.gmb{background:linear-gradient(160deg,color-mix(in srgb,var(--ca,#333) 40%,#05060c) 0 50%,color-mix(in srgb,var(--cb,#333) 40%,#05060c) 50%);justify-items:center;text-align:center;padding:40px 16px 22px}
+.np-card.gmb .np-id>b{white-space:normal}
+/* « .next » sert aussi au bandeau « prochain match » : sans ça, les cases pas encore vues prenaient sa marge, son bord et son retour à la ligne */
+.npi.next{margin:0;border-left:0;flex-wrap:nowrap}
+@media (min-width:901px) and (max-height:800px){
+  .np.dense .npi.m:not(.cur){height:38px}
+  .np.dense .npi.m:not(.cur) .nplg .lg{width:22px;height:22px}
+  .np.dense .npi.m:not(.cur) .npr{grid-template-columns:22px minmax(0,1fr) auto}
+  .np.dense .npi.m:not(.cur) .npr.h{grid-template-columns:auto minmax(0,1fr) 22px}
+  .np.dense .npi.m:not(.cur) .npr .led{height:25px;font-size:17px}
+  .np.dense .npi.xt{height:40px;min-height:40px;max-height:40px}
+}
+.np-card.tall .npcs{justify-self:stretch;width:100%;gap:8px}
+.np-card.tall .npcs .npc{padding:10px 4px}
+.np-card.tall .npcs .npc b{font-size:clamp(22px,1.8vw,32px)}
+.np-card.tall .np-id{justify-self:stretch}
+.nps>.np-card.gmb{align-content:center;gap:14px}
+.np-card.gmb .np-gl .lg{width:clamp(64px,6vw,110px);height:clamp(64px,6vw,110px)}
+.np-card.gmb .np-id>b{font-size:clamp(26px,2.4vw,40px)}

@@ -277,6 +277,15 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     qui tient sur l'écran).
   - Banc d'essai sans ESPN : Playwright qui détourne ESPN (faux scoreboard/summary), `v2/nuit/` (vrai fichier de la branche
     data) et l'embed YouTube (fausse page qui envoie `infoDelivery` avec `currentTime`) : on pilote la position de la vidéo.
+- **Fin du résumé de la nuit (25/11, retour Kiki : Flagg affiché au lieu de Tatum, 5 actions au lieu de 10, classement en retard)** :
+  `nuit.fin()` repère tout À L'IMAGE, plus jamais par les chapitres YouTube seuls (décalés de 2 à 10 s). Cartons = disque bleu sur
+  fond noir (`carton`) : « PLAYER OF THE NIGHT » puis un carton par action, autant que la vidéo en compte (le titre ne le dit pas
+  toujours, rang = compté depuis la fin). Nom du joueur = plaque en bas à gauche (x 57-660, y 565-685 en 720p), visible ~8 s juste
+  après son carton (`plaque`, `nom_lu` : le nom + ses stats, sur plusieurs images) ; PAS SÛR = AUCUN NOM (l'ancienne devinette par les
+  sigles du bandeau est supprimée : elle lisait le petit tableau des autres matchs). Classement = images presque fixes qui
+  s'enchaînent jusqu'à la fin de la vidéo. Plus de lecture du match / joueur de chaque action ni du chrono du joueur de la nuit (le
+  site ne s'en servait pas). `python nuit.py --fin <nuit.json> <video> [décalage]` refait seulement la fin d'une nuit. Vérifié du 20
+  au 24/11. Site : barre de 5 ou 10 cases (`topCards`, rang seul, cliquables), podium bronze / argent / or.
 - **Réglages du calage (22/11 soir, mesurés sur la nuit du 19)** : les chiffres du bandeau se lisent MAL (tesseract rate
   souvent le « 7 »), le chrono bien ; le bandeau change de score ~3 s de chrono AVANT l'horaire ESPN → `RETARD = 3.5` ajouté
   au chrono lu ; le chrono prime, un score lu ne sert de borne que sur sa propre image (et sans chrono, il doit coller aux

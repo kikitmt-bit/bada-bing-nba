@@ -771,7 +771,7 @@ const Chrono = (() => {
       const plays = c.plays || [], n = plays.filter(a => cur.t >= a.s).length;
       if (my.below) my.below.innerHTML = topCards(c, cur.t);
       if (my.side) my.side.innerHTML = n ? topBig(plays[n - 1], plays.length - n + 1) : `<div class="np-wait"><span class="lv-kick sm">Les plus belles actions</span><p>Elles se dévoilent une par une.</p></div>`;
-    } else if (my.below) my.below.innerHTML = `<div class="lv-sec np-idle"><span class="lv-kick sm">${c.t}</span></div>`;
+    } else if (my.below) my.below.innerHTML = `<div class="lv-sec np-idle"><span class="lv-kick sm">${chapTitle(c.t)}</span></div>`;
   }
   // les icônes de la liste (même boîte, même trait : alignées sur les logos des matchs)
   const ICO = {
@@ -782,9 +782,10 @@ const Chrono = (() => {
   };
   // les titres des chapitres de la NBA, en français
   function chapTitle(t) {
-    if (/eastern conference standings/i.test(t)) return "Classement de l'Est";
-    if (/western conference standings/i.test(t)) return "Classement de l'Ouest";
+    if (/east.*standings/i.test(t)) return "Classement de l'Est";
+    if (/west.*standings/i.test(t)) return "Classement de l'Ouest";
     if (/standings/i.test(t)) return "Le classement";
+    if (/player of the/i.test(t)) return "Le joueur de la nuit";
     return t;
   }
   function listHTML(L) {
@@ -876,16 +877,15 @@ const Chrono = (() => {
         <g class="ln"><rect x="0" y="0" width="50" height="${DEEP}"/><rect x="17" y="0" width="16" height="19"/><circle cx="25" cy="19" r="6"/>
         <path d="M3 0V14A23.75 23.75 0 0 0 47 14V0"/><path d="M22 4H28"/><circle cx="25" cy="5.25" r=".75"/></g>${dots.join("")}</svg></div>`;
   }
-  // les plus belles actions : une carte par action, dévoilée quand elle passe (n° 5 → n° 1)
-  // le joueur de chaque action n'est pas assez sûr (lu à l'image) : on montre seulement le match (les deux équipes)
+  // les plus belles actions : une barre partagée en 5 ou 10 cases, une par action (10 → 1), allumées au fil de la vidéo ;
+  // le podium en bronze, argent, or. Ni joueur ni match (la lecture n'est pas assez sûre). Un clic sur une case = y aller.
   function topCards(c, t) {
     const plays = c.plays || [];
     if (!plays.length) return `<div class="lv-sec np-idle"><span class="lv-kick sm">Les plus belles actions de la nuit</span><p>Profite.</p></div>`;
     const n = plays.filter(a => t >= a.s).length;
     return `<div class="np-tops" style="--n:${plays.length}">${plays.map((a, i) => {
-      const rank = a.r || plays.length - i, open = i < n, curr = i === n - 1;
-      if (!open) return `<div class="np-top off"><span class="np-rk">${rank}</span><span class="np-q">?</span></div>`;
-      return `<div class="np-top rk ${curr ? "cur" : ""}"><span class="np-rkbig">${rank}</span><b>Top ${rank}</b></div>`; // ni joueur ni match : la lecture n'est pas assez sûre
+      const rank = a.r || plays.length - i;
+      return `<button class="np-top rk np-m${rank} ${i < n ? "on" : ""} ${i === n - 1 ? "cur" : ""}" data-np-seek="${a.s}" aria-label="Action n° ${rank}">${rank}</button>`;
     }).join("")}</div>`;
   }
   function gameTeams(a) {

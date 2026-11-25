@@ -1427,11 +1427,20 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .nps>.np-card.gmb{align-content:center;gap:14px}
 .np-card.gmb .np-gl .lg{width:clamp(64px,6vw,110px);height:clamp(64px,6vw,110px)}
 .np-card.gmb .np-id>b{font-size:clamp(26px,2.4vw,40px)}
-/* plus belles actions : seulement le rang (ni joueur ni match, la lecture n'est pas assez sûre) */
-.np-top.rk{justify-content:center;align-items:center;gap:2px;background:linear-gradient(180deg,rgba(255,176,46,.14),#0b0d18)}
-.np-top.rk .np-rkbig{font:900 clamp(60px,6vw,110px)/1 var(--disp);color:var(--amber);text-shadow:0 0 24px rgba(255,176,46,.5)}
-.np-top.rk>b{font:800 15px var(--disp);letter-spacing:.2em;color:var(--ink2)}
-.np-top.rk .np-rk{display:none}
+/* plus belles actions : une barre de 5 ou 10 cases, le rang seul ; podium en bronze, argent, or */
+.np-top.rk{--mt:255,176,46;justify-content:center;align-items:center;padding:0;border:0;cursor:pointer;animation:none;
+  font:900 clamp(34px,min(5.4vw,13vh),120px)/1 var(--disp);color:rgba(var(--mt),.28);background:rgba(var(--mt),.05);transition:background .4s,color .4s}
+.np-top.np-m3{--mt:214,132,76}
+.np-top.np-m2{--mt:214,222,235}
+.np-top.np-m1{--mt:255,208,64}
+.np-top.rk.on{color:rgb(var(--mt));background:linear-gradient(180deg,rgba(var(--mt),.2),rgba(var(--mt),.04))}
+.np-top.rk.cur{color:#0b0d18;background:rgb(var(--mt));box-shadow:none}
+.np-top.rk.np-m3.cur{background:linear-gradient(160deg,#f0b48a,#b5693a 55%,#e09a68)}
+.np-top.rk.np-m2.cur{background:linear-gradient(160deg,#fff,#a9b4c6 55%,#eef2f8)}
+.np-top.rk.np-m1.cur{background:linear-gradient(160deg,#fff3b8,#f0b41e 55%,#ffe27a)}
+.np-top.rk:hover{background-color:rgba(var(--mt),.25)}
+.np-tops{gap:8px}
+@media (max-width:900px){ .np-tops{grid-template-columns:repeat(5,minmax(0,1fr))} .np-top.rk{min-height:74px} }
 /* liste de gauche : sur un grand écran, les cases grandissent pour remplir toute la hauteur (plus de vide en bas) */
 .np:not(.dense) .npi.m{flex:1 1 0;max-height:none}
 .np:not(.dense) .npi.xt{flex:.5 1 0;height:auto;max-height:none}

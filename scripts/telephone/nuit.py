@@ -6,11 +6,14 @@ Pour chaque résumé de la nuit :
      « Top Plays of the Night » ; chaque chapitre de match est relié à son match ESPN ;
      publié tout de suite (le site peut déjà montrer la liste et sauter d'un match à l'autre) ;
   2. la vidéo (720p), le chrono du bandeau lu chapitre par chapitre (chrono_video : même lecture que les
-     résumés de match), et le nom du « Player of the Night » lu à l'écran ;
+     résumés de match), puis la fin du résumé (fin()) : le joueur de la nuit, les plus belles actions, le classement,
+     repérés À L'IMAGE (les chapitres YouTube sont décalés de 2 à 10 s) ;
   3. publié dans v2/nuit/<nuit NY>.json sur la branche data.
 
     python nuit.py <id_youtube>     # essai sur une vidéo (écrit nuit_<id>.json ici, ne publie rien)
+    python nuit.py --fin <nuit.json> <video> [seconde du début de la vidéo]   # refait seulement la fin d'une nuit (remplace le .json)
 """
+import difflib
 import json
 import os
 import re
@@ -90,7 +93,7 @@ def sans_accents(s):
 
 
 def candidats(chs):
-    """Les joueurs de la nuit (feuilles de match ESPN), les meilleurs d'abord."""
+    """Tous les joueurs de la nuit (feuilles de match ESPN), avec leurs points, rebonds et passes."""
     out = []
     for c in chs:
         if c.get("k") != "match":
@@ -100,165 +103,156 @@ def candidats(chs):
         except Exception:
             continue
         for side in (j.get("boxscore") or {}).get("players", []):
-            ab = (side.get("team") or {}).get("abbreviation", "").upper()
             st = side["statistics"][0]
             names = st.get("names", [])
             for a in st.get("athletes", []):
                 if not a.get("athlete") or not a.get("stats"):
                     continue
                 v = dict(zip(names, a["stats"]))
-                f = lambda k: float(v.get(k) or 0) if re.match(r"^-?\d+(\.\d+)?$", str(v.get(k) or "")) else 0
-                gs = f("PTS") + 1.2 * f("REB") + 1.5 * f("AST") + 2 * f("BLK") + 2 * f("STL")
-                out.append({"aid": str(a["athlete"].get("id")), "n": a["athlete"].get("displayName", ""), "gs": gs, "gid": c["gid"], "ab": ab})
-    out.sort(key=lambda p: -p["gs"])
-    return out[:14], out  # le nom est cherché parmi les 14 grosses perfs (moins de fausses lectures) ; la liste complète sert au repli
-
-
-def joueur_de_la_nuit(video, ch, cands_tous, tmp):
-    """Lit le texte à l'écran pendant le chapitre « Player of the Night » (une image toutes les 2 s) et y cherche
-    les noms des grosses perfs de la nuit. Le nom le plus souvent lu l'emporte (au moins 2 images)."""
-    d = os.path.join(tmp, "potn")
-    os.makedirs(d, exist_ok=True)
-    subprocess.run(["ffmpeg", "-loglevel", "error", "-ss", str(ch["s"]), "-to", str(ch["e"]), "-i", video,
-                    "-vf", "fps=1/2", os.path.join(d, "%04d.png")], check=True)
-    cands, tous = cands_tous
-    score = {p["aid"]: 0 for p in cands}
-    sigles = {}  # sigles d'équipe lus dans le bandeau (« POR 14 1ST 4:05 19 MIL ») : le match du joueur, en repli
-    for name in sorted(os.listdir(d)):
-        img = Image.open(os.path.join(d, name))
-        mots = set()
-        for mode in ("gray", "inv"):
-            for w in cv.ocr(cv.prep(img, 1, mode), 11):
-                mots.add(re.sub(r"[^A-Z'-]", "", sans_accents(w["t"])))
-        for ab in {p["ab"] for p in tous if p["ab"]}:
-            if ab in mots:
-                sigles[ab] = sigles.get(ab, 0) + 1
-        for p in cands:
-            parts = [x for x in re.split(r"[\s.]+", sans_accents(p["n"])) if len(x) >= 3]
-            if parts and parts[-1] in mots:
-                score[p["aid"]] += 2 if len(parts) > 1 and parts[0] in mots else 1
-    best = max(cands, key=lambda p: (score[p["aid"]], p["gs"]), default=None)
-    if best and score[best["aid"]] >= 2:
-        return {"aid": best["aid"], "n": best["n"], "gid": best["gid"], "lu": score[best["aid"]]}
-    # repli : le match dont les sigles reviennent le plus dans le bandeau, et sa meilleure perf
-    par_match = {}
-    for p in tous:
-        if p["ab"]:
-            par_match.setdefault(p["gid"], set()).add(p["ab"])
-    gid = max(par_match, key=lambda g: sum(sigles.get(a, 0) for a in par_match[g]), default=None)
-    if gid and sum(sigles.get(a, 0) for a in par_match[gid]) >= 4:
-        p = max((p for p in tous if p["gid"] == gid), key=lambda p: p["gs"])
-        return {"aid": p["aid"], "n": p["n"], "gid": gid, "lu": 0, "par": "bandeau"}
-    return None
-
-
-# ---------- les plus belles actions : pour chacune, le match (sigles du bandeau), le moment (chrono, score), le joueur ----------
-ALIAS = {"NY": ["NYK", "NY"], "GS": ["GSW", "GS"], "SA": ["SAS", "SA"], "NO": ["NOP", "NO"], "UTAH": ["UTA", "UTAH"],
-         "WSH": ["WAS", "WSH"], "PHX": ["PHX", "PHO"], "BKN": ["BKN", "BRK"], "CHA": ["CHA", "CHO"]}
-
-
-def sigles(ab):
-    return ALIAS.get(ab, [ab])
-
-
-def noms(gid):
-    j = lire(ESPN + "summary?event=" + str(gid))
-    out = {}
-    for side in (j.get("boxscore") or {}).get("players", []):
-        for a in side["statistics"][0].get("athletes", []):
-            if a.get("athlete"):
-                out[str(a["athlete"].get("id"))] = a["athlete"].get("displayName", "")
+                f = lambda k: int(v[k]) if str(v.get(k) or "").isdigit() else 0
+                out.append({"aid": str(a["athlete"].get("id")), "n": a["athlete"].get("displayName", ""), "gid": c["gid"],
+                            "pts": f("PTS"), "reb": f("REB"), "ast": f("AST")})
     return out
 
 
+# ---------- la fin du résumé : joueur de la nuit, plus belles actions, classement ----------
+# Même habillage tous les soirs (vérifié du 20 au 24/11) : un carton = un disque bleu sur fond noir (« PLAYER OF THE NIGHT »,
+# puis « 10 »… « 1 ») ; le nom du joueur dans une plaque en bas à gauche, juste après son carton ; le classement = images presque fixes, jusqu'à la fin.
 def carton(img):
-    """Les cartons « 5 », « 4 »… entre deux actions du top : une image presque toute bleue (ou le classement qui suit)."""
-    small = img.convert("RGB").resize((32, 12))
-    px = list(small.getdata())
-    r = sum(p[0] for p in px) / len(px)
-    g = sum(p[1] for p in px) / len(px)
-    b = sum(p[2] for p in px) / len(px)
-    return b > 70 and r < 60 and b > r + 40  # mesuré : cartons b 76-93 / r 15-36 ; classement qui suit b 72 / r 35 (exclu)
+    s = img.convert("RGB").resize((64, 36))
+    bleu = all(b > 80 and r < 30 and g < 80 and b > r + 60 for r, g, b in (s.getpixel((x, 18)) for x in (24, 40)))
+    return bleu and all(max(s.getpixel(q)) < 50 for q in ((2, 1), (62, 1)))
 
 
-def actions(frames_dir, frames, ch, Ds):
-    """Le top 5 : les cartons bleus découpent les actions ; dans chacune, le bandeau (sigles, chrono, score) donne le match
-    et le moment, et l'action est le prochain panier ESPN de ce match (le bandeau se voit juste avant le geste)."""
-    ts = list(range(ch["s"], min(ch["e"], len(frames) * cv.PAS), cv.PAS))
-    imgs = {t: Image.open(os.path.join(frames_dir, frames[t // cv.PAS])) for t in ts}
-    bleu = {t: carton(imgs[t]) for t in ts}
-    # les actions : ce qui suit chaque carton, jusqu'au carton suivant
-    seg, cur = [], None
-    for t in ts:
-        if bleu[t]:
-            if cur and cur["t"]:
-                seg.append(cur)
-            cur = {"s": t, "t": []}
-        elif cur is not None:
-            cur["t"].append(t)
-    if cur and cur["t"]:
-        seg.append(cur)
-    seg = [x for x in seg if len(x["t"]) >= 4][:5]
+def suites(vrais, trou=1.0):
+    """[(t, vrai ?)] → les plages [début, fin] où c'est vrai (les trous de `trou` s ou moins sont comblés)."""
     out = []
-    for n, x in enumerate(seg):
-        a = {"s": x["s"], "e": seg[n + 1]["s"] if n + 1 < len(seg) else (x["t"][-1] + 1), "r": len(seg) - n}
-        lect = []  # (t, gid, quart lu ou None, [chronos possibles], nombres)
-        for t in x["t"][:12]:  # le bandeau apparaît au début de l'action
-            words = []
-            scale = max(.8, min(2.4, 2000 / imgs[t].width))
-            for mode in ("gray", "inv"):
-                words += cv.ocr(cv.prep(imgs[t], scale, mode), 11)
-            txt = {re.sub(r"[^A-Z]", "", w["t"].upper()) for w in words}
-            best = None
-            for gid, D in Ds.items():
-                hits = sum(any(z in txt for z in sigles(D["ab"][k])) for k in ("away", "home"))
-                if hits and (best is None or hits > best[0]):
-                    best = (hits, gid)
-            if not best:
-                continue
-            q = cv.find_quarter(words)
-            horl = set()
-            for w in words:  # « 6:27 » (pas de « 627 » : les bilans « 12-3 » se lisent « 123 »)
-                m = re.search(r"(\d{1,2})[:;](\d{2})(?!\d)", w["t"])
-                if m and int(m.group(2)) < 60 and int(m.group(1)) <= 12:
-                    horl.add(int(m.group(1)) * 60 + int(m.group(2)))
-            lect.append((t, best[1], q[0] if q else None, horl, cv.nombres([w["t"] for w in words])))
-        if lect:
-            gid = max({r[1] for r in lect}, key=lambda g: sum(1 for r in lect if r[1] == g))
-            D, L = Ds[gid], [r for r in lect if r[1] == gid]
-            a["gid"] = gid
-            E, P = D["etats"], D["plays"]
-            nums = {}
-            for r in L:
-                for v, c in r[4].items():
-                    nums[v] = nums.get(v, 0) + c
-            quarts = {r[2] for r in L if r[2]}
-            cands = []  # (soutien, quart lu ?, temps de jeu) : le moment du bandeau
-            for r in L:
-                for sec in r[3]:
-                    for per in (quarts or {1, 2, 3, 4}):
-                        el = cv.ecoule(per, sec) + cv.RETARD
-                        k = max(i for i, e in enumerate(E) if e["el"] <= el)
-                        sout = sum(1 for v in (E[k]["as"], E[k]["hs"]) if v >= 10 and nums.get(v))
-                        cands.append((sout, per in quarts, el))
-            jeu = None
-            if cands:
-                sout, lu, el = max(cands)
-                if sout or lu:
-                    # l'action : le panier suivant dans ce match (ni lancer franc), dans la minute
-                    for p in P:
-                        if p["pts"] and p["a0"] and p["el"] >= el - 2 and not re.search(r"free throw", p["tx"], re.I):
-                            if p["el"] - el <= 60:
-                                jeu = p
-                            break
-            if jeu:
-                a.update(aid=str(jeu["a0"]), per=jeu["per"], sec=jeu["sec"], tx=jeu["tx"])
-                try:
-                    a["n"] = D.setdefault("noms", noms(gid)).get(str(jeu["a0"]), "")
-                except Exception:
-                    pass
-        out.append(a)
+    for t, v in vrais:
+        if v:
+            if out and t - out[-1][1] <= trou:
+                out[-1][1] = t
+            else:
+                out.append([t, t])
     return out
+
+
+def ecart(a, b):
+    return sum(abs(x - y) for x, y in zip(a.tobytes(), b.tobytes())) / (a.width * a.height)
+
+
+def plaque(img):
+    """Les lectures de la plaque (toujours au même endroit : x 57-660, y 565-685 sur 1280×720) : la ligne du nom, puis tout."""
+    k = img.width / 1280
+    zone = lambda *q: img.crop(tuple(int(v * k) for v in q))
+    out = []
+    for q, sc, psm in (((62, 568, 380, 640), 2, 7), ((62, 568, 520, 640), 2, 7), ((40, 555, 660, 692), 1, 11), ((40, 555, 660, 692), 2, 11)):
+        for mode in ("gray", "inv"):
+            out.append(sans_accents(" ".join(w["t"] for w in cv.ocr(cv.prep(zone(*q), sc / k, mode), psm))))
+    return out
+
+
+def nom_lu(images, cands):
+    """Le joueur écrit sur la plaque (« JAYSON TATUM / 41 PTS, 6 REB, 8 AST VS. WAS »). images = les lectures de chaque image.
+    Le nom exact compte 3, presque exact 1 (« JAVSON »), le nom de famille seul 1, ses stats 1. Rien de sûr = personne
+    (24/11 : une devinette avait donné Flagg au lieu de Tatum)."""
+    best = []
+    for p in cands:
+        parts = [re.sub(r"[^A-Z]", "", x) for x in sans_accents(p["n"]).split()]
+        if len(parts) > 2 and parts[-1] in ("JR", "SR", "II", "III", "IV"):
+            parts = parts[:-1]
+        nom, sc, n = "".join(parts), 0, 0
+        for textes in images:
+            v = 0
+            for tx in textes:
+                lettres = re.sub(r"[^A-Z]", "", tx)
+                if len(nom) >= 6 and nom in lettres:
+                    v = max(v, 3)
+                elif difflib.SequenceMatcher(None, nom, lettres).ratio() >= .8 or (
+                        len(parts[-1]) >= 4 and re.search(r"(?<![A-Z])%s(?![A-Z])" % parts[-1], tx)):
+                    v = max(v, 1)
+            lus = {k: {x for tx in textes for x in re.findall(r"(\d+)\s*" + k, tx)} for k in ("PTS", "REB", "AST")}
+            if v and str(p["pts"]) in lus["PTS"] and (str(p["reb"]) in lus["REB"] or str(p["ast"]) in lus["AST"]):
+                v += 1
+            sc += v
+            n += v > 0
+        if n >= 2 and sc >= 4:
+            best.append((sc, p["pts"], p))
+    best.sort(key=lambda b: b[:2], reverse=True)
+    if not best or (len(best) > 1 and best[1][0] > best[0][0] * .75):
+        return None
+    return {"aid": best[0][2]["aid"], "n": best[0][2]["n"], "gid": best[0][2]["gid"], "lu": best[0][0]}
+
+
+def fin(chs, video, decal=0):
+    """Remet à leur vraie place les chapitres de la fin (cartons, image fixe du classement), lit le joueur de la nuit et
+    découpe les plus belles actions. decal = la seconde du résumé où commence le fichier vidéo (0 = vidéo entière)."""
+    hors = [c for c in chs if c["k"] != "match"]
+    if not hors:
+        return
+    deb = max(decal, hors[0]["s"] - 20)
+    tmp = tempfile.mkdtemp(prefix="nocturne_fin_")
+    try:
+        vues = os.path.join(tmp, "vues")
+        os.makedirs(vues)
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-ss", str(deb - decal), "-i", video, "-vf", "fps=2,scale=320:180",
+                        "-q:v", "3", os.path.join(vues, "%05d.jpg")], check=True)
+        cartes, gris = [], []
+        for k, name in enumerate(sorted(os.listdir(vues))):
+            img = Image.open(os.path.join(vues, name))
+            cartes.append((deb + k / 2, carton(img)))
+            gris.append(img.convert("L").resize((80, 45)))
+        cartes = suites(cartes)
+        potn = next((c for c in chs if c["k"] == "potn"), None)
+        top = next((c for c in chs if c["k"] == "top"), None)
+        lim = top["s"] - 12 if top else 1e9
+        # le joueur de la nuit : son carton, puis la plaque à son nom dans les 14 s qui suivent
+        pot = [g for g in cartes if potn and potn["s"] - 15 <= g[0] <= min(potn["s"] + 15, lim)][:1]
+        if potn:
+            t0 = pot[0][1] if pot else potn["s"] - 6
+            if pot:
+                potn["s"] = int(pot[0][0])
+            d = os.path.join(tmp, "plaque")
+            os.makedirs(d)
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-ss", str(max(0, t0 - decal)), "-t", "14", "-i", video,
+                            "-vf", "fps=2", os.path.join(d, "%03d.png")], check=True)
+            textes = [plaque(Image.open(os.path.join(d, name))) for name in sorted(os.listdir(d))]
+            for k in ("aid", "n", "gid", "lu", "par", "pts"):
+                potn.pop(k, None)
+            BRUT["plaque"] = textes
+            p = nom_lu(textes, candidats(chs))
+            if p:
+                potn.update(p)
+            print("  joueur de la nuit :", p, "à", potn["s"], flush=True)
+        # les plus belles actions : un carton par action, du dernier rang au n° 1
+        if top:
+            m = re.search(r"top (\d+)", top["t"].lower())
+            prevu = int(m.group(1)) if m else 10
+            g = [x for x in cartes if x[0] >= top["s"] - 12 and x not in pot][-prevu:]
+            if len(g) >= 3:
+                top["s"] = int(g[0][0])
+                top["plays"] = [{"s": x[0], "e": g[k + 1][0] if k + 1 < len(g) else top["e"], "r": len(g) - k} for k, x in enumerate(g)]
+            else:
+                top["plays"] = []
+            print("  plus belles actions :", len(g), "cartons", [x[0] for x in g], flush=True)
+        # le classement : les images presque fixes (léger zoom au plus) qui s'enchaînent jusqu'à la fin de la vidéo
+        der = cartes[-1][1] + 3 if cartes else deb
+        bouts = suites([(deb + k / 2, deb + k / 2 > der and ecart(gris[k], gris[k - 1]) < 4.5) for k in range(1, len(gris))], .5)
+        fixe, suite = [], deb + len(gris) / 2
+        for x in reversed([x for x in bouts if x[1] - x[0] >= 5]):
+            if suite - x[1] > 4:
+                break
+            fixe.insert(0, x)
+            suite = x[0]
+        cl = [c for c in chs if "standings" in c["t"].lower()]
+        for c, x in zip(cl, fixe if len(fixe) >= len(cl) else []):
+            c["s"] = int(x[0] - (1.5 if c is cl[0] else .5))  # l'animation qui l'amène
+        print("  classement :", [(c["t"], c["s"]) for c in cl], fixe, flush=True)
+        for a, b in zip(chs, chs[1:]):
+            a["e"] = b["s"]
+        if top and top.get("plays"):
+            top["plays"][-1]["e"] = top["e"]
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 BRUT = {}
@@ -299,26 +293,10 @@ def analyse(vid, titre, video=None, publier=None):
             c["pts"] = pts if len(pts) >= 8 else []
             BRUT[c["t"]] = brut
             print(f"  {c['t']} : {len(brut)} lectures, {len(c['pts'])} gardées", flush=True)
-        potn = next((c for c in chs if c["k"] == "potn"), None)
-        if potn:
-            try:
-                p = joueur_de_la_nuit(video, potn, candidats(chs), tmp)
-                if p:
-                    potn.update(p)
-                    if p["gid"] not in Ds:
-                        Ds[p["gid"]] = cv.deroule(p["gid"])
-                    pts, BRUT["potn"] = cv.lire_plage(b, frames, potn["s"], potn["e"], Ds[p["gid"]])  # ses actions, calées sur son match
-                    potn["pts"] = pts
-                print("  joueur de la nuit :", p, len(potn.get("pts") or []), "points", flush=True)
-            except Exception as e:
-                print("  joueur de la nuit illisible :", e, flush=True)
-        top = next((c for c in chs if c["k"] == "top"), None)
-        if top and Ds:
-            try:
-                top["plays"] = actions(b, frames, top, Ds)
-                print("  plus belles actions :", [(a.get("n"), a["s"]) for a in top["plays"]], flush=True)
-            except Exception as e:
-                print("  plus belles actions illisibles :", e, flush=True)
+        try:
+            fin(chs, video)
+        except Exception as e:
+            print("  fin du résumé illisible :", e, flush=True)
         res["fait"] = True
         try:  # les lectures brutes, à côté (pour recaler sans relire la vidéo)
             with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "brut_%s.json" % vid), "w") as f:
@@ -335,6 +313,13 @@ def analyse(vid, titre, video=None, publier=None):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(__doc__)
+        sys.exit()
+    if sys.argv[1] == "--fin":
+        with open(sys.argv[2]) as f:
+            r = json.load(f)
+        fin(r["ch"], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 0)
+        with open(sys.argv[2], "w") as f:
+            json.dump(r, f, separators=(",", ":"))
         sys.exit()
     vid = sys.argv[1]
     titre = json.loads(subprocess.run(["yt-dlp", "-J", "--no-warnings", "--skip-download", "https://www.youtube.com/watch?v=" + vid],

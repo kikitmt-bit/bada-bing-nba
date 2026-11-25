@@ -299,6 +299,15 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   Résultat nuit du 19 : Knicks-Wolves 4/5 instants de contrôle exacts (2-5, 14-7, 37-30, 71-57 ; 97-91 au lieu de 97-90),
   points avec score lu : 52/58, 75/77, 58/80, 47/63. `test_cases.py` = test sur images de référence (lancer DÉTACHÉ sur le
   téléphone : les longues sessions SSH coupent). ~15 min par chapitre de 3 min.
+- **Échecs de téléchargement (24/11)** : le 24/11 de 5h30 à 7h, YouTube a refusé le téléphone (« Sign in… ») et 3 essais à 5 min d'écart ont
+  perdu 5 matchs. Depuis : refus YouTube (`genre` = youtube) = tout s'arrête 30 min, 1 h, 2 h (`etat["pause"]`) ; refus et coupure internet ne
+  comptent pas comme essai ; les autres échecs sont réessayés après 5 min, 30 min, 1 h 30 (`ESSAIS` = 4). La chaîne NBA n'est plus essayée
+  pour les résumés de match (bloquée en France : 50 essais, 0 réussi). On ne contourne pas les blocages (ni cookies, ni proxy). Relancer un
+  match abandonné : retirer son id de `~/nocturne/etat.json` (boucle arrêtée), puis relancer `boucle.py`.
+- **Fin de match (24/11)** : les 3,5 s de `RETARD` débordaient sur une prolongation fictive (« Prol. en cours » à la fin du film, ~24 tables).
+  Convention : chrono **-0.01 = période terminée** (le panier à 0.0 est compris, `clockTxt` affiche 0.0, le film affiche le score du quart).
+  Téléphone : `apres` (RETARD borné à la période dès le 4e quart), `nettoyer(…, nper)` (pas de quart-temps au-delà du match, `D["nper"]`).
+  Site, pour les tables déjà publiées : `cleanMap` (à l'ouverture) et `realEnd` (dans `clampAt`). Contrôlé sur les 92 tables : 0 fausse prolongation.
 - **Mode démo** : `?demo=1` = fausse saison stable (`demo.js`), l'équivalent de `BB_FAUX_ESPN=1`. Test local :
   `python3 -m http.server 8777` dans `docs/` puis `http://localhost:8777/?demo=1` (Playwright : PC 1400px + téléphone 393px,
   vérifier zéro erreur JS et zéro défilement horizontal).

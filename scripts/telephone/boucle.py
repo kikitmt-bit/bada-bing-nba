@@ -33,7 +33,9 @@ LISTE = "https://raw.githubusercontent.com/kikitmt-bit/bada-bing-nba/data/v2/vid
 REMOTE = "git@github.com:kikitmt-bit/bada-bing-nba.git"
 JOURS = 3          # on ne regarde que les résumés des 3 derniers jours
 DEPUIS = os.path.join(ICI, "depuis.txt")  # date ISO : rien avant (créée au 1er lancement : seulement les nouvelles soirées)
-ESSAIS = 3         # au-delà, on abandonne une vidéo
+ESSAIS = 4         # au-delà, on abandonne une vidéo
+ATTENTE = (300, 1800, 5400)  # après le 1er, 2e, 3e échec : 5 min, 30 min, 1 h 30 (24/11 : 3 essais en 15 min = 5 matchs perdus)
+PAUSE = (1800, 3600, 7200)   # YouTube refuse (« not a bot ») : on ne lui demande plus rien pendant 30 min, 1 h, puis 2 h
 
 
 def log(*a):
@@ -50,6 +52,47 @@ def charger(path, defaut):
             return json.load(f)
     except Exception:
         return defaut
+
+
+def erreur(ex):
+    """Le texte utile d'un échec : les lignes ERROR de yt-dlp, sinon la fin du message."""
+    t = getattr(ex, "stderr", "") or str(ex)
+    i = t.find("ERROR")
+    return t[i:i + 300].strip() if i >= 0 else t[-300:].strip()
+
+
+def genre(ex):
+    """« youtube » (il nous refuse : tout le monde attend), « reseau » (coupure internet) ou « echec » (la vidéo elle-même)."""
+    t = (getattr(ex, "stderr", "") or str(ex)).lower()
+    if any(m in t for m in ("not a bot", "http error 429", "rate-limited")):
+        return "youtube"
+    if any(m in t for m in ("network is unreachable", "no address associated", "could not resolve", "failed to resolve",
+                            "name resolution", "timed out", "connection reset", "connection abort", "urlopen error")):
+        return "reseau"
+    return "echec"
+
+
+def en_pause(etat):
+    return etat.get("pause", {}).get("fin", 0) > time.time()
+
+
+def rater(etat, e, ex):
+    """Note un échec : un refus de YouTube ou une coupure internet ne compte pas comme un essai, le reste est réessayé
+    de plus en plus tard."""
+    g = genre(ex)
+    if g == "echec":
+        e["apres"] = time.time() + ATTENTE[min(e["essais"], len(ATTENTE)) - 1]
+        return
+    e["essais"] -= 1
+    if g == "youtube" and not en_pause(etat):  # plusieurs analyses refusées ensemble = un seul refus
+        n = etat.get("pause", {}).get("n", 0)
+        d = PAUSE[min(n, len(PAUSE) - 1)]
+        etat["pause"] = {"n": n + 1, "fin": time.time() + d}
+        log("YouTube refuse : pause de %d min" % (d // 60))
+
+
+def a_essayer(e):
+    return e.get("ok") is None and e.get("essais", 0) < ESSAIS and e.get("apres", 0) <= time.time()
 
 
 # ---------- la note « à voir » : même formule que le site (watchLevel dans docs/app.js) ----------
@@ -144,7 +187,8 @@ def liste_videos():
 
 
 def resumes(vids=None):
-    """Les résumés de match récents, GameTime d'abord (c'est celui que le site ouvre en premier)."""
+    """Les résumés de match récents de GameTime (celui que le site ouvre en premier). Pas ceux de la chaîne NBA : tous
+    bloqués en France (50 essais, 0 réussi au 24/11), ils ne faisaient que multiplier les demandes à YouTube."""
     if vids is None:
         with urllib.request.urlopen(LISTE + "?t=%d" % time.time(), timeout=30) as r:
             vids = json.load(r).get("videos", [])
@@ -156,7 +200,7 @@ def resumes(vids=None):
     out = []
     for v in vids:
         t = (v.get("t") or "").lower()
-        if v.get("c") not in ("gt", "nba") or "highlight" not in t or "recap" in t:
+        if v.get("c") != "gt" or "highlight" not in t or "recap" in t:
             continue
         if " vs " not in t and " at " not in t and " vs. " not in t:
             continue
@@ -167,8 +211,7 @@ def resumes(vids=None):
             pass
         out.append(v)
     out.sort(key=lambda v: v.get("p", ""), reverse=True)   # les plus récents d'abord
-    out.sort(key=lambda v: v.get("c") != "gt")             # GameTime avant NBA (tri stable)
-    # un seul résumé par match (celui que le site ouvre : GameTime, sinon NBA), et seulement les matchs à SEUIL barres ou plus
+    # un seul résumé par match, et seulement les matchs à SEUIL barres ou plus
     gardes, vus = [], set()
     for v in out:
         try:
@@ -325,7 +368,7 @@ def nuits(vids, etat):
             continue
         cle = "nuit:" + v["id"]
         e = etat.setdefault(cle, {"essais": 0})
-        if e.get("ok") or e["essais"] >= ESSAIS:
+        if not a_essayer(e):
             continue
         e["essais"] += 1
         jour = nuit.nuit_de(v.get("t", ""))
@@ -341,7 +384,8 @@ def nuits(vids, etat):
                 e["ok"] = True
                 log("résumé de la nuit publié :", jour)
         except Exception as ex:
-            log("résumé de la nuit raté", v["id"], (getattr(ex, "stderr", "") or str(ex))[-300:])
+            log("résumé de la nuit raté", v["id"], erreur(ex))
+            rater(etat, e, ex)
         finally:
             for f in (video, video + ".part"):
                 if os.path.exists(f):
@@ -364,12 +408,14 @@ def passage():
     except Exception as e:
         log("mise à jour de la liste des vidéos ratée :", str(e)[-200:])
     etat = charger(ETAT, {})
+    if en_pause(etat):
+        return
     try:
         liste = resumes(vids)
     except Exception as e:
         log("liste des vidéos illisible :", e)
         return
-    a_faire = [v for v in liste if etat.get(v["id"], {}).get("ok") is None and etat.get(v["id"], {}).get("essais", 0) < ESSAIS]
+    a_faire = [v for v in liste if a_essayer(etat.get(v["id"], {}))]
     if not a_faire:
         nuits(vids, etat)  # rien d'autre à faire : le résumé de la nuit
         return
@@ -380,6 +426,8 @@ def passage():
     def traiter(v):
         vid = v["id"]
         with verrou:
+            if en_pause(etat):
+                return  # refusé pendant ce passage : on ne demande plus rien
             e = etat.setdefault(vid, {"essais": 0})
             e["essais"] += 1
         video = os.path.join(TRAVAIL, vid + ".mp4")
@@ -392,6 +440,8 @@ def passage():
             sh("yt-dlp", "-q", "--no-warnings", "-f", "bv*[height=720][vcodec^=avc1]/bv*[height=720][vcodec^=vp]/bv*[height=720]/bv*[height<=720]",
                "-o", video, "https://www.youtube.com/watch?v=" + vid)
             suivi["telecharge"] = heure()
+            with verrou:
+                etat.pop("pause", None)  # YouTube répond
             res = chrono_video.analyse(video, os.path.join(TRAVAIL, vid + ".json"), vid, v.get("gid"))
             res["t"] = v.get("t", "")
             pts = res["pts"]
@@ -407,7 +457,9 @@ def passage():
                     if not bon and res["n"] > 120:
                         e["essais"] = ESSAIS  # vidéo entière lue mais bandeau illisible : inutile de réessayer
         except Exception as ex:
-            log("échec", vid, (getattr(ex, "stderr", "") or str(ex))[-300:])
+            log("échec", vid, erreur(ex))
+            with verrou:
+                rater(etat, e, ex)
         finally:
             for f in (video, video + ".part"):
                 if os.path.exists(f):
@@ -423,7 +475,9 @@ def passage():
 
     with ThreadPoolExecutor(EN_MEME_TEMPS) as pool:
         list(pool.map(traiter, a_faire))
-    nuits(vids, etat)
+    if not en_pause(etat):
+        nuits(vids, etat)
+
 
 if __name__ == "__main__":
     if "--une" in sys.argv:

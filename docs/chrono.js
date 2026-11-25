@@ -325,7 +325,7 @@ const Chrono = (() => {
   }
 
   /* ---------- le panneau ---------- */
-  const clockTxt = (per, sec) => sec < 0 ? "Final" : `${per > 4 ? "Prol." + (per > 5 ? per - 4 : "") : "Q" + per} · ${sec >= 60 ? Math.floor(sec / 60) + ":" + String(Math.floor(sec % 60)).padStart(2, "0") : sec.toFixed(1)}`;
+  const clockTxt = (per, s) => { if (s <= -1) return "Final"; const sec = Math.max(0, s); return `${per > 4 ? "Prol." + (per > 5 ? per - 4 : "") : "Q" + per} · ${sec >= 60 ? Math.floor(sec / 60) + ":" + String(Math.floor(sec % 60)).padStart(2, "0") : sec.toFixed(1)}`; };
   function panelIdle() {
     const auto = store.get("live", true);
     return `<div class="lv-idle">
@@ -440,7 +440,7 @@ const Chrono = (() => {
     const cols = Array.from({ length: nq }, (_, i) => i + 1);
     const qcell = q => {
       const lab = q <= 4 ? "Q" + q : "Prol." + (q > 5 ? q - 4 : "");
-      if ((q < at.per || (at.fin && q === at.per)) && F.qEnd[q]) {
+      if ((q < at.per || (q === at.per && at.sec < 0)) && F.qEnd[q]) {
         const pr = q > 1 && F.qEnd[q - 1] ? F.qEnd[q - 1] : [0, 0], va = F.qEnd[q][0] - pr[0], vh = F.qEnd[q][1] - pr[1];
         return `<div class="lv-q"><span>${lab}</span><b class="${va > vh ? "w" : ""}" style="--mc:${a.color}">${va}</b><b class="${vh > va ? "w" : ""}" style="--mc:${h.color}">${vh}</b></div>`;
       }
@@ -578,6 +578,30 @@ const Chrono = (() => {
   }
   // le match fini : dernier quart-temps joué, chrono à zéro (fin = tout le déroulé)
   function finalAt(D) { return { per: Math.max(4, ...D.plays.map(p => p.per)), sec: -1, fin: true }; }
+  // La fin d'une période (24/11) : les 3,5 s ajoutées par le téléphone au chrono lu débordaient sur une prolongation fictive.
+  // À partir du 4e quart-temps, un moment tombé dans ces premières secondes = période précédente terminée (chrono -0.01 :
+  // le panier à 0.0 est compris), et jamais au-delà de la dernière période du match.
+  const RETARD = 3.5, nPer = D => D.plays.reduce((n, p) => Math.max(n, p.per), 4);
+  function realEnd(n, per, sec) {
+    if (per > 4 && sec >= 300 - RETARD - .05) { per--; sec = -.01; }
+    if (per > n) per = n; // quart-temps mal lu
+    return [per, sec];
+  }
+  // la table d'un match, remise dans la vraie durée du match ; si un point a bougé, on regarde la plus longue suite où le match avance
+  function cleanMap(pts, D) {
+    if (!D || !pts.some(p => p[1] > 4)) return pts;
+    const n = nPer(D), P = pts.map(p => { const [per, sec] = realEnd(n, p[1], p[2]); return [p[0], per, sec, ...p.slice(3)]; });
+    const el = P.map(p => elapsed(p[1], p[2])), best = [], prev = [];
+    let top = -1;
+    for (let i = 0; i < P.length; i++) {
+      best[i] = 1; prev[i] = -1;
+      for (let j = 0; j < i; j++) if (el[j] <= el[i] + .001 && best[j] + 1 > best[i]) { best[i] = best[j] + 1; prev[i] = j; }
+      if (top < 0 || best[i] > best[top]) top = i;
+    }
+    const out = [];
+    for (let i = top; i >= 0; i = prev[i]) out.push(P[i]);
+    return out.reverse();
+  }
   async function prepLoop(my) {
     let n = 0;
     while (S === my) {
@@ -622,7 +646,7 @@ const Chrono = (() => {
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     };
     if (!my.D || my.D.plays.length < 20) { if (CAN) panel.innerHTML = `<p class="lv-wait">Pas de déroulé ESPN pour ce match : pas de stats en direct.</p>`; else hide(); return; }
-    if (map && map.pts && map.pts.length >= 5) { my.map = map.pts; my.endT = map.pts[map.pts.length - 1][0] + 3; my.on = true; my.status = "prep"; render(true); prepLoop(my); return; }
+    if (map && map.pts && map.pts.length >= 5) { my.map = cleanMap(map.pts, my.D); my.endT = map.pts[map.pts.length - 1][0] + 3; my.on = true; my.status = "prep"; render(true); prepLoop(my); return; }
     if (!CAN) { hide(); return; } // téléphone sans table préparée : pas de panneau
     render(true);
     if (STREAM && STREAM.active) start(false); // déjà partagé pendant cette visite : rien à redemander
@@ -644,7 +668,8 @@ const Chrono = (() => {
   // le moment du match, borné à l'intérieur du score vu à l'écran (le chrono qui coule entre deux images ne doit jamais
   // faire passer un panier qu'on n'a pas encore vu)
   function clampAt(D, at, sc) {
-    if (!sc || !D || !at) return at;
+    if (!D || !at) return at;
+    if (!sc) { const [per, sec] = realEnd(nPer(D), at.per, at.sec); return per === at.per ? at : { ...at, per, sec }; }
     const P = D.plays;
     let i0 = -1;
     if (sc[0] + sc[1] > 0) {
@@ -652,7 +677,7 @@ const Chrono = (() => {
       if (i0 < 0) { // score de l'écran absent du fil ESPN (panier corrigé après coup) : le plus proche
         let best = 4;
         P.forEach((p, i) => { const d = Math.abs(p.as - sc[0]) + Math.abs(p.hs - sc[1]); if (d < best) { best = d; i0 = i; } });
-        if (i0 < 0) return at;
+        if (i0 < 0) return clampAt(D, at, null);
         sc = [P[i0].as, P[i0].hs];
       }
     }
@@ -660,7 +685,7 @@ const Chrono = (() => {
     let hi = Infinity;
     for (let i = i0 + 1; i < P.length; i++) if (P[i].as !== sc[0] || P[i].hs !== sc[1]) { hi = elapsed(P[i].per, P[i].sec) - .3; break; }
     const el = elapsed(at.per, at.sec), e2 = Math.min(Math.max(el, lo), hi);
-    return Math.abs(e2 - el) < .001 ? at : fromEl(e2);
+    return clampAt(D, Math.abs(e2 - el) < .001 ? at : fromEl(e2), null);
   }
   async function attachNight(N, list, iframe, below, opts) {
     if (S) S.on = false;
@@ -690,8 +715,8 @@ const Chrono = (() => {
   // le moment du match à la seconde t d'un chapitre (chrono + score lus à l'écran)
   function chapAt(c, t) {
     if (!c.pts || !c.pts.length || !c.gid) return null;
-    const m = momentAt(c.pts, t); if (!m) return null;
     const D = S.D[c.gid];
+    const m = momentAt(D ? (c.map || (c.map = cleanMap(c.pts, D))) : c.pts, t); if (!m) return null;
     const last = c.pts[c.pts.length - 1];
     if (D && t >= last[0] + 2 && (last[1] > 4 || (last[1] === 4 && last[2] < 60))) return finalAt(D); // la fin du match est passée à l'écran
     const at = clampAt(D, m, m.sc);
@@ -929,5 +954,5 @@ const Chrono = (() => {
     pts[pts.length - 1][0] < end ? pts.push([end, F.hs - F.as]) : 0;
     return { pts, span: end, nq: lastPer };
   }
-  return { CAN, attach, attachNight, film, close, onResumeClick, wantsFull, hasMap, indexReady, testFrames, _flow: flow, _reindex() { MAPS = null; return loadIndex(); }, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
+  return { CAN, attach, attachNight, film, close, onResumeClick, wantsFull, hasMap, indexReady, testFrames, _flow: flow, _map: cleanMap, _moment: momentAt, _clamp: clampAt, _reindex() { MAPS = null; return loadIndex(); }, _plays: parsePlays, _stats: statsAt, _clock: readClock, _q: readQuarter };
 })();

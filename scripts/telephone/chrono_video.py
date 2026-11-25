@@ -236,12 +236,13 @@ def frac(per, sec):
     return ((per - 1) * 720 + 720 - sec) / 2880 if per <= 4 else 1 + ((per - 5) * 300 + 300 - sec) / 2880
 
 
-def nettoyer(lectures):
+def nettoyer(lectures, nper=5):
     """Plus longue suite où le match avance (un résumé est chronologique).
-    Chaque lecture propose 1 ou 2 moments (« 1:05 » / « 11:05 ») : on en garde au plus un."""
+    Chaque lecture propose 1 ou 2 moments (« 1:05 » / « 11:05 ») : on en garde au plus un.
+    nper : le nombre de périodes du match (une lecture au-delà est un quart-temps mal lu)."""
     cands = []  # (i, t, per, sec, poids)
     for i, (t, per, sec, alt) in enumerate(lectures):
-        pers = [(per, 1.0)] if per else [(p, .85 - .01 * p) for p in range(1, 6)]  # quart illisible : la chronologie tranche
+        pers = [(per, 1.0)] if per and per <= nper else [(p, .85 - .01 * p) for p in range(1, nper + 1)]  # quart illisible : la chronologie tranche
         for pp, wp in pers:
             for s, w in ((sec, 1.0), (alt, .9)):
                 if s is not None and s <= (300 if pp > 4 else 720):
@@ -535,11 +536,14 @@ def ecoule(per, sec):
     return (per - 1) * 720 + 720 - sec if per <= 4 else 2880 + (per - 5) * 300 + 300 - sec
 
 
+FIN = .01  # chrono « -0.01 » = période terminée (le panier à 0.0 est compris), sans basculer sur la prolongation suivante
+
+
 def moment(el):
-    if el < 2880:
+    if el < 2880 + 2 * FIN:
         per = min(4, int(el // 720) + 1)
         return per, round(720 - (el - (per - 1) * 720), 2)
-    per = 5 + int((el - 2880) // 300)
+    per = 5 + int((el - 2880 - 2 * FIN) // 300)
     return per, round(300 - (el - 2880 - (per - 5) * 300), 2)
 
 
@@ -567,7 +571,7 @@ def deroule(gid):
         if (p["as"], p["hs"]) != (etats[-1]["as"], etats[-1]["hs"]):
             etats.append({"as": p["as"], "hs": p["hs"], "el": p["el"], "i": i})
     ab = {k: cs[k]["team"].get("abbreviation", "") for k in ("away", "home")}
-    return {"plays": plays, "etats": etats, "ab": ab, "gid": str(gid),
+    return {"plays": plays, "etats": etats, "nper": max([4] + [p["per"] for p in plays]), "ab": ab, "gid": str(gid),
             "ids": {k: str(cs[k]["team"]["id"]) for k in ("away", "home")}}
 
 
@@ -594,6 +598,13 @@ def soutenus(D, nums):
 RETARD = 3.5  # le bandeau change de score ~2 s (de chrono) avant l'horaire noté par ESPN (vérifié : 14-7 à l'écran à 6:25, ESPN 6:24)
 
 
+def apres(per, sec):
+    """Le moment du chrono lu, RETARD compris ; à partir du 4e quart-temps, jamais au-delà de la période (24/11 : les 3,5 s
+    débordaient sur une prolongation fictive à la fin du match)."""
+    el = ecoule(per, sec) + RETARD
+    return min(el, ecoule(per, 0) + FIN) if per >= 4 else el
+
+
 def etendre(votes):
     """Les confusions courantes de lecture : un nombre à 3 chiffres est souvent un score collé à un autre chiffre
     (« 907 » = 90 + chrono des tirs) : on essaie aussi ses deux moitiés, à demi-voix."""
@@ -611,7 +622,7 @@ def caler(lectures, D):
     (validé par la suite des scores ESPN : exact, ou à 3 points près quand ESPN a corrigé un panier après coup), et le
     moment du match (chrono lu + RETARD) reste à l'intérieur de ce score."""
     E = D["etats"]
-    K = {p[0]: (p[1], p[2]) for p in nettoyer([l[:4] for l in lectures if l[2] is not None])}
+    K = {p[0]: (p[1], p[2]) for p in nettoyer([l[:4] for l in lectures if l[2] is not None], D["nper"])}
     Kt = sorted(K)
     items = []  # (t, état ESPN, poids, score de l'écran)
     for lec in lectures:
@@ -634,16 +645,16 @@ def caler(lectures, D):
                     w = .8 * conf
                 fin = E[k + 1]["el"] if k + 1 < len(E) else 1e9
                 if t in K:
-                    el = ecoule(*K[t]) + RETARD
+                    el = apres(*K[t])
                     if not (E[k]["el"] - 25 <= el <= fin + 25):
                         continue
                     w += 1
                 else:
                     av = [x for x in Kt if x < t][-1:]
                     ap = [x for x in Kt if x > t][:1]
-                    if av and fin < ecoule(*K[av[0]]) + RETARD - 30:
+                    if av and fin < apres(*K[av[0]]) - 30:
                         continue
-                    if ap and E[k]["el"] > ecoule(*K[ap[0]]) + RETARD + 30:
+                    if ap and E[k]["el"] > apres(*K[ap[0]]) + 30:
                         continue
                 items.append((t, k, w, (a, h)))
     items.sort()
@@ -668,10 +679,10 @@ def caler(lectures, D):
             k, sc = vu[t]
             deb = E[k]["el"] + .01
             fin = (E[k + 1]["el"] - .3) if k + 1 < len(E) else 1e9
-            el = min(max(ecoule(*K[t]) + RETARD, deb), fin) if t in K else deb
+            el = min(max(apres(*K[t]), deb), fin) if t in K else deb
             pts.append((t, el, k, sc))
         else:
-            pts.append((t, ecoule(*K[t]) + RETARD, None, None))
+            pts.append((t, apres(*K[t]), None, None))
     vus = [p for p in pts if p[2] is not None]
     res, last = [], -1.0
     for t, el, k, sc in pts:

@@ -442,8 +442,9 @@ function findJournal(key) { // le journal NBA Extra du matin : « REPLAY - NBA E
 // chrono lu chapitre par chapitre, joueur de la nuit lu à l'écran
 const NUIT = {};
 async function loadNuit(key) {
-  if (DEMO || key in NUIT) return NUIT[key];
-  try { NUIT[key] = await fetchJSON(RAWDATA + "nuit/" + key + ".json?t=" + Math.floor(Date.now() / 300e3)); } catch (e) { NUIT[key] = null; }
+  // analyse pas finie (`fait` faux) : on relit le fichier toutes les 5 min, le « + » arrive tout seul
+  if (DEMO || (key in NUIT && (!NUIT[key] || NUIT[key].fait || Date.now() - (NUIT[key]._at || 0) < 300e3))) return NUIT[key];
+  try { NUIT[key] = await fetchJSON(RAWDATA + "nuit/" + key + ".json?t=" + Math.floor(Date.now() / 300e3)); if (NUIT[key]) NUIT[key]._at = Date.now(); } catch (e) { NUIT[key] = null; }
   return NUIT[key];
 }
 const nuitCh = (key, k) => { const N = NUIT[key]; return N && N.ch ? N.ch.find(c => c.k === k) || null : null; };
@@ -734,7 +735,9 @@ function skyHTML(games, hero, scored) {
     : isLast && nFin === games.length ? "Pendant que tu dormais"
     : isLast ? "La nuit se termine" : "Retour sur la nuit";
   const nr = started && !DEMO ? findNightRecap(state.night) : null;
-  const nplus = started && NUIT[state.night] && NUIT[state.night].ch && NUIT[state.night].ch.some(c => c.k === "match");
+  // « + » seulement quand le téléphone a fini toute la vidéo (`fait`) ; avant, le résumé de la nuit tout court (26/11, Kiki)
+  const NN = NUIT[state.night], nplus = started && NN && NN.fait && NN.ch && NN.ch.some(c => c.k === "match");
+  const nvid = nr ? nr.id : started && NN && NN.v;
   const jr = started && !DEMO ? findJournal(state.night) : null;
   const left = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).length;
   // en-tête sur UNE ligne (20/11, carte blanche de Kiki) : la nuit d'avant, celle affichée, celle d'après, le calendrier,
@@ -751,10 +754,10 @@ function skyHTML(games, hero, scored) {
     <div class="skyrow">
       <div class="nights" id="nights" data-ctx="${ctx}"></div>
       ${board}
-      ${started || nr || jr || nplus ? `<div class="actions">
+      ${started || nvid || jr || nplus ? `<div class="actions">
       ${started ? `<button class="btn amber big" id="revall" ${left ? "" : "disabled"}>${left ? "🎬 Révéler la nuit" : "✓ Nuit révélée"}</button>` : ""}
       ${nplus ? `<button class="btn" data-nuitplus="${state.night}" title="Le résumé de la nuit, avec la liste des matchs et les scores qui suivent la vidéo"><span class="pl">▶</span>Résumé de la nuit<span class="plus">+</span></button>`
-        : nr ? `<button class="btn" data-vplay="${nr.id}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
+        : nvid ? `<button class="btn" data-vplay="${nvid}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
       ${jr ? `<button class="btn" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin"><span class="pl">▶</span>NBA Extra</button>` : ""}
       </div>` : ""}
     </div>

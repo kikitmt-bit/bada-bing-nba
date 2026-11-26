@@ -293,6 +293,11 @@ def analyse(vid, titre, video=None, publier=None):
             c["pts"] = pts if len(pts) >= 8 else []
             BRUT[c["t"]] = brut
             print(f"  {c['t']} : {len(brut)} lectures, {len(c['pts'])} gardées", flush=True)
+            if publier and c["pts"]:  # au fil de l'eau : les stats d'un match sont en ligne dès qu'il est lu
+                try:
+                    publier(dict(res))
+                except Exception as e:
+                    print("  publication intermédiaire ratée :", e, flush=True)
         try:
             fin(chs, video)
         except Exception as e:

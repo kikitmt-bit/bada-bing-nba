@@ -778,10 +778,10 @@ function skyHTML(games, hero, scored) {
       <div class="nights" id="nights" data-ctx="${ctx}"></div>
       ${board}
       ${started || nvid || jr || nplus ? `<div class="actions">
-      ${started ? `<button class="btn amber big" id="revall" ${left ? "" : "disabled"}>${left ? "🎬 Révéler la nuit" : "✓ Nuit révélée"}</button>` : ""}
-      ${nplus ? `<button class="btn" data-nuitplus="${state.night}" title="Le résumé de la nuit, avec la liste des matchs et les scores qui suivent la vidéo"><span class="pl">▶</span>Résumé de la nuit<span class="plus">+</span></button>`
-        : nvid ? `<button class="btn" data-vplay="${nvid}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
-      ${jr ? `<button class="btn" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin"><span class="pl">▶</span>NBA Extra</button>` : ""}
+      ${started ? `<button class="btn prime big" id="revall" ${left ? "" : "disabled"}>${left ? `<svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la nuit` : "✓ Nuit révélée"}</button>` : ""}
+      ${nplus ? `<button class="btn amber" data-nuitplus="${state.night}" title="Le résumé de la nuit, avec la liste des matchs et les scores qui suivent la vidéo"><span class="pl">▶</span>Résumé de la nuit<span class="plus">+</span></button>`
+        : nvid ? `<button class="btn amber" data-vplay="${nvid}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
+      ${jr ? `<button class="btn amber" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin"><span class="pl">▶</span>NBA Extra</button>` : ""}
       </div>` : ""}
     </div>
   </section>`;
@@ -820,10 +820,10 @@ async function renderNight(soft) {
   main.innerHTML = `${skyHTML(games, hero, scored)}
     ${!games.length ? `<p class="loadmsg">Pas de match cette nuit-là. Les joueurs dorment aussi. 🌙</p>` : ""}
     ${hero ? heroHTML(hero.g, hero.lvl) : ""}
-    ${rest.length ? `<div class="sect"><h2>${hero ? "Les autres matchs" : "Les matchs de la nuit"}</h2><i></i></div>
+    ${rest.length ? sect(hero ? "Les autres matchs" : "Les matchs de la nuit") + `
     <div class="bugs">${rest.map((g, i) => cardHTML(g, i)).join("")}</div>` : ""}
-    ${nPost >= 2 ? `<section class="stage" id="stage"><div id="mvpbody"><div class="ess hide">${essTop("")}
-      <div class="skel" style="padding:0 28px"><div class="ph" style="height:220px"></div></div></div></div></section>` : ""}
+    ${nPost >= 2 ? `<div id="mvpbody"><div class="ess hide">${sect("Le MVP et les grosses perfs")}
+      <div class="skel"><div class="ph" style="height:220px"></div></div></div></div>` : ""}
     <div id="nextstrip"></div>`;
 
   for (const id of state.revealed) reveal(id, true);
@@ -1009,10 +1009,8 @@ async function standingMoves(posts) {
    ou « Révéler l'essentiel ». Les Français sont connus d'avance (effectifs) : photo, nom et adversaire visibles, stats masquées.
    x-h = ce qu'on voit avant, x-r = ce qu'on voit après (CSS .ess.hide). */
 const hr = (h, r) => `<x-h>${h}</x-h><x-r>${r}</x-r>`;
-function essTop(cta) {
-  return `<div class="ess-top"><span class="q">L'essentiel <em>de la nuit</em></span>
-    <small>Tout ce qu'il faut retenir, en une minute</small><button class="btn amber" id="essrev">Révéler l'essentiel</button></div>${cta}`;
-}
+// un titre de rubrique : petit, gris, avec un trait (le même partout, demande de Kiki 28/11) ; `after` = un bouton juste après le titre
+const sect = (t, after) => `<div class="sect"><h2>${t}</h2>${after || ""}<i></i></div>`;
 function revealEss() {
   const e = $("#mvpbody .ess"); state.essOpen = state.night;
   if (!e || !e.classList.contains("hide") || !e.dataset.ready) return;
@@ -1030,7 +1028,7 @@ async function loadEss() {
   const body = $("#mvpbody"); if (!body) return;
   const all = [];
   sums.forEach((s, i) => { if (s) for (const p of s.players) all.push({ ...p, g: posts[i] }); });
-  if (!all.length) { body.innerHTML = `<div class="ess">${essTop("")}<p class="essn pad">L'essentiel arrive dès que les feuilles de match sont disponibles.</p></div>`; return; }
+  if (!all.length) { body.innerHTML = `<div class="ess">${sect("L'essentiel de la nuit")}<p class="essn pad">L'essentiel arrive dès que les feuilles de match sont disponibles.</p></div>`; return; }
   all.sort((a, b) => gscore(b) - gscore(a));
   // le MVP = le « Player of the Night » choisi par la NBA dans son résumé de la nuit (lu à l'écran par le téléphone),
   // sinon notre calcul (meilleur « game score »)
@@ -1039,19 +1037,18 @@ async function loadEss() {
   if (pi > 0) all.unshift(all.splice(pi, 1)[0]);
   const mvp = all[0], t = team(mvp.tid);
   const mvpPlay = pi >= 0 && N ? `<button class="btn amber mvplay" data-nuitsolo="potn" data-night="${night}"><span class="pl">▶</span>Ses meilleures actions</button>` : "";
-  // les plus belles actions : une vraie plaque, plus un petit bouton perdu à droite (demande de Kiki)
+  // les plus belles actions : une rubrique à part, titre + bouton « ▶ Top 10 » (ou 5) (demande de Kiki 28/11)
   const topV = findTopPlays(night), topN = topV ? (/top 10/i.test(topV.t) ? 10 : 5) : top && top.plays && top.plays.length;
-  const cta = topV || (top && N) ? `<button class="topcta" data-nuitsolo="top" data-night="${night}"><span class="tpl">▶</span>
-      <span class="tpt"><b>Les ${topN ? topN + " " : ""}plus belles actions <em>de la nuit</em></b><small>La sélection de la NBA, en vidéo</small></span>
-      <span class="tpn led"><span class="v">${topN ? "TOP " + topN : "TOP"}</span></span></button>` : "";
+  const cta = topV || (top && N) ? sect(`Les ${topN ? topN + " " : ""}plus belles actions de la nuit`,
+    `<button class="btn amber" data-nuitsolo="top" data-night="${night}"><span class="pl">▶</span>Top ${topN || ""}</button>`) : "";
   const opp = mvp.g.teams.away.id === mvp.tid ? mvp.g.teams.home : mvp.g.teams.away;
-  const face = (aid, lazy) => /^\d+$/.test(aid) && !DEMO ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${aid}.png" alt=""${lazy ? ' loading="lazy"' : ""} onerror="this.remove()">` : "";
+  const face = (aid, lazy, cl) => /^\d+$/.test(aid) && !DEMO ? `<img${cl ? ` class="${cl}"` : ""} src="https://a.espncdn.com/i/headshots/nba/players/full/${aid}.png" alt=""${lazy ? ' loading="lazy"' : ""} onerror="this.remove()">` : "";
   const stat = (v, l) => `<div class="stat">${hr(`<span class="led off"><span class="v">??</span></span>`, `<span class="led"><span class="v" data-count="${v}">0</span></span>`)}<small>${l}</small></div>`;
   const full = (mvp.full || mvp.name).trim(), sp = full.indexOf(" ");
   const nameHTML = sp > 0 ? `<span>${full.slice(0, sp)}</span><span>${full.slice(sp + 1)}</span>` : `<span>${full}</span>`;
   const qm = `<span class="qm">?</span>`;
   const mvpBlock = `<div class="mvpw"><div class="mvp">
-      <div class="card" style="--tc:${t.color}">${hr(qm, face(mvp.aid) + logoHTML(t))}</div>
+      <div class="card" style="--tc:${t.color}">${hr(qm, face(mvp.aid, false, "mph") + logoHTML(t))}</div>
       <div style="min-width:0">
         <h3>${hr(`<span>Le MVP de la nuit</span><span>? ? ?</span>`, nameHTML)}</h3>
         <div class="sub">${hr("Qui a été le meilleur cette nuit ?", `${t.city} ${t.name} · contre ${le(opp)}`)}</div>
@@ -1073,7 +1070,7 @@ async function loadEss() {
   const rank = new Map([...frs].filter(f => f.p).sort((a, b) => gscore(b.p) - gscore(a.p)).map((f, i) => [f.aid, i]));
   const nFr = frs.length - (mvpFr ? 1 : 0);
   const frCols = n => n <= 5 ? Math.max(1, n) : n === 6 ? 3 : 4; // 1 à 5 sur une ligne, 6 = 2 × 3, puis 4 par ligne
-  const frBlock = `<div class="ess-h"><span class="tag">${mvpFr ? hr("Les Français de la nuit", "Les autres Français de la nuit") : "Les Français de la nuit"}</span><i></i></div>${frs.length ? `<div class="frg" style="--n:${frCols(frs.length)};--nr:${frCols(nFr)}">${frs.map((f, i) => {
+  const frBlock = `${sect(mvpFr ? hr("Les Français de la nuit", "Les autres Français de la nuit") : "Les Français de la nuit")}${frs.length ? `<div class="frg" style="--n:${frCols(frs.length)};--nr:${frCols(nFr)}">${frs.map((f, i) => {
       const pt = team(f.tid), og = f.g.teams.away.id === f.tid ? f.g.teams.home : f.g.teams.away, p = f.p;
       const real = p ? `<span class="frs"><b>${p.pts}</b><small>pts</small><b>${p.reb}</b><small>reb</small><b>${p.ast}</b><small>pd</small>${p.blk ? `<b>${p.blk}</b><small>ctr</small>` : ""}<small class="frm">· ${p.min} min</small></span>`
         : `<span class="frs"><small>N'a pas joué</small></span>`;
@@ -1082,9 +1079,7 @@ async function loadEss() {
         ${hr(`<span class="frs"><b>??</b><small>pts</small><b>??</b><small>reb</small><b>??</b><small>pd</small></span>`, real)}</span></div>`;
     }).join("")}</div>` : `<p class="essn pad">Aucun Français sur les parquets cette nuit.</p>`}`;
   const open = settings.showAll || state.essOpen === night || !state.games.some(g => g.state !== "pre" && !state.revealed.has(g.id));
-  body.innerHTML = `<div class="ess hide" data-ready="1">${essTop(cta)}
-    <div class="ess-h"><span class="tag">Le MVP et les grosses perfs</span><i></i></div>${mvpBlock}${frBlock}</div>`;
-  $("#essrev").addEventListener("click", revealEss);
+  body.innerHTML = `<div class="ess hide" data-ready="1">${cta}${sect("Le MVP et les grosses perfs")}${mvpBlock}${frBlock}</div>`;
   if (open) revealEss();
 }
 
@@ -1674,7 +1669,7 @@ function welcome() {
   w.hidden = false;
   w.innerHTML = `<div class="welcome"><p><b>Nouveau sur Nocturne ?</b> Aucun score ne s'allume tant que <b>tu</b> ne le demandes pas :
     touche un afficheur pour revivre ce match, et seulement celui-là.</p>
-    <button class="btn amber" id="hellok">Compris</button></div>`;
+    <button class="btn prime" id="hellok">Compris</button></div>`;
   $("#hellok").addEventListener("click", () => { store.set("hello", true); w.hidden = true; });
 }
 
@@ -1751,7 +1746,7 @@ function renderAdmin() {
     <div class="adcard"><h3>Les visites</h3>
       <p>Le compteur (GoatCounter, gratuit et sans cookie) note chaque page ouverte et quels appareils sont venus.
       Tableau de bord : nombre de visites par jour, pages vues, pays, téléphone ou ordinateur, et une ligne par appareil.</p>
-      <a class="btn amber big" href="https://${GC}.goatcounter.com" target="_blank" rel="noopener">Ouvrir le tableau de bord ↗</a></div>
+      <a class="btn prime big" href="https://${GC}.goatcounter.com" target="_blank" rel="noopener">Ouvrir le tableau de bord ↗</a></div>
     <div class="adcard"><h3>Qui est venu</h3>
       <p>Un seul lien pour tout le monde. Chaque appareil se signale une fois par jour, dans la rubrique « Events » du tableau
       de bord, par sa ville (d'après son fuseau horaire), son type et un petit code qui lui reste : par exemple

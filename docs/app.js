@@ -1464,14 +1464,13 @@ async function renderStandings() {
   const tok = ++state.tok;
   const main = $("#main");
   setURL();
-  main.innerHTML = `<div class="sect top"><h2>La hiérarchie</h2></div>
-    <div class="skel"><div class="ph" style="height:300px"></div></div>`;
+  main.innerHTML = `<div class="skel" style="margin-top:26px"><div class="ph" style="height:300px"></div></div>`;
   let data;
   try {
     data = DEMO ? await window.DEMO.standings()
       : await fetchJSON("https://site.api.espn.com/apis/v2/sports/basketball/nba/standings");
   } catch (e) { if (tok === state.tok) main.innerHTML = `<p class="loadmsg">Impossible de charger le classement.</p>`; return; }
-  if (state.cutLast === undefined) state.cutLast = !settings.showAll;
+
   // la coupure : on retire les résultats de la dernière nuit jouée
   let adj = new Map(), cutPossible = false;
   try {
@@ -1485,7 +1484,10 @@ async function renderStandings() {
     }
   } catch (e) { /* pas grave : pas de coupure possible */ }
   if (tok !== state.tok) return;
-  const cut = state.cutLast && cutPossible;
+  // plus d'interrupteur (28/11, Kiki : « moche, pas très utile ») : le classement suit la révélation. La dernière nuit compte
+  // dès qu'elle a été révélée (bouton « Révéler la nuit ») ou avec « toujours montrer » ; sinon il s'arrête juste avant.
+  let lastGames = []; try { lastGames = (await scoreboard(defaultNight())).filter(g => g.state === "post"); } catch (e) { /* déjà vu plus haut */ }
+  const cut = cutPossible && !settings.showAll && !lastGames.every(g => state.revealed.has(g.id));
   const confs = [];
   for (const ch of data.children || []) {
     const rows = [];
@@ -1504,12 +1506,11 @@ async function renderStandings() {
   const pct = r => (r.w + r.l) ? (r.w / (r.w + r.l)) : 0;
   const confHTML = c => {
     const lead = c.rows[0];
-    return `<div class="conf"><h2>${c.name}</h2>
-      <div class="srow head"><span></span><span></span><span>Équipe</span><span class="n">V</span><span class="n">D</span><span class="n">%</span><span class="n gb">Écart</span></div>
+    return `<div class="conf">${sect(c.name)}
       ${c.rows.map((r, i) => {
         const t = team(r.id);
         // des sous-parties plutôt qu'une légende (28/11, carte blanche de Kiki)
-        const part = i === 0 ? `<div class="spart po">Play-offs</div>` : i === 6 ? `<div class="spart pi">Play-in</div>` : i === 10 ? `<div class="spart out">Hors course</div>` : "";
+        const part = i === 0 ? `<div class="srow spart po"><span class="pl">Play-offs</span><span class="n">V</span><span class="n">D</span><span class="n">%</span><span class="n gb">Écart</span></div>` : i === 6 ? `<div class="spart pi">Play-in</div>` : i === 10 ? `<div class="spart out">Hors course</div>` : "";
         const gb = lead ? ((lead.w - r.w) + (r.l - lead.l)) / 2 : 0;
         return part + `<div class="srow ${i < 6 ? "po" : i < 10 ? "pi" : ""} ${r.id === settings.fav ? "favrow" : ""}" style="--tc:${t.color};animation-delay:${i * 30}ms">
           <span class="rk">${i + 1}</span>${logoHTML(t)}<span class="tn">${t.name}</span>
@@ -1518,13 +1519,11 @@ async function renderStandings() {
       }).join("")}</div>`;
   };
   // plus de grand titre (déjà dans le menu, comme le programme) : étiquette, coupure sans spoil et légende sur UNE ligne
-  main.innerHTML = `<div class="sect top stand"><h2>La hiérarchie</h2>
-      <div class="scut">${cutPossible ? `<span class="sct">${cut ? "Arrêté avant la dernière nuit, pour ne rien te gâcher." : "À jour, dernière nuit comprise."}</span>
-      <label class="scl"><button class="sw ${cut ? "" : "on"}" id="swcut" role="switch" aria-checked="${!cut}" aria-label="Inclure la dernière nuit"></button>
-      <span>Inclure la dernière nuit</span></label>` : `<span class="sct">Classement à jour.</span>`}</div></div>
-    <div class="standwrap">${confs.map(confHTML).join("")}</div>`;
-  const sw = $("#swcut");
-  if (sw) sw.addEventListener("click", () => { state.cutLast = !state.cutLast; renderStandings(); });
+  const d1 = keyDate(defaultNight()), d2 = keyDate(addDays(defaultNight(), 1));
+  const nuitTxt = EURO ? `${d1.getUTCDate()} → ${d2.getUTCDate()}` : FR({ day: "numeric", month: "short" }).format(d1);
+  main.innerHTML = `<div class="standwrap">${confs.map(confHTML).join("")}</div>
+    ${cut ? `<p class="standnote">Sans les résultats de la nuit du ${nuitTxt} : révèle cette nuit pour les inclure.</p>` : ""}`;
+
 }
 
 /* ---------- la NBA Cup (28/11, carte blanche de Kiki) ----------

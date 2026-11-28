@@ -1809,3 +1809,12 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .tbrev .mb{width:1.6em;height:1.6em}
 .tbrev .rc{font:600 .8em var(--disp);letter-spacing:.1em;color:#5d6280;margin-left:2px}
 @media (max-width:900px){ .tbrev{font-size:11.5px;padding:7px 14px 6px;letter-spacing:.1em} .tbrev .rc{display:none} }
+/* 28/11 : le bouton juste après le logo, avant les onglets (le plus important) */
+.tbrev{margin-left:0}
+.tbrev:not([hidden]) ~ .pill-maq{margin-left:auto}
+.tbrev:not([hidden]) ~ .gear{margin-left:auto}
+.tbrev:not([hidden]) ~ .pill-maq:not([hidden]) + .gear{margin-left:0}
+.tbrev .rl{display:inline}.tbrev .rs{display:none}
+@media (max-width:900px){ .tbrev{margin-left:auto} .tbrev .rl{display:none}.tbrev .rs{display:inline}
+  .tbrev:not([hidden]) ~ .pill-maq{margin-left:0} }
+@media (min-width:901px){ .tbrev{min-width:254px;justify-content:center} }

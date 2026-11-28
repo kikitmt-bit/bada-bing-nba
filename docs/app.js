@@ -736,7 +736,9 @@ function paintRev() {
   b.title = settings.showAll ? "Les scores sont toujours montrés (réglage « Toujours montrer les scores »)"
     : on ? "Toucher pour tout recacher" : `Dévoile tous les résultats jusqu'à la nuit du ${nt} : scores, NBA Cup, classement`;
   b.setAttribute("aria-label", b.title);
-  b.innerHTML = on ? `<span>✓ Nuit révélée</span>${settings.showAll ? "" : `<small class="rc">· recacher</small>`}` : `${MBSVG}<span>Révéler la nuit</span>`;
+  // libellé parlant (28/11, Kiki) : long sur PC, court sur téléphone (.rl / .rs ; pas .lg = les logos)
+  b.innerHTML = on ? `<span class="rl">✓ Résultats révélés</span><span class="rs">✓ Révélé</span>${settings.showAll ? "" : `<small class="rc">· recacher</small>`}`
+    : `${MBSVG}<span class="rl">Révéler tous les résultats</span><span class="rs">Tout révéler</span>`;
 }
 function toggleRevealAll() {
   if (settings.showAll) return;
@@ -1539,7 +1541,7 @@ async function renderStandings() {
   const d1 = keyDate(defaultNight()), d2 = keyDate(addDays(defaultNight(), 1));
   const nuitTxt = EURO ? `${d1.getUTCDate()} → ${d2.getUTCDate()}` : FR({ day: "numeric", month: "short" }).format(d1);
   main.innerHTML = `<div class="standwrap">${confs.map(confHTML).join("")}</div>
-    ${cut ? `<p class="standnote">Sans les résultats de la nuit du ${nuitTxt} : « Révéler la nuit », en haut, les ajoute.</p>` : ""}`;
+    ${cut ? `<p class="standnote">Sans les résultats de la nuit du ${nuitTxt} : « Révéler tous les résultats », en haut, les ajoute.</p>` : ""}`;
 
 }
 
@@ -1819,7 +1821,7 @@ function welcome() {
   const w = $("#welcome");
   w.hidden = false;
   w.innerHTML = `<div class="welcome"><p><b>Nouveau sur Nocturne ?</b> Aucun score ne s'allume tant que <b>tu</b> ne le demandes pas :
-    touche un afficheur pour un seul match, ou <b>« Révéler la nuit »</b>, en haut, pour tout dévoiler d'un coup (scores, NBA Cup, classement).</p>
+    touche un afficheur pour un seul match, ou <b>« Révéler tous les résultats »</b>, en haut, pour tout dévoiler d'un coup (scores, NBA Cup, classement).</p>
     <button class="btn prime" id="hellok">Compris</button></div>`;
   $("#hellok").addEventListener("click", () => { store.set("hello", true); w.hidden = true; });
 }

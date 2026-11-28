@@ -1620,9 +1620,10 @@ async function renderCup() {
   const champHTML = champ ? (() => { const t = team(champ); return `<div class="cchamp" style="--tc:${t.color}">${logoHTML(t)}<span><small>Vainqueur de la NBA Cup</small><b>${t.city} ${t.name}</b></span></div>`; })() : "";
   const hidKO = ko.filter(g => g.state === "post" && !cupShown(g)).length;
   const toReveal = hiddenG + hidKO;
-  const phase = left ? `Phase de groupes · ${plural(left, "match")} à jouer` : !groupsDone ? "Phase de groupes terminée · résultats de la dernière nuit cachés"
-    : champ ? "La Coupe est jouée" : "Phase finale";
-  main.innerHTML = `<div class="cuptop"><p><b>${phase}</b><span>6 groupes de 5 · le 1er de chaque groupe et le meilleur 2e de chaque conférence vont en quarts · finale le ${fin ? FR({ day: "numeric", month: "long" }).format(fin.date) : "en décembre"}${fin && fin.city ? " à " + fin.city : ""}</span></p>
+  const phase = left ? `Phase de groupes en cours · ${plural(left, "match")} à jouer` : champ ? "La Coupe est jouée."
+    : ko.some(g => g.state !== "pre") ? "Phase finale en cours." : "Phase de groupes terminée.";
+  // 28/11 (Kiki) : d'abord le principe de la Coupe, puis où on en est, tout à la même taille (plus de gros titre)
+  main.innerHTML = `<div class="cuptop"><p><span>6 groupes de 5 · le 1er de chaque groupe et le meilleur 2e de chaque conférence vont en quarts · finale le ${fin ? FR({ day: "numeric", month: "long" }).format(fin.date) : "en décembre"}${fin && fin.city ? " à " + fin.city : ""}</span><span>${phase}</span></p>
       ${toReveal ? `<button class="btn nightb big" id="cuprev"><svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la Coupe</button>` : ""}</div>
     ${sect("Le tableau final")}
     <div class="cbr">

@@ -1672,3 +1672,15 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .ess.hide .mvp h3{display:none}
 .ess.hide .mvp .sub{font:800 17px var(--disp);text-transform:uppercase;color:var(--ink3)}
 .ess.hide .perf small{font-family:var(--led);font-size:18px}
+/* « Révéler la nuit » (28/11, idée de Kiki) : le bouton EST la nuit (noir, liseré blanc, texte blanc) ;
+   une fois la nuit révélée, le jour se lève : il s'éclaire en blanc, texte sombre. Aucune nouvelle couleur. */
+.btn.nightb{--bg:rgba(255,255,255,.78);--fg:var(--ink);position:relative;isolation:isolate;transition:color .8s ease,transform .2s}
+.btn.nightb::before{content:"";position:absolute;inset:1.5px;z-index:-1;background:var(--night);
+  clip-path:polygon(7.4px 0,100% 0,calc(100% - 7.4px) 100%,0 100%);transition:opacity .9s ease,background .2s}
+.btn.nightb:hover{--bg:#fff}
+.btn.nightb:hover::before{background:var(--panel2)}
+.btn.nightb.done{--bg:#f3efe6;--fg:#0b0d16;flex-direction:column;gap:2px;line-height:1.1}
+.btn.nightb.done::before{opacity:0}
+.btn.nightb.done:hover{--bg:#fff}
+.btn.nightb.done small{font:600 10px var(--disp);letter-spacing:.12em;color:#5d6280}
+.btn.nightb:disabled{cursor:default}

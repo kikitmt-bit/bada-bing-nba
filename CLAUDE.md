@@ -291,6 +291,10 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     nom ; l'équipe lue à l'écran pour confirmer). MVP masqué = « MVP de la nuit » au format des « Grosse perf n° X » ; Français
     masqués sans « ? ». Firefox : le lecteur YouTube intégré demande « confirmez que vous n'êtes pas un robot » (cookies tiers
     isolés) → couper la protection renforcée (bouclier) pour le site, vérifié par Kiki.
+  - **Bouton « Révéler la nuit » = la nuit qui devient le jour (28/11, idée de Kiki)** : `.btn.nightb` : avant = fond de nuit
+    (`--night`), liseré blanc (le `--bg` blanc + `::before` sombre en retrait de 1,5 px, même biseau), texte blanc, logo lune-ballon ;
+    révélée (`.done`) = le `::before` s'efface en 0,9 s, bouton blanc cassé, texte sombre, « ✓ Nuit révélée / Toucher pour recacher ».
+    Aucune nouvelle couleur. `.btn.prime` (blanc) reste pour « Compris » et la page admin.
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

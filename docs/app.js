@@ -778,7 +778,7 @@ function skyHTML(games, hero, scored) {
       <div class="nights" id="nights" data-ctx="${ctx}"></div>
       ${board}
       ${started || nvid || jr || nplus ? `<div class="actions">
-      ${started ? `<button class="btn prime big${left ? "" : " done"}" id="revall" ${left || !settings.showAll ? "" : "disabled"}>${left ? `<svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la nuit` : `✓ Nuit révélée${settings.showAll ? "" : "<small>Toucher pour recacher</small>"}`}</button>` : ""}
+      ${started ? `<button class="btn nightb big${left ? "" : " done"}" id="revall" ${left || !settings.showAll ? "" : "disabled"}>${left ? `<svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la nuit` : `✓ Nuit révélée${settings.showAll ? "" : "<small>Toucher pour recacher</small>"}`}</button>` : ""}
       ${nplus ? `<button class="btn amber" data-nuitplus="${state.night}" title="Le résumé de la nuit, avec la liste des matchs et les scores qui suivent la vidéo"><span class="pl">▶</span>Résumé de la nuit<span class="plus">+</span></button>`
         : nvid ? `<button class="btn amber" data-vplay="${nvid}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
       ${jr ? `<button class="btn amber" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin"><span class="pl">▶</span>NBA Extra</button>` : ""}

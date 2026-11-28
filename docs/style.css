@@ -1696,3 +1696,11 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .btn.nightb{line-height:1.2}
 .btn.nightb .mb{margin:-6px 0}
 @media (max-width:600px){ .nxm .lg{display:none}.nxm{grid-template-columns:auto auto auto minmax(0,1fr);gap:6px;padding:8px 10px} }
+/* 28/11 : le même espace entre toutes les rubriques (36 px), moitié moins entre le match de la nuit et les autres matchs */
+.sect{margin-top:36px}
+.jumbo{margin-bottom:0}
+.jumbo + .sect{margin-top:18px}
+.ess{padding:0}
+.ess .mvpw .mvp,.ess .mvpw .perfs{padding-top:0;padding-bottom:0}
+@media (max-width:900px){ .ess .mvpw{row-gap:18px} }
+.sky.one + .sect{margin-top:21px}

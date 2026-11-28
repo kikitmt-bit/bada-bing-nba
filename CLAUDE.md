@@ -299,6 +299,9 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     révélé = UNE ligne « ✓ Nuit révélée · toucher pour recacher », même hauteur. Ordre sous les matchs : MVP et grosses perfs · Français ·
     Les 10 plus belles actions [▶ Top 10] · **La nuit prochaine** (`nextStrip` : titre de rubrique + bouton gris « Voir la nuit › »,
     puis les affiches en plaques `.nxm` « logo CHA @ ATL logo · 01h00 » par heure, sans logos sur téléphone).
+  - **Espacement des rubriques (28/11)** : 36 px partout entre la fin d'une rubrique et le titre suivant (`.sect{margin-top:36px}`,
+    `.ess` sans marge, MVP/perfs sans marge haut/bas, `.sky.one + .sect` à 21 px car l'en-tête a 15 px dessous), 18 px entre le match
+    de la nuit et « Les autres matchs » (`.jumbo + .sect`). Mesuré au pixel (Playwright : bas du dernier élément visible → titre).
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

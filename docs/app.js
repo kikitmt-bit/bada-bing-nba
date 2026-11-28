@@ -718,7 +718,7 @@ function updateRevealAll() {
   const left = state.games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).length;
   if (!left && state.games.some(g => g.state === "post")) revealEss();
   const b = $("#revall"); if (!b) return;
-  if (!left) { b.classList.add("done"); b.disabled = !!settings.showAll; b.innerHTML = `✓ Nuit révélée${settings.showAll ? "" : "<small>Toucher pour recacher</small>"}`; }
+  if (!left) { b.classList.add("done"); b.disabled = !!settings.showAll; b.innerHTML = `✓ Nuit révélée${settings.showAll ? "" : "<small>· toucher pour recacher</small>"}`; }
 }
 
 /* ---------- le brief : la nuit, comme une retransmission ---------- */
@@ -778,7 +778,7 @@ function skyHTML(games, hero, scored) {
       <div class="nights" id="nights" data-ctx="${ctx}"></div>
       ${board}
       ${started || nvid || jr || nplus ? `<div class="actions">
-      ${started ? `<button class="btn nightb big${left ? "" : " done"}" id="revall" ${left || !settings.showAll ? "" : "disabled"}>${left ? `<svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la nuit` : `✓ Nuit révélée${settings.showAll ? "" : "<small>Toucher pour recacher</small>"}`}</button>` : ""}
+      ${started ? `<button class="btn nightb big${left ? "" : " done"}" id="revall" ${left || !settings.showAll ? "" : "disabled"}>${left ? `<svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la nuit` : `✓ Nuit révélée${settings.showAll ? "" : "<small>· toucher pour recacher</small>"}`}</button>` : ""}
       ${nplus ? `<button class="btn amber" data-nuitplus="${state.night}" title="Le résumé de la nuit, avec la liste des matchs et les scores qui suivent la vidéo"><span class="pl">▶</span>Résumé de la nuit<span class="plus">+</span></button>`
         : nvid ? `<button class="btn amber" data-vplay="${nvid}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
       ${jr ? `<button class="btn amber" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin"><span class="pl">▶</span>NBA Extra</button>` : ""}
@@ -1087,7 +1087,7 @@ async function loadEss() {
         ${hr("", real)}</span></div>`;
     }).join("")}</div>` : `<p class="essn pad">Aucun Français sur les parquets cette nuit.</p>`}`;
   const open = settings.showAll || state.essOpen === night || !state.games.some(g => g.state !== "pre" && !state.revealed.has(g.id));
-  body.innerHTML = `<div class="ess hide" data-ready="1">${cta}${sect("Le MVP et les grosses perfs")}${mvpBlock}${frBlock}</div>`;
+  body.innerHTML = `<div class="ess hide" data-ready="1">${sect("Le MVP et les grosses perfs")}${mvpBlock}${frBlock}${cta}</div>`;
   if (open) revealEss();
 }
 
@@ -1099,10 +1099,10 @@ async function nextStrip() {
   try { [games] = await Promise.all([scoreboard(next), loadRanks()]); } catch (e) { return; }
   const pre = games.filter(g => g.state === "pre");
   if (!pre.length || state.night !== defaultNight() || !$("#nextstrip")) return;
-  const top = [...pre].sort((x, y) => watchLevel(y) - watchLevel(x))[0];
-  $("#nextstrip").innerHTML = `<div class="next"><span class="tt">La nuit prochaine</span>
-    <span>${pre.length} match${pre.length > 1 ? "s" : ""} · l'affiche : ${top.teams.away.name} – ${top.teams.home.name} à ${hourLocal(top.date)}</span>
-    <button class="btn" data-night-go="${next}">Voir la nuit ›</button></div>`;
+  // 28/11 (Kiki) : une rubrique comme les autres, le plus sobre possible : les affiches et l'heure, rien d'autre
+  const m = g => `<div class="nxm" title="${g.teams.away.name} – ${g.teams.home.name}">${logoHTML(g.teams.away)}<b>${g.teams.away.tri}</b><i>@</i><b>${g.teams.home.tri}</b>${logoHTML(g.teams.home)}<small>${hourLocal(g.date)}</small></div>`;
+  $("#nextstrip").innerHTML = sect("La nuit prochaine", `<button class="btn" data-night-go="${next}">Voir la nuit ›</button>`) +
+    `<div class="nxl">${[...pre].sort((x, y) => x.date - y.date).map(m).join("")}</div>`;
 }
 
 function markSeen(key) { if (!seen.has(key)) { seen.add(key); store.set("vues", [...seen].slice(-90)); } }

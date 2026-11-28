@@ -1676,11 +1676,23 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
    une fois la nuit révélée, le jour se lève : il s'éclaire en blanc, texte sombre. Aucune nouvelle couleur. */
 .btn.nightb{--bg:rgba(255,255,255,.78);--fg:var(--ink);position:relative;isolation:isolate;transition:color .8s ease,transform .2s}
 .btn.nightb::before{content:"";position:absolute;inset:1.5px;z-index:-1;background:var(--night);
-  clip-path:polygon(7.4px 0,100% 0,calc(100% - 7.4px) 100%,0 100%);transition:opacity .9s ease,background .2s}
+  clip-path:polygon(11.6px 0,calc(100% - .4px) 0,calc(100% - 11.6px) 100%,.4px 100%);transition:opacity .9s ease,background .2s}
 .btn.nightb:hover{--bg:#fff}
 .btn.nightb:hover::before{background:var(--panel2)}
-.btn.nightb.done{--bg:#f3efe6;--fg:#0b0d16;flex-direction:column;gap:2px;line-height:1.1}
+.btn.nightb.done{--bg:#f3efe6;--fg:#0b0d16}
 .btn.nightb.done::before{opacity:0}
 .btn.nightb.done:hover{--bg:#fff}
-.btn.nightb.done small{font:600 10px var(--disp);letter-spacing:.12em;color:#5d6280}
+.btn.nightb.done small{font:600 .72em var(--disp);letter-spacing:.12em;color:#5d6280;margin-left:4px}
 .btn.nightb:disabled{cursor:default}
+/* la nuit prochaine (28/11) : rubrique comme les autres, juste les affiches, le détail est dans « Voir la nuit » */
+.nxl{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px}
+.nxm{display:grid;grid-template-columns:auto auto auto auto auto minmax(0,1fr);align-items:center;gap:8px;padding:8px 12px;background:var(--panel);min-width:0;
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.nxm .lg{width:26px;height:26px;font-size:9px}
+.nxm b{font:800 15px var(--disp);letter-spacing:.06em;white-space:nowrap}
+.nxm i{font-style:normal;color:var(--ink3);font:600 12px var(--disp);text-align:center}
+.nxm small{justify-self:end;color:var(--ink3);font:600 12px var(--disp);letter-spacing:.1em;white-space:nowrap}
+@media (max-width:600px){ .nxl{grid-template-columns:1fr 1fr} }
+.btn.nightb{line-height:1.2}
+.btn.nightb .mb{margin:-6px 0}
+@media (max-width:600px){ .nxm .lg{display:none}.nxm{grid-template-columns:auto auto auto minmax(0,1fr);gap:6px;padding:8px 10px} }

@@ -1102,10 +1102,10 @@ async function loadEss() {
   const frCols = n => n <= 5 ? Math.max(1, n) : n === 6 ? 3 : 4; // 1 à 5 sur une ligne, 6 = 2 × 3, puis 4 par ligne
   const frBlock = `${sect(mvpFr ? hr("Les Français de la nuit", "Les autres Français de la nuit") : "Les Français de la nuit")}${frs.length ? `<div class="frg" style="--n:${frCols(frs.length)};--nr:${frCols(nFr)}">${frs.map((f, i) => {
       const pt = team(f.tid), og = f.g.teams.away.id === f.tid ? f.g.teams.home : f.g.teams.away, p = f.p;
-      const real = p ? `<span class="frs"><b>${p.pts}</b><small>pts</small><b>${p.reb}</b><small>reb</small><b>${p.ast}</b><small>pd</small>${p.blk ? `<b>${p.blk}</b><small>ctr</small>` : ""}<small class="frm">· ${p.min} min</small></span>`
+      const real = p ? `<span class="frs"><b>${p.pts}</b><small>pts</small><b>${p.reb}</b><small>reb</small><b>${p.ast}</b><small>pd</small>${p.blk ? `<b>${p.blk}</b><small>ctr</small>` : ""}</span>`
         : `<span class="frs"><small>N'a pas joué</small></span>`;
       return `<div class="frt${f.aid === mvp.aid ? " ismvp" : ""}" style="--tc:${pt.color};--o:${rank.has(f.aid) ? rank.get(f.aid) : 99};animation-delay:${i * 60}ms"><span class="frp">${face(f.aid, true)}${logoHTML(pt)}</span>
-        <span class="frn"><b>${f.n}</b><small>${pt.tri} contre ${og.tri}</small>
+        <span class="frn"><b>${f.n}</b><small>${pt.tri} contre ${og.tri}${p ? `<x-r> · ${p.min} min</x-r>` : ""}</small>
         ${hr("", real)}</span></div>`;
     }).join("")}</div>` : `<p class="essn pad">Aucun Français sur les parquets cette nuit.</p>`}`;
   const open = settings.showAll || state.essOpen === night || !state.games.some(g => g.state !== "pre" && !state.revealed.has(g.id));

@@ -1818,3 +1818,10 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 @media (max-width:900px){ .tbrev{margin-left:auto} .tbrev .rl{display:none}.tbrev .rs{display:inline}
   .tbrev:not([hidden]) ~ .pill-maq{margin-left:0} }
 @media (min-width:901px){ .tbrev{min-width:254px;justify-content:center} }
+/* 28/11 : les stats des Français ne sont plus coupées (la règle des noms « … » touchait aussi les chiffres) ; minutes sur la ligne d'avant */
+.frt .frs{flex-wrap:wrap;row-gap:2px}
+.frt .frs b,.frt .frs small{flex:none;overflow:visible;text-overflow:clip;white-space:nowrap}
+.frt .frs b{font:800 19px/1 var(--disp);color:var(--amber);margin-left:7px}
+.frt .frs b:first-child{margin-left:0}
+/* NBA Cup : « Ouest » / « Est » alignés sur le texte des plaques (« Quart de finale ») */
+.cbt{padding-left:10px}

@@ -1616,7 +1616,7 @@ async function renderCup() {
   const colQF = (L) => L.length === 2 ? L.map(qfPlate).join("") : blankQF(qfs[0] && qfs[0].date) + blankQF(qfs[2] && qfs[2].date);
   const sfPlate = (S) => plate(S.g, S.g ? [S.g.teams.away.id, S.g.teams.home.id] : S.ids, "Demi-finale", S.date);
   const fPlate = plate(realF, realF ? [realF.teams.away.id, realF.teams.home.id] : fw.map(x => x || null), "Finale", fin && fin.date, true);
-  const trophy = `<svg class="ctro" viewBox="0 0 64 64" aria-hidden="true"><path d="M20 8h24v14c0 8-5 14-12 14s-12-6-12-14V8Z"/><path d="M20 12h-8c0 9 4 14 10 14M44 12h8c0 9-4 14-10 14" fill="none"/><path d="M28 36h8v8h-8zM22 50h20v6H22z"/></svg>`;
+  const trophy = `<img class="ctro" src="nba-cup.png?v=1" alt="Le trophée de la NBA Cup" width="196" height="480">`; // le vrai trophée (image fournie par Kiki), fond retiré
   const champHTML = champ ? (() => { const t = team(champ); return `<div class="cchamp" style="--tc:${t.color}">${logoHTML(t)}<span><small>Vainqueur de la NBA Cup</small><b>${t.city} ${t.name}</b></span></div>`; })() : "";
   const hidKO = ko.filter(g => g.state === "post" && !cupShown(g)).length;
   const toReveal = hiddenG + hidKO;

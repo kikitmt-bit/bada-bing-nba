@@ -282,6 +282,10 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     + « Toucher pour recacher » : un 2e clic recache tout (`state.revealed.clear()`, sauf « toujours montrer ») ; intitulés des 3 lignes
     en BLANC avant le match, en AMBRE une fois révélé (`.kfs.post`) ; faits raccourcis pour tenir sur une ligne (`nm` : nom court
     au-delà de 15 lettres, classement sans « 2e → 1re » quand il y a un cap franchi, blessé sans « pour la suite »).
+  - **28/11 (nuit)** : titres de rubrique à 17 px (+13 %) ; essentiel masqué allégé : MVP = « Qui a régné sur la nuit ? » + 4 LED « ? »
+    (plus de nom « ? ? ? »), grosses perfs = « Grosse perf n° X » sans stats, Français = un seul « ? ». **Les plus belles actions** =
+    bande `.topstrip` (bouton ambre « ▶ Top 10 » + compte à rebours de cases LED 10 → 1, le n° 1 doré, elles s'allument au survol),
+    toute la bande lance la vidéo.
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

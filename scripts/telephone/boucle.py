@@ -95,8 +95,13 @@ def a_essayer(e):
     return e.get("ok") is None and e.get("essais", 0) < ESSAIS and e.get("apres", 0) <= time.time()
 
 
-# ---------- la note « à voir » : même formule que le site (watchLevel dans docs/app.js) ----------
-SEUIL = 0          # tous les matchs (20/11, choix de Kiki : rien ne limite le téléphone), les meilleurs d'abord
+# ---------- la note « à voir » : LA MÊME que le site (docs/note.js, sur le déroulé ESPN), lancée avec Node.js ----------
+# 28/11 (choix de Kiki) : le résumé de la nuit d'abord, puis les matchs du meilleur au moins bon, et plus de Replay +
+# pour les matchs « Sans plus », « Bof » et « À fuir » (niveaux 2, 1, 0) : seulement Sympa (3), Génial (4), Immanquable (5).
+SEUIL = 3
+NOTEJS = next((c for c in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "note.js"),
+                           os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "docs", "note.js")) if os.path.exists(c)), None)
+SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event="
 EN_MEME_TEMPS = 3  # analyses en parallèle (le téléphone a 8 cœurs, une analyse n'en prend qu'un)
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates="
 _SB = {}
@@ -124,8 +129,34 @@ def jitter(gid):
     return (x / 997 - .5) * .7
 
 
+def note_fine(ev):
+    """(note continue, niveau 0 à 5) du site (docs/note.js sur le déroulé ESPN) ; sans Node ou sans déroulé : l'ancienne formule."""
+    if NOTEJS:
+        try:
+            j = None
+            for k in range(5):  # le wifi du téléphone a des trous
+                try:
+                    with urllib.request.urlopen(SUMMARY + str(ev["id"]), timeout=30) as r:
+                        j = r.read()
+                    break
+                except Exception:
+                    if k == 4:
+                        raise
+                    time.sleep(3)
+            code = ("const N=require(process.argv[1]);let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{"
+                    "const r=N.rate(JSON.parse(s));console.log(JSON.stringify(r?[r.s,r.lvl]:null))})")
+            out = subprocess.run(["node", "-e", code, NOTEJS], input=j, capture_output=True, timeout=60).stdout
+            r = json.loads(out or b"null")
+            if r:
+                return float(r[0]), int(r[1])
+        except Exception as ex:
+            log("note fine impossible (%s), ancienne formule :" % ev.get("id"), str(ex)[-120:])
+    n = note(ev)
+    return float(n), n
+
+
 def note(ev):
-    """0 à 5 barres, comme sur le site (match terminé)."""
+    """0 à 5 barres, l'ancienne formule sur le score final (secours)."""
     comp = ev["competitions"][0]
     sides, top = {}, 0
     for c in comp.get("competitors", []):
@@ -222,11 +253,13 @@ def resumes(vids=None):
         if not ev or ev["id"] in vus:
             continue
         vus.add(ev["id"])
-        v["note"] = note(ev)
         v["gid"] = ev["id"]  # le déroulé ESPN de ce match sert à caler la vidéo sur les scores lus à l'écran
+        v["score"], v["note"] = note_fine(ev)
         if v["note"] >= SEUIL:
             gardes.append(v)
-    gardes.sort(key=lambda v: -v["note"])                  # les meilleurs matchs d'abord
+        else:
+            log("pas de Replay + (%s) :" % ["À fuir", "Bof", "Sans plus"][v["note"]], v.get("t", ""))
+    gardes.sort(key=lambda v: -v["score"])                 # les meilleurs matchs d'abord (le match de la nuit en tête)
     return gardes
 
 
@@ -354,10 +387,10 @@ def suivre(ligne):
     publier_fichiers({SUIVI: {"l": lignes}}, "suivi : " + ligne.get("etat", ""))
 
 
-def nuits(vids, etat):
-    """Le résumé de la nuit augmenté (nuit.py) : chapitres publiés tout de suite, puis chrono + joueur de la nuit.
-    Les 2 derniers jours seulement, un résumé à la fois."""
+def recaps(vids, etat):
+    """Les résumés de la nuit (2 derniers jours) encore à faire, le plus récent d'abord."""
     lim = datetime.now(timezone.utc) - timedelta(days=2)
+    out = []
     for v in vids or []:
         if not nuit.est_recap(v):
             continue
@@ -366,33 +399,45 @@ def nuits(vids, etat):
                 continue
         except Exception:
             continue
-        cle = "nuit:" + v["id"]
-        e = etat.setdefault(cle, {"essais": 0})
-        if not a_essayer(e):
-            continue
+        if a_essayer(etat.get("nuit:" + v["id"], {})):
+            out.append(dict(v, nuit=True))
+    out.sort(key=lambda v: v.get("p", ""), reverse=True)
+    return out
+
+
+def traiter_nuit(v, etat, verrou):
+    """Le résumé de la nuit augmenté (nuit.py) : chapitres publiés tout de suite, puis chrono + joueur de la nuit."""
+    with verrou:
+        if en_pause(etat):
+            return
+        e = etat.setdefault("nuit:" + v["id"], {"essais": 0})
         e["essais"] += 1
-        jour = nuit.nuit_de(v.get("t", ""))
-        video = os.path.join(TRAVAIL, v["id"] + ".mp4")
-        try:
-            def pub(res):
+    jour = nuit.nuit_de(v.get("t", ""))
+    video = os.path.join(TRAVAIL, v["id"] + ".mp4")
+    try:
+        def pub(res):
+            with verrou:
                 publier_fichiers({"v2/nuit/%s.json" % res["nuit"]: res}, "résumé de la nuit %s : %s" % (res["nuit"], "complet" if res["fait"] else "chapitres"))
-            nuit.analyse(v["id"], v.get("t", ""), None, pub)  # les chapitres d'abord (quelques secondes)
-            sh("yt-dlp", "-q", "--no-warnings", "-f", "bv*[height=720][vcodec^=avc1]/bv*[height=720][vcodec^=vp]/bv*[height=720]/bv*[height<=720]",
-               "-o", video, "https://www.youtube.com/watch?v=" + v["id"])
-            res = nuit.analyse(v["id"], v.get("t", ""), video, pub)
-            if res and res.get("fait"):
-                e["ok"] = True
-                log("résumé de la nuit publié :", jour)
-        except Exception as ex:
-            log("résumé de la nuit raté", v["id"], erreur(ex))
+        nuit.analyse(v["id"], v.get("t", ""), None, pub)  # les chapitres d'abord (quelques secondes)
+        sh("yt-dlp", "-q", "--no-warnings", "-f", "bv*[height=720][vcodec^=avc1]/bv*[height=720][vcodec^=vp]/bv*[height=720]/bv*[height<=720]",
+           "-o", video, "https://www.youtube.com/watch?v=" + v["id"])
+        with verrou:
+            etat.pop("pause", None)
+        res = nuit.analyse(v["id"], v.get("t", ""), video, pub)
+        if res and res.get("fait"):
+            e["ok"] = True
+            log("résumé de la nuit publié :", jour)
+    except Exception as ex:
+        log("résumé de la nuit raté", v["id"], erreur(ex))
+        with verrou:
             rater(etat, e, ex)
-        finally:
-            for f in (video, video + ".part"):
-                if os.path.exists(f):
-                    os.remove(f)
+    finally:
+        for f in (video, video + ".part"):
+            if os.path.exists(f):
+                os.remove(f)
+        with verrou:
             with open(ETAT, "w") as f:
                 json.dump(etat, f)
-        return  # un seul par passage (les résumés de match passent avant au passage suivant)
 
 
 def passage():
@@ -415,15 +460,18 @@ def passage():
     except Exception as e:
         log("liste des vidéos illisible :", e)
         return
-    a_faire = [v for v in liste if a_essayer(etat.get(v["id"], {}))]
+    # l'ordre de passage (28/11, choix de Kiki) : le résumé de la nuit dès qu'il est sorti, puis les matchs du meilleur au moins bon
+    a_faire = recaps(vids, etat) + [v for v in liste if a_essayer(etat.get(v["id"], {}))]
     if not a_faire:
-        nuits(vids, etat)  # rien d'autre à faire : le résumé de la nuit
         return
-    log("%d résumé(s) à analyser, %d à la fois" % (len(a_faire), EN_MEME_TEMPS))
+    log("%d vidéo(s) à analyser, %d à la fois : %s" % (len(a_faire), EN_MEME_TEMPS,
+        " · ".join("NUIT" if v.get("nuit") else "%.1f" % v["score"] for v in a_faire)))
     os.makedirs(TRAVAIL, exist_ok=True)
     verrou = threading.Lock()  # l'état et la publication git : un seul fil à la fois
 
     def traiter(v):
+        if v.get("nuit"):
+            return traiter_nuit(v, etat, verrou)
         vid = v["id"]
         with verrou:
             if en_pause(etat):
@@ -473,10 +521,8 @@ def passage():
                 except Exception as ex:
                     log("suivi non publié :", str(ex)[-200:])
 
-    with ThreadPoolExecutor(EN_MEME_TEMPS) as pool:
+    with ThreadPoolExecutor(EN_MEME_TEMPS) as pool:  # les tâches partent dans l'ordre de la liste
         list(pool.map(traiter, a_faire))
-    if not en_pause(etat):
-        nuits(vids, etat)
 
 
 if __name__ == "__main__":

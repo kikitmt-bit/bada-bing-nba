@@ -159,6 +159,9 @@ function normEvent(ev) {
         g.leaders.push({ name: l.athlete && l.athlete.shortName || "", pts: +l.value || 0 });
   }
   g.ot = g.state === "post" && g.period > 4;
+  const note = ((comp.notes || [])[0] || {}).headline || "";
+  g.cup = !/NBA Cup/i.test(note) ? null : /group/i.test(note) ? "group" : /quarter/i.test(note) ? "qf" : /semi/i.test(note) ? "sf" : /champion|final/i.test(note) ? "final" : null;
+  g.city = (comp.venue && comp.venue.address && comp.venue.address.city) || "";
   pairColors(g);
   return g;
 }
@@ -1522,6 +1525,123 @@ async function renderStandings() {
   if (sw) sw.addEventListener("click", () => { state.cutLast = !state.cutLast; renderStandings(); });
 }
 
+/* ---------- la NBA Cup (28/11, carte blanche de Kiki) ----------
+   ESPN marque chaque match (« NBA Cup - Group Play », « - Quarterfinals », « - Semifinals », « NBA Cup Championship »), mais ne donne
+   pas les groupes : on les retrouve (dans un groupe de 5, chacun joue les 4 autres : les matchs de groupe forment 6 paquets).
+   Sans spoil : un résultat ne compte que s'il est d'une nuit d'avant la dernière, ou révélé (même ensemble que les nuits :
+   un match révélé sur la page de la nuit l'est aussi ici), ou avec « toujours montrer ». Le tableau ne se remplit qu'avec ce qui
+   compte : tant qu'un match de groupe est caché, les qualifiés restent « ? ». Onglet visible jusqu'au lendemain de la finale. */
+const CUP = { year: 2026, dates: ["20261030", "20261106", "20261113", "20261120", "20261124", "20261125", "20261127", "20261204", "20261205", "20261208", "20261211"], until: "20261212" };
+const EAST = new Set([1, 2, 4, 5, 8, 11, 14, 15, 17, 18, 19, 20, 27, 28, 30]);
+const cupOn = () => nyKey(new Date()) <= CUP.until || QS.get("vue") === "cup";
+function cupShown(g) { // ce résultat peut-il être montré ?
+  return g.state === "post" && (settings.showAll || state.revealed.has(g.id) || nyKey(g.date) < defaultNight());
+}
+async function renderCup() {
+  const tok = ++state.tok;
+  const main = $("#main");
+  setURL();
+  main.innerHTML = `<div class="skel"><div class="ph" style="height:260px"></div><div class="ph" style="height:420px"></div></div>`;
+  let all;
+  try { all = (await Promise.all(CUP.dates.map(k => scoreboard(k).catch(() => [])))).flat().filter(g => g.cup); }
+  catch (e) { all = []; }
+  if (tok !== state.tok) return;
+  if (!all.length) { main.innerHTML = `<p class="loadmsg">La NBA Cup n'est pas encore disponible chez ESPN. Réessaie dans un instant.</p>`; return; }
+  const grp = all.filter(g => g.cup === "group"), ko = all.filter(g => g.cup !== "group");
+  // les groupes : composantes du graphe des matchs de groupe
+  const par = new Map(), find = x => { while (par.get(x) !== x) x = par.get(x); return x; };
+  for (const g of grp) for (const t of [g.teams.away.id, g.teams.home.id]) if (!par.has(t)) par.set(t, t);
+  for (const g of grp) par.set(find(g.teams.away.id), find(g.teams.home.id));
+  const groups = new Map();
+  for (const t of par.keys()) { const r = find(t); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(t); }
+  const groupsDone = grp.every(cupShown);
+  // les qualifiés : les équipes des quarts (connues seulement quand toute la phase de groupes peut être montrée)
+  const qfs = ko.filter(g => g.cup === "qf").sort((a, b) => a.date - b.date);
+  const qual = new Set(groupsDone ? qfs.flatMap(g => [g.teams.away.id, g.teams.home.id]).filter(id => TEAMS[id]) : []);
+  const table = ids => {
+    const R = new Map(ids.map(id => [id, { id, w: 0, l: 0, pf: 0, pa: 0, gp: 0 }]));
+    for (const g of grp) if (cupShown(g) && R.has(g.teams.home.id)) {
+      const a = R.get(g.teams.away.id), h = R.get(g.teams.home.id), as = g.teams.away.score, hs = g.teams.home.score;
+      a.gp++; h.gp++; a.pf += as; a.pa += hs; h.pf += hs; h.pa += as;
+      if (as > hs) { a.w++; h.l++; } else { h.w++; a.l++; }
+    }
+    const h2h = (x, y) => { const g = grp.find(g => cupShown(g) && [g.teams.away.id, g.teams.home.id].includes(x.id) && [g.teams.away.id, g.teams.home.id].includes(y.id));
+      if (!g) return 0; const xw = (g.teams.away.id === x.id) === (g.teams.away.score > g.teams.home.score); return xw ? -1 : 1; };
+    return [...R.values()].sort((x, y) => y.w - x.w || (x.w === y.w && h2h(x, y)) || (y.pf - y.pa) - (x.pf - x.pa) || y.pf - x.pf);
+  };
+  // le vrai classement d'un groupe départage aussi les égalités à trois : les qualifiés (vainqueur, puis repêché) passent devant
+  const ranked = ids => { const r = table(ids); return r.filter(x => qual.has(x.id)).concat(r.filter(x => !qual.has(x.id))); };
+  const gl = [...groups.values()].map(ids => ({ east: EAST.has(ids[0]), rows: ranked(ids), key: Math.min(...ids) }))
+    .sort((a, b) => (b.east - a.east) || a.key - b.key);
+  let ne = 0, nw = 0;
+  gl.forEach(G => { G.name = `Groupe ${G.east ? "Est" : "Ouest"} ${G.east ? ++ne : ++nw}`; });
+  const left = grp.filter(g => g.state !== "post").length, hiddenG = grp.filter(g => g.state === "post" && !cupShown(g)).length;
+  const groupHTML = G => `<div class="cgrp"><div class="cgh">${G.name}</div>
+    <div class="cgr head"><span></span><span></span><span>Équipe</span><span class="n">V-D</span><span class="n">Diff.</span><span></span></div>
+    ${G.rows.map((r, i) => { const t = team(r.id), d = r.pf - r.pa, q = qual.has(r.id);
+      const tag = !q ? "" : G.rows.findIndex(x => qual.has(x.id)) === i ? `<span class="ctag">Qualifié</span>` : `<span class="ctag wc">Repêché</span>`;
+      return `<div class="cgr${q ? " q" : ""}${r.id === settings.fav ? " favrow" : ""}" style="--tc:${t.color}"><span class="rk">${r.gp ? i + 1 : "–"}</span>${logoHTML(t)}<span class="tn">${t.name}</span>
+        <span class="n">${r.w}-${r.l}</span><span class="n">${r.gp ? (d > 0 ? "+" : "") + d : "–"}</span>${tag}</div>`; }).join("")}</div>`;
+  // le tableau final : les vainqueurs ne montent que si le match peut être montré
+  const winnerOf = g => g && cupShown(g) ? (g.teams.away.score > g.teams.home.score ? g.teams.away.id : g.teams.home.id) : null;
+  const confOf = g => EAST.has(g.teams.home.id) || EAST.has(g.teams.away.id);
+  const qfE = qfs.filter(g => groupsDone && confOf(g)), qfW = qfs.filter(g => groupsDone && !confOf(g));
+  const sfs = ko.filter(g => g.cup === "sf").sort((a, b) => a.date - b.date), fin = ko.find(g => g.cup === "final");
+  const sfFor = (pair) => { // la demi-finale qui oppose les vainqueurs de ces deux quarts (vrais noms seulement s'ils sont montrables)
+    const w = pair.map(winnerOf);
+    const real = sfs.find(g => w.every(id => id && [g.teams.away.id, g.teams.home.id].includes(id)));
+    return { g: real || null, ids: w, date: (real || sfs[0] || {}).date };
+  };
+  const sfE = sfFor(qfE.length === 2 ? qfE : [null, null]), sfW = sfFor(qfW.length === 2 ? qfW : [null, null]);
+  const fw = [sfE.g && winnerOf(sfE.g), sfW.g && winnerOf(sfW.g)];
+  const realF = fin && fw.every(id => id && [fin.teams.away.id, fin.teams.home.id].includes(id)) ? fin : null;
+  const champ = realF && winnerOf(realF);
+  const when = d => d ? `${cap1(FR({ weekday: "short", day: "numeric", month: "short" }).format(d)).replace(/\./g, "")} · ${hourLocal(d)}` : "";
+  const slot = (g, id, side) => { // une rangée d'équipe dans une plaque du tableau
+    if (!id) return `<div class="cmr unk"><span class="lg noimg"><span>?</span></span><b>À venir</b><span class="sc"></span></div>`;
+    const t = team(id), shown = g && cupShown(g), hid = g && g.state === "post" && !shown;
+    const sc = !g || g.state === "pre" ? "" : hid ? `<span class="led hid cupled" data-cg="${g.id}" role="button" tabindex="0"><span class="v">??</span></span>`
+      : g.state === "live" ? `<span class="led live"><span class="v">${g.teams[side].score}</span></span>` : `<span class="led"><span class="v">${g.teams[side].score}</span></span>`;
+    const win = shown && winnerOf(g) === id, lose = shown && winnerOf(g) !== id;
+    return `<div class="cmr${win ? " win" : ""}${lose ? " lose" : ""}" style="--tc:${t.color}">${logoHTML(t)}<b title="${t.city} ${t.name}">${t.name}</b>${sc}</div>`;
+  };
+  const plate = (g, ids, label, date, big) => {
+    const st = !g ? (date ? when(date) : "") : g.state === "pre" ? when(g.date) : g.state === "live" ? `<span class="lv">● En direct</span>` : cupShown(g) ? "Final" : "Terminé";
+    const sideOf = id => g && g.teams.away.id === id ? "away" : "home";
+    return `<div class="cm${big ? " big" : ""}"><div class="cmh"><span>${label}</span><span>${st}</span></div>
+      ${slot(g, ids[0], ids[0] ? sideOf(ids[0]) : "away")}${slot(g, ids[1], ids[1] ? sideOf(ids[1]) : "home")}</div>`;
+  };
+  const qfPlate = g => plate(g, [g.teams.away.id, g.teams.home.id], "Quart de finale");
+  const blankQF = d => plate(null, [null, null], "Quart de finale", d);
+  const colQF = (L) => L.length === 2 ? L.map(qfPlate).join("") : blankQF(qfs[0] && qfs[0].date) + blankQF(qfs[2] && qfs[2].date);
+  const sfPlate = (S) => plate(S.g, S.g ? [S.g.teams.away.id, S.g.teams.home.id] : S.ids, "Demi-finale", S.date);
+  const fPlate = plate(realF, realF ? [realF.teams.away.id, realF.teams.home.id] : fw.map(x => x || null), "Finale", fin && fin.date, true);
+  const trophy = `<svg class="ctro" viewBox="0 0 64 64" aria-hidden="true"><path d="M20 8h24v14c0 8-5 14-12 14s-12-6-12-14V8Z"/><path d="M20 12h-8c0 9 4 14 10 14M44 12h8c0 9-4 14-10 14" fill="none"/><path d="M28 36h8v8h-8zM22 50h20v6H22z"/></svg>`;
+  const champHTML = champ ? (() => { const t = team(champ); return `<div class="cchamp" style="--tc:${t.color}">${logoHTML(t)}<span><small>Vainqueur de la NBA Cup</small><b>${t.city} ${t.name}</b></span></div>`; })() : "";
+  const hidKO = ko.filter(g => g.state === "post" && !cupShown(g)).length;
+  const toReveal = hiddenG + hidKO;
+  const phase = left ? `Phase de groupes · ${plural(left, "match")} à jouer` : !groupsDone ? "Phase de groupes terminée · résultats de la dernière nuit cachés"
+    : champ ? "La Coupe est jouée" : "Phase finale";
+  main.innerHTML = `<div class="cuptop"><p><b>${phase}</b><span>6 groupes de 5 · le 1er de chaque groupe et le meilleur 2e de chaque conférence vont en quarts · finale le ${fin ? FR({ day: "numeric", month: "long" }).format(fin.date) : "en décembre"}${fin && fin.city ? " à " + fin.city : ""}</span></p>
+      ${toReveal ? `<button class="btn nightb big" id="cuprev"><svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la Coupe</button>` : ""}</div>
+    ${sect("Le tableau final")}
+    <div class="cbr">
+      <div class="cbc"><div class="cbt">Est</div>${colQF(qfE)}</div>
+      <div class="cbc mid1">${sfPlate(sfE)}</div>
+      <div class="cbc fin">${trophy}${fPlate}${champHTML}</div>
+      <div class="cbc mid1">${sfPlate(sfW)}</div>
+      <div class="cbc"><div class="cbt">Ouest</div>${colQF(qfW)}</div>
+    </div>
+    ${sect("La phase de groupes")}
+    <div class="cgrid">${gl.map(groupHTML).join("")}</div>`;
+  const rv = $("#cuprev");
+  if (rv) rv.addEventListener("click", () => { all.forEach(g => { if (g.state === "post") state.revealed.add(g.id); }); renderCup(); });
+}
+document.addEventListener("click", e => { // un afficheur « ?? » du tableau : ce match seulement
+  const l = e.target.closest(".cupled"); if (!l) return;
+  state.revealed.add(l.dataset.cg); renderCup();
+});
+
 /* ---------- réglages ---------- */
 const setovl = $("#setovl"), setsheet = $("#setsheet");
 function openSettings() {
@@ -1606,9 +1726,10 @@ function setURL() {
 }
 function go(vue) {
   state.vue = vue;
-  track("/" + vue, { nuit: "Les nuits", programme: "Le programme", classement: "Le classement" }[vue] || vue);
+  track("/" + vue, { nuit: "Les nuits", cup: "La NBA Cup", programme: "Le programme", classement: "Le classement" }[vue] || vue);
   $$(".tab[data-vue]").forEach(t => t.classList.toggle("on", t.dataset.vue === vue));
   if (vue === "nuit") renderNight();
+  else if (vue === "cup") renderCup();
   else if (vue === "classement") renderStandings(); else renderProgramme();
   const m = $("#main"); // petite entrée en scène à chaque changement d'onglet
   if (m && !RM) { m.style.animation = "none"; void m.offsetWidth; m.style.animation = ""; }
@@ -1787,5 +1908,6 @@ function renderAdmin() {
 function startSite() {
   trackVisitor();
   const vue = QS.get("vue");
-  go(vue === "programme" ? "programme" : "nuit");
+  if (cupOn()) $$(".tab.cuptab").forEach(t => { t.hidden = false; });
+  go(vue === "programme" || vue === "classement" || (vue === "cup" && cupOn()) ? vue : "nuit");
 }

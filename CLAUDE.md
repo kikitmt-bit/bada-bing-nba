@@ -325,6 +325,10 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     groupes). Programme et classement ouvrent sur le titre de rubrique commun (`.sect.top` : « Les prochaines nuits (heure de Paris) »,
     « La hiérarchie » + coupure sans spoil à droite `.scut`). Classement en sous-parties Play-offs / Play-in / Hors course (`.spart`)
     au lieu d'une légende ; noms de conférence gardés en blanc (l'ambre est pour les vidéos et les LED).
+  - **Classement (28/11, fin)** : plus de « La hiérarchie » ni d'interrupteur ; « Conférence Ouest / Est » = titres de rubrique ;
+    plus de colonne « Équipe » : V · D · % · Écart sur la ligne « Play-offs » (`.srow.spart`, même grille que les lignes). Coupure sans
+    spoil AUTOMATIQUE : la dernière nuit compte dès qu'elle est révélée (tous ses matchs dans `state.revealed`) ou avec « toujours
+    montrer » ; sinon petite note grise en bas (`.standnote`) « Sans les résultats de la nuit du 27 → 28 : révèle cette nuit… ».
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

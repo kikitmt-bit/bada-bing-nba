@@ -1788,3 +1788,16 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .spart.pi{color:#e7a33c}.spart.pi::before{background:#e7a33c}
 .spart.out{color:var(--ink3)}
 @media (max-width:600px){ .tvleg span{white-space:normal;align-items:flex-start} }
+/* classement (28/11, fin) : nom de conférence = titre de rubrique, en-têtes V · D · % · Écart sur la ligne « Play-offs » */
+.standwrap{margin-top:0}
+.conf .sect{margin-top:26px;margin-bottom:12px}
+.srow.spart{background:none;height:auto;margin:16px 0 8px;animation:none;box-shadow:none}
+.srow.spart.po{margin-top:0}
+.srow.spart .pl{grid-column:1/4;display:flex;align-items:center;gap:10px}
+.srow.spart .pl::before{content:"";width:12px;height:12px;transform:skewX(-14deg);background:#43c47a}
+.srow.spart::before{display:none}
+.srow.spart span.n{font:800 12px var(--disp);letter-spacing:.22em;color:var(--ink3)}
+.srow.spart span.n.gb{letter-spacing:.12em}
+.standnote{margin:18px 0 0;color:var(--ink3);font-size:13px}
+.srow.spart{display:grid;gap:8px;align-items:center}
+.conf .sect h2{font:800 17px var(--disp);letter-spacing:.26em;margin:0;color:var(--ink2)}

@@ -318,6 +318,8 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     nuits), ou « toujours montrer » ; qualifiés « ? » tant qu'un match de groupe est caché ; un vainqueur ne monte que si son match est
     montrable ; « Révéler la Coupe » (bouton de nuit) ou clic sur un « ?? ». Tableau : Est à gauche, Ouest à droite, finale + trophée au
     centre, vainqueur en plaque ; demies = vainqueurs des quarts de la même conférence. cdn.nba.com refuse (403) : ESPN seulement.
+    Trophée = la vraie coupe (image donnée par Kiki, fond blanc retiré → `docs/nba-cup.png`, 196×480), liseré doré + lueur
+    (`.ctro`, drop-shadow ; sans la lueur sous Firefox) pour que le socle noir se détache du fond de nuit.
     Banc d'essai : faux ESPN construit depuis les vrais résultats (Playwright, `clock.setFixedTime` pour simuler la fin de la Coupe).
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →

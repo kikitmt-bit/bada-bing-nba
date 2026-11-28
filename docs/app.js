@@ -262,7 +262,7 @@ function watchScore(g) {
   const n = noteOf(g); if (n !== null) return n;
   const C = typeof Note !== "undefined" ? Note.CUT : [0, 1.3, 3.0, 5.0, 7.2], l = watchLevel(g);
   const fin = g.state === "pre" ? afficheOf(g).s * .01 : 0; // entre deux affiches du même niveau : la plus hype d'abord
-  return fin + l === 0 ? C[0] - .5 : l >= 5 ? C[4] + .5 : (C[l - 1] + C[l]) / 2;
+  return fin + (l === 0 ? C[0] - .5 : l >= 5 ? C[4] + .5 : (C[l - 1] + C[l]) / 2);
 }
 function watchLevel(g) {
   const nt = noteOf(g); if (nt !== null) return Note.level(nt);
@@ -402,7 +402,8 @@ function keyFacts(g) {
 }
 function kfHTML(g) {
   const fs = keyFacts(g);
-  return fs.length ? `<div class="kfs">${fs.map(f => `<div class="kf"><b>${f.t}</b><span>${f.x}</span></div>`).join("")}</div>` : "";
+  if (g.state === "post" && state.revealed.has(g.id) && MF.has(g.id)) return MF.get(g.id); // révélé : ce qui s'est passé
+  return `<div class="kfs">${fs.map(f => `<div class="kf"><b>${f.t}</b><span>${f.x}</span></div>`).join("")}</div>`;
 }
 
 /* ---------- vidéos : liste tenue par le robot GitHub (branche data), lecteur intégré ---------- */
@@ -668,6 +669,7 @@ function finishReveal(g, fx) {
   for (const st of $$(`[data-st="${g.id}"]`)) st.textContent = statusText(g, true);
   for (const r of $$(`[data-rec^="${g.id}:"]`)) { const s = r.dataset.rec.split(":")[1]; r.textContent = recHTML(g.teams[s], g); }
   const hint = $(`[data-hint="${g.id}"]`); if (hint) hint.style.visibility = "hidden";
+  setFacts(g);
   if (fx && !RM) {
     if (wside) for (const r of $$(`[data-row="${g.id}:${wside}"]`)) { r.classList.remove("won"); void r.offsetWidth; r.classList.add("won"); }
     const lvl = watchLevel(g);
@@ -713,8 +715,9 @@ function reveal(id, instant, quick) {
   setTimeout(tick, 260);
 }
 function updateRevealAll() {
-  const b = $("#revall"); if (!b) return;
   const left = state.games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).length;
+  if (!left && state.games.some(g => g.state === "post")) revealEss();
+  const b = $("#revall"); if (!b) return;
   if (!left) { b.disabled = true; b.innerHTML = "✓ Nuit révélée"; }
 }
 
@@ -819,11 +822,8 @@ async function renderNight(soft) {
     ${hero ? heroHTML(hero.g, hero.lvl) : ""}
     ${rest.length ? `<div class="sect"><h2>${hero ? "Les autres matchs" : "Les matchs de la nuit"}</h2><i></i></div>
     <div class="bugs">${rest.map((g, i) => cardHTML(g, i)).join("")}</div>` : ""}
-    ${nPost >= 2 ? `<section class="stage" id="stage">
-      <button class="teaser" id="mvpbtn"><span><span class="q">L'essentiel <em>de la nuit</em></span>
-        <small>Tout ce qu'il faut retenir, en une minute · contient les résultats</small></span>
-        <span class="btn amber big">Voir l'essentiel</span></button>
-      <div id="mvpbody"></div></section>` : ""}
+    ${nPost >= 2 ? `<section class="stage" id="stage"><div id="mvpbody"><div class="ess hide">${essTop("")}
+      <div class="skel" style="padding:0 28px"><div class="ph" style="height:220px"></div></div></div></div></section>` : ""}
     <div id="nextstrip"></div>`;
 
   for (const id of state.revealed) reveal(id, true);
@@ -838,8 +838,7 @@ async function renderNight(soft) {
     // en moins d'une seconde (petit décalage de 60 ms d'un match à l'autre), sans course quart-temps par quart-temps
     order.forEach((g, i) => setTimeout(() => reveal(g.id, false, true), RM ? 0 : i * 60));
   });
-  const mb = $("#mvpbtn");
-  if (mb) mb.addEventListener("click", () => loadMVP(mb));
+  if (nPost >= 2) loadEss();
   nextStrip();
   renderChips();
   scheduleRefresh();
@@ -861,61 +860,121 @@ const le = t => (SING.has(t.name) ? "le " : "les ") + t.name;
 const du = t => (SING.has(t.name) ? "du " : "des ") + t.name;
 const au = t => (SING.has(t.name) ? "au " : "aux ") + t.name;
 const cap1 = x => x[0].toUpperCase() + x.slice(1);
-function nightFacts(posts, sums, extra) {
-  const F = [...(extra || [])];
-  posts.forEach((g, i) => {
-    const s = sums[i]; if (!s) return;
-    const A = g.teams.away, H = g.teams.home, aw = A.score > H.score, W = aw ? A : H, L = aw ? H : A, m = Math.abs(A.score - H.score);
-    const base = { g, aw };
-    // la surprise : le moins bon bilan d'avant-match l'emporte nettement
-    const ra = moins(A.record, aw), rh = moins(H.record, !aw), rw = aw ? ra : rh, rl = aw ? rh : ra;
-    if (Math.min(played(ra), played(rh)) >= 6 && winpct(rl) - winpct(rw) >= .2)
-      F.push({ ...base, p: 7 + (winpct(rl) - winpct(rw)) * 6, k: "surprise", tag: "La surprise", t: `Exploit ${du(W)} face ${au(L)}`, x: `Bilans avant le match : ${W.tri} ${rw} · ${L.tri} ${rl}` });
-    if (s.ot) F.push({ ...base, p: 9, k: "fin", tag: "Prolongation", t: `${A.name} – ${H.name} en prolongation`, x: `Il a fallu jouer ${s.quarters ? s.quarters.home.q.length - 4 : 1} prolongation${s.quarters && s.quarters.home.q.length > 5 ? "s" : ""}` });
-    else if (m <= 3) F.push({ ...base, p: 8, k: "fin", tag: "Le thriller", t: `Décidé à ${plural(m, "point")}`, x: `${A.name} – ${H.name}, jusqu'au bout` });
-    // la remontée : le vainqueur a été mené de 15 points ou plus (écart après chaque panier, + = domicile devant)
-    if (s.series && s.series.length) {
-      const dv = s.series.map(p => Array.isArray(p) ? p[1] : p);
-      const deficit = aw ? Math.max(...dv) : -Math.min(...dv);
-      if (deficit >= 15) F.push({ ...base, p: 7 + deficit / 10, k: "remontee", tag: "La remontée", t: `Remontée de ${deficit} points pour ${le(W)}`, x: `${deficit} points de retard au pire moment` });
-    }
-    if (m >= 25) F.push({ ...base, p: 4 + m / 20, k: "raclee", tag: "La démonstration", t: `Victoire ${du(W)} avec ${m} points d'écart`, x: `${cap1(le(L))} jamais dans le match` });
-    // les perfs individuelles
-    for (const pl of s.players || []) {
-      const t3 = +((pl.tp || "").split("-")[0]) || 0, nom = pl.full || pl.name;
-      if (pl.pts >= 40) F.push({ ...base, p: 9 + (pl.pts - 40) / 4, k: "perf", tag: "La perf", t: `${pl.pts} points pour ${nom}`, x: `${pl.reb} reb · ${pl.ast} pd · ${pl.fg} au tir`, pl });
-      else if (pl.pts >= 10 && pl.reb >= 10 && pl.ast >= 10) F.push({ ...base, p: 8, k: "perf", tag: "Triple-double", t: `Triple-double de ${nom}`, x: `${pl.pts} pts · ${pl.reb} reb · ${pl.ast} pd`, pl });
-      else if (t3 >= 8) F.push({ ...base, p: 7, k: "perf", tag: "Adresse folle", t: `${t3} paniers à 3 points pour ${nom}`, x: `${pl.pts} pts · ${pl.tp} à 3 pts`, pl });
-    }
-  });
-  F.sort((a, b) => b.p - a.p);
-  const out = [], perGame = new Map(), perKind = new Map();
-  for (const f of F) { // de la variété : 2 faits max par match et par type
-    if ((perGame.get(f.g.id) || 0) >= 2 || (perKind.get(f.k) || 0) >= 2) continue;
-    out.push(f); perGame.set(f.g.id, (perGame.get(f.g.id) || 0) + 1); perKind.set(f.k, (perKind.get(f.k) || 0) + 1);
-    if (out.length === 6) break;
+function gameFacts(g, s) { // les faits d'un match terminé (c = le texte court pour la tuile du match)
+  const F = [];
+  const A = g.teams.away, H = g.teams.home, aw = A.score > H.score, W = aw ? A : H, L = aw ? H : A, m = Math.abs(A.score - H.score);
+  const base = { g, aw };
+  // la surprise : le moins bon bilan d'avant-match l'emporte nettement
+  const ra = moins(A.record, aw), rh = moins(H.record, !aw), rw = aw ? ra : rh, rl = aw ? rh : ra;
+  if (Math.min(played(ra), played(rh)) >= 6 && winpct(rl) - winpct(rw) >= .2)
+    F.push({ ...base, p: 7 + (winpct(rl) - winpct(rw)) * 6, k: "surprise", tag: "La surprise", t: `Exploit ${du(W)} face ${au(L)}`, c: `Exploit ${du(W)} (${rw} avant le match, contre ${rl})` });
+  const nOt = s.quarters ? s.quarters.home.q.length - 4 : 1;
+  if (s.ot) F.push({ ...base, p: 9, k: "fin", tag: "Prolongation", t: `${A.name} – ${H.name} en prolongation`, c: nOt > 1 ? `${nOt} prolongations pour se départager` : "Il a fallu une prolongation" });
+  else if (m <= 3) F.push({ ...base, p: 8, k: "fin", tag: "Le thriller", t: `Décidé à ${plural(m, "point")}`, c: `Décidé à ${plural(m, "point")}, jusqu'au bout` });
+  // la remontée : le vainqueur a été mené de 15 points ou plus (écart après chaque panier, + = domicile devant)
+  if (s.series && s.series.length) {
+    const dv = s.series.map(p => Array.isArray(p) ? p[1] : p);
+    const deficit = aw ? Math.max(...dv) : -Math.min(...dv);
+    if (deficit >= 15) F.push({ ...base, p: 7 + deficit / 10, k: "remontee", tag: "La remontée", t: `Remontée de ${deficit} points pour ${le(W)}`, c: `${cap1(le(W))} ${SING.has(W.name) ? "revient" : "reviennent"} de ${deficit} points` });
   }
+  if (m >= 25) F.push({ ...base, p: 4 + m / 20, k: "raclee", tag: "La démonstration", t: `Victoire ${du(W)} avec ${m} points d'écart`, c: `${m} points d'écart, ${le(L)} jamais dans le match` });
+  // les perfs individuelles
+  for (const pl of s.players || []) {
+    const t3 = +((pl.tp || "").split("-")[0]) || 0, nom = pl.full || pl.name;
+    if (pl.pts >= 40) F.push({ ...base, p: 9 + (pl.pts - 40) / 4, k: "perf", tag: "La perf", t: `${pl.pts} points pour ${nom}`, c: `${nom} : ${pl.pts} pts · ${pl.reb} reb · ${pl.ast} pd`, pl });
+    else if (pl.pts >= 10 && pl.reb >= 10 && pl.ast >= 10) F.push({ ...base, p: 8, k: "perf", tag: "Triple-double", t: `Triple-double de ${nom}`, c: `${nom} : ${pl.pts} pts · ${pl.reb} reb · ${pl.ast} pd`, pl });
+    else if (t3 >= 8) F.push({ ...base, p: 7, k: "perf", tag: "Adresse folle", t: `${t3} paniers à 3 points pour ${nom}`, c: `${nom} : ${t3} paniers à 3 pts, ${pl.pts} pts`, pl });
+  }
+  return F;
+}
+/* les 3 faits d'un match, qui remplacent ses 3 infos d'avant-match une fois le score révélé (28/11, demande de Kiki ;
+   remplace la rubrique « Les faits marquants » de l'essentiel) */
+function matchFacts(g, s, extra) {
+  const A = g.teams.away, H = g.teams.home, aw = A.score > H.score, W = aw ? A : H, L = aw ? H : A, m = Math.abs(A.score - H.score);
+  const F = gameFacts(g, s).concat((extra || []).filter(f => f.g.id === g.id));
+  const named = new Set(F.filter(f => f.pl).map(f => f.pl.aid));
+  const best = tid => s.players.filter(p => p.tid === tid).sort((a, b) => gscore(b) - gscore(a))[0];
+  const line = p => `${p.full || p.name} : ${p.pts} pts · ${p.reb} reb · ${p.ast} pd`;
+  const bw = best(W.id), bl = best(L.id);
+  if (bw && !named.has(bw.aid)) F.push({ p: 5, k: "patron", tag: "Le patron", c: line(bw) });
+  const la = A.ls || [], lh = H.ls || []; // le quart-temps qui a fait la différence
+  let bq = -1, bd = 0;
+  for (let q = 0; q < Math.min(la.length, lh.length); q++) { const d = aw ? la[q] - lh[q] : lh[q] - la[q]; if (d > bd) { bd = d; bq = q; } }
+  if (bq >= 0 && bd >= 7) F.push({ p: 4.5, k: "tournant", tag: "Le tournant",
+    c: `${bq >= 4 ? "La prolongation" : (bq === 0 ? "1er" : bq + 1 + "e") + " quart-temps"} : ${Math.max(la[bq], lh[bq])}-${Math.min(la[bq], lh[bq])} pour ${le(W)}` });
+  if (bl && !named.has(bl.aid)) F.push({ p: 3, k: "enface", tag: "En face", c: line(bl) });
+  if (!F.some(f => f.k === "fin" || f.k === "raclee"))
+    F.push({ p: 2, k: "ecart", tag: m >= 12 ? "Sans trembler" : "La victoire", c: `${cap1(le(W))} ${SING.has(W.name) ? "s'impose" : "s'imposent"} de ${plural(m, "point")}` });
+  F.sort((a, b) => b.p - a.p);
+  const out = [], kinds = new Map();
+  for (const f of F) { if ((kinds.get(f.k) || 0) >= (f.k === "perf" ? 2 : 1)) continue; kinds.set(f.k, (kinds.get(f.k) || 0) + 1); out.push(f); if (out.length === 3) break; }
   return out;
 }
-function factHTML(f, i) {
-  const A = f.g.teams.away, H = f.g.teams.home;
-  const face = f.pl && /^\d+$/.test(f.pl.aid) && !DEMO ? `<img class="fph" src="https://a.espncdn.com/i/headshots/nba/players/full/${f.pl.aid}.png" alt="" loading="lazy" onerror="this.remove()">` : "";
-  return `<article class="fact ${face ? "has-ph" : ""}" style="--ca:${A.color};--cb:${H.color};animation-delay:${i * 70}ms">${face}
-    <span class="ftag">${f.tag}</span><h4>${f.t}</h4><p>${f.x}</p>
-    <div class="fsc">${logoHTML(A)}<b class="${f.aw ? "w" : ""}">${A.score}</b><i>–</i><b class="${f.aw ? "" : "w"}">${H.score}</b>${logoHTML(H)}</div></article>`;
+const MF = new Map(); // id du match -> les 3 faits (HTML), une fois calculés
+async function setFacts(g) {
+  if (g.state !== "post") return;
+  if (!MF.has(g.id)) {
+    let sm = null; try { sm = await cachedSummary(g.id); } catch (e) { /* ESPN muet : on garde l'avant-match */ }
+    if (!sm || !sm.players.length) return;
+    const ex = await nightExtras().catch(() => []);
+    MF.set(g.id, `<div class="kfs post">${matchFacts(g, sm, ex).map(f => `<div class="kf"><b>${f.tag}</b><span>${f.c || f.t}</span></div>`).join("")}</div>`);
+  }
+  if (!state.revealed.has(g.id)) return;
+  for (const el of $$(`[data-card="${g.id}"] .kfs`)) el.outerHTML = MF.get(g.id);
+}
+// les blessés sortis pendant la nuit et ce qui a bougé au classement (rangés ensuite avec le match concerné)
+let EXN = null, EXK = "";
+function nightExtras() {
+  const posts = state.games.filter(g => g.state === "post"), key = state.night + ":" + posts.length;
+  if (EXN && EXK === key) return EXN;
+  EXK = key;
+  return (EXN = (async () => {
+    const sums = await Promise.all(posts.map(g => cachedSummary(g.id).catch(() => null)));
+    const isLast = state.night === defaultNight();
+    const [moves] = await Promise.all([isLast && !DEMO ? standingMoves(posts).catch(() => []) : [], posts.some(g => AVANT[g.id]) ? loadInjuries() : null]);
+    const extra = [];
+    const vb = (t, one, many) => SING.has(t.name) ? one : many;
+    if (INJ) posts.forEach((g, i) => {
+      const ph = AVANT[g.id], sm = sums[i]; if (!ph || !sm) return;
+      for (const [side, T] of [["a", g.teams.away], ["h", g.teams.home]]) {
+        const before = new Set(((ph[side] && ph[side].out) || []).map(o => o.n));
+        for (const o of INJ[T.id] || []) {
+          if (before.has(o.n) || !/out|day|question/i.test(o.st)) continue;
+          // seulement un joueur qui compte : titulaire, ou vraies minutes / vrais points ce soir-là (pas le bout de banc)
+          const pl = sm.players.find(p => p.tid === T.id && (p.name === o.n || p.full === o.n));
+          const mins = pl ? parseInt(pl.min, 10) || 0 : 0;
+          if (!pl || !(pl.starter || mins >= 18 || pl.pts >= 10)) continue;
+          const out = /^out$/i.test(o.st);
+          extra.push({ g, p: 6 + (pl.starter ? 1 : 0) + (out ? .5 : 0), k: "blesse", tag: "Sorti blessé",
+            c: `${pl.full || pl.name} · ${o.ty ? blessFr(o.ty) : "blessure"} · ${out ? "forfait" : "incertain"} pour la suite` });
+        }
+      }
+    });
+    for (const m of moves) {
+      const T = team(m.id), g = posts.find(x => x.teams.away.id === m.id || x.teams.home.id === m.id); if (!g) continue;
+      const up = m.a < m.b, n = Math.abs(m.a - m.b);
+      const t = m.crossed === "prend la tête" ? `${cap1(le(T))} ${vb(T, "prend", "prennent")} la tête de l'${m.conf}`
+        : m.crossed ? `${cap1(le(T))} ${m.crossed.startsWith("entre") ? vb(T, "entre", "entrent") : vb(T, "sort", "sortent")} ${m.crossed.replace(/^(entre|sort) /, "")}`
+        : `${cap1(le(T))} ${up ? vb(T, "gagne", "gagnent") : vb(T, "perd", "perdent")} ${plural(n, "place")}`;
+      extra.push({ g, p: 4 + m.sc / 15, k: "classement", tag: "Au classement", c: `${t} (${m.b + 1}e → ${m.a + 1}e à l'${m.conf})` });
+    }
+    return extra;
+  })());
 }
 // les Français : lieu de naissance des effectifs ESPN (gardé une semaine sur l'appareil)
-async function frenchIds(teamIds) {
-  const c = store.get("fr", null), fresh = c && Date.now() - c.t < 7 * 864e5 ? c : { t: Date.now(), teams: {} };
+async function frenchPlayers(teamIds) { // id -> { n: nom, tid: équipe }
+  const c = store.get("fr2", null), fresh = c && Date.now() - c.t < 7 * 864e5 ? c : { t: Date.now(), teams: {} };
   const miss = teamIds.filter(id => !(id in fresh.teams));
   await Promise.all(miss.map(async id => {
     try {
       const j = await fetchJSON(API + "teams/" + id + "/roster");
-      fresh.teams[id] = (j.athletes || []).filter(a => /france/i.test((a.birthPlace && a.birthPlace.country) || "") || /france|french/i.test(a.citizenship || "")).map(a => String(a.id));
+      fresh.teams[id] = (j.athletes || []).filter(a => /france/i.test((a.birthPlace && a.birthPlace.country) || "") || /france|french/i.test(a.citizenship || "")).map(a => ({ id: String(a.id), n: a.displayName || a.fullName || "" }));
     } catch (e) { /* tant pis pour cette équipe */ }
   }));
-  if (miss.length) store.set("fr", fresh);
-  return new Set(Object.values(fresh.teams).flat());
+  if (miss.length) store.set("fr2", fresh);
+  const m = new Map();
+  for (const id of teamIds) for (const a of fresh.teams[id] || []) m.set(a.id, { n: a.n, tid: +id });
+  return m;
 }
 // le classement avant / après la nuit (seulement pour la dernière nuit jouée)
 async function standingMoves(posts) {
@@ -945,99 +1004,88 @@ async function standingMoves(posts) {
   // seulement ce qui compte : 2 places ou plus, ou un changement de zone (1re place, top 6, top 10)
   return moves.filter(m => m.crossed || Math.abs(m.a - m.b) >= 2).sort((x, y) => y.sc - x.sc).slice(0, 5);
 }
-async function loadMVP(btn) {
-  btn.disabled = true;
-  const lab = btn.querySelector(".btn"); if (lab) lab.textContent = "On fait le tour de la nuit…";
+/* L'essentiel (28/11, demande de Kiki) : plus de bouton « Voir l'essentiel », tout est déjà en place à l'écran, mais masqué
+   (« ? » à la place de la photo du MVP et des grosses perfs, « ?? » à la place des stats) jusqu'à « Révéler la nuit »
+   ou « Révéler l'essentiel ». Les Français sont connus d'avance (effectifs) : photo, nom et adversaire visibles, stats masquées.
+   x-h = ce qu'on voit avant, x-r = ce qu'on voit après (CSS .ess.hide). */
+const hr = (h, r) => `<x-h>${h}</x-h><x-r>${r}</x-r>`;
+function essTop(cta) {
+  return `<div class="ess-top"><span class="q">L'essentiel <em>de la nuit</em></span>
+    <small>Tout ce qu'il faut retenir, en une minute</small><button class="btn amber" id="essrev">Révéler l'essentiel</button></div>${cta}`;
+}
+function revealEss() {
+  const e = $("#mvpbody .ess"); state.essOpen = state.night;
+  if (!e || !e.classList.contains("hide") || !e.dataset.ready) return;
+  e.classList.remove("hide");
+  for (const v of e.querySelectorAll("[data-count]")) countUp(v, +v.dataset.count, 1100);
+}
+async function loadEss() {
+  const tok = state.tok, night = state.night;
   const posts = state.games.filter(g => g.state === "post");
   const sums = await Promise.all(posts.map(g => cachedSummary(g.id).catch(() => null)));
   await loadVideos(); // pour le bouton du top de la nuit (5 ou 10 actions selon la vidéo de la NBA)
+  const teamIds = [...new Set(posts.flatMap(g => [g.teams.away.id, g.teams.home.id]))];
+  const frMap = DEMO ? new Map() : await frenchPlayers(teamIds).catch(() => new Map());
+  if (tok !== state.tok || night !== state.night) return;
+  const body = $("#mvpbody"); if (!body) return;
   const all = [];
   sums.forEach((s, i) => { if (s) for (const p of s.players) all.push({ ...p, g: posts[i] }); });
-  if (!all.length) { if (lab) lab.textContent = "Indisponible pour l'instant"; btn.disabled = false; return; }
-  const isLast = state.night === defaultNight();
-  const [frIds, moves] = await Promise.all([
-    DEMO ? Promise.resolve(new Set()) : frenchIds([...new Set(posts.flatMap(g => [g.teams.away.id, g.teams.home.id]))]).catch(() => new Set()),
-    isLast && !DEMO ? standingMoves(posts).catch(() => []) : Promise.resolve([]),
-    posts.some(g => AVANT[g.id]) ? loadInjuries() : null]);
+  if (!all.length) { body.innerHTML = `<div class="ess">${essTop("")}<p class="essn pad">L'essentiel arrive dès que les feuilles de match sont disponibles.</p></div>`; return; }
   all.sort((a, b) => gscore(b) - gscore(a));
   // le MVP = le « Player of the Night » choisi par la NBA dans son résumé de la nuit (lu à l'écran par le téléphone),
   // sinon notre calcul (meilleur « game score »)
-  const N = NUIT[state.night], potn = nuitCh(state.night, "potn"), top = nuitCh(state.night, "top");
+  const N = NUIT[night], potn = nuitCh(night, "potn"), top = nuitCh(night, "top");
   const pi = potn && potn.aid ? all.findIndex(p => p.aid === potn.aid) : -1;
   if (pi > 0) all.unshift(all.splice(pi, 1)[0]);
   const mvp = all[0], t = team(mvp.tid);
-  // les extraits du résumé de la nuit, avec leur panneau (ses tirs qui s'ajoutent, les actions qui se dévoilent)
-  const mvpPlay = pi >= 0 && N ? `<button class="btn amber mvplay" data-nuitsolo="potn" data-night="${state.night}"><span class="pl">▶</span>Ses meilleures actions</button>` : "";
-  const topV = findTopPlays(state.night), topN = topV ? (/top 10/i.test(topV.t) ? 10 : 5) : top && top.plays && top.plays.length;
-  const topPlay = topV || (top && N) ? `<button class="btn amber" data-nuitsolo="top" data-night="${state.night}"><span class="pl">▶</span>Les ${topN ? topN + " " : ""}plus belles actions</button>` : "";
+  const mvpPlay = pi >= 0 && N ? `<button class="btn amber mvplay" data-nuitsolo="potn" data-night="${night}"><span class="pl">▶</span>Ses meilleures actions</button>` : "";
+  // les plus belles actions : une vraie plaque, plus un petit bouton perdu à droite (demande de Kiki)
+  const topV = findTopPlays(night), topN = topV ? (/top 10/i.test(topV.t) ? 10 : 5) : top && top.plays && top.plays.length;
+  const cta = topV || (top && N) ? `<button class="topcta" data-nuitsolo="top" data-night="${night}"><span class="tpl">▶</span>
+      <span class="tpt"><b>Les ${topN ? topN + " " : ""}plus belles actions <em>de la nuit</em></b><small>La sélection de la NBA, en vidéo</small></span>
+      <span class="tpn led"><span class="v">${topN ? "TOP " + topN : "TOP"}</span></span></button>` : "";
   const opp = mvp.g.teams.away.id === mvp.tid ? mvp.g.teams.home : mvp.g.teams.away;
-  const photo = /^\d+$/.test(mvp.aid) && !DEMO ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${mvp.aid}.png" alt="" onerror="this.remove()">` : "";
-  const stat = (v, l) => `<div class="stat"><span class="led"><span class="v" data-count="${v}">0</span></span><small>${l}</small></div>`;
-  const full = (mvp.full || mvp.name).trim(), cut = full.indexOf(" ");
-  const nameHTML = cut > 0 ? `<span>${full.slice(0, cut)}</span><span>${full.slice(cut + 1)}</span>` : `<span>${full}</span>`;
+  const face = (aid, lazy) => /^\d+$/.test(aid) && !DEMO ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${aid}.png" alt=""${lazy ? ' loading="lazy"' : ""} onerror="this.remove()">` : "";
+  const stat = (v, l) => `<div class="stat">${hr(`<span class="led off"><span class="v">??</span></span>`, `<span class="led"><span class="v" data-count="${v}">0</span></span>`)}<small>${l}</small></div>`;
+  const full = (mvp.full || mvp.name).trim(), sp = full.indexOf(" ");
+  const nameHTML = sp > 0 ? `<span>${full.slice(0, sp)}</span><span>${full.slice(sp + 1)}</span>` : `<span>${full}</span>`;
+  const qm = `<span class="qm">?</span>`;
   const mvpBlock = `<div class="mvpw"><div class="mvp">
-      <div class="card" style="--tc:${t.color}">${photo}${logoHTML(t)}</div>
+      <div class="card" style="--tc:${t.color}">${hr(qm, face(mvp.aid) + logoHTML(t))}</div>
       <div style="min-width:0">
-        <h3>${nameHTML}</h3>
-        <div class="sub">${t.city} ${t.name} · contre ${le(opp)}</div>
-        ${mvpPlay}
+        <h3>${hr(`<span>Le MVP de la nuit</span><span>? ? ?</span>`, nameHTML)}</h3>
+        <div class="sub">${hr("Qui a été le meilleur cette nuit ?", `${t.city} ${t.name} · contre ${le(opp)}`)}</div>
+        ${mvpPlay ? `<x-r>${mvpPlay}</x-r>` : ""}
         <div class="row">${stat(mvp.pts, "points")}${stat(mvp.reb, "rebonds")}${stat(mvp.ast, "passes")}${stat(mvp.blk || 0, "contres")}</div>
       </div></div>
     <div class="perfs"><span class="tag ghost">Les grosses perfs</span>${all.slice(1, 7).map((p, i) => {
       const pt = team(p.tid);
-      return `<div class="perf" style="--tc:${pt.color};animation-delay:${200 + i * 70}ms"><span class="slab">${logoHTML(pt)}</span><b>${p.full || p.name}</b><small>${p.pts} PTS · ${p.reb} REB · ${p.ast} PAS${p.blk >= 3 ? ` · ${p.blk} CTR` : ""}</small></div>`;
+      return `<div class="perf" style="--tc:${pt.color};animation-delay:${200 + i * 70}ms"><span class="slab">${hr(qm, logoHTML(pt))}</span>
+        <b>${hr(`Grosse perf n° ${i + 2}`, p.full || p.name)}</b><small>${hr("?? PTS · ?? REB · ?? PAS", `${p.pts} PTS · ${p.reb} REB · ${p.ast} PAS${p.blk >= 3 ? ` · ${p.blk} CTR` : ""}`)}</small></div>`;
     }).join("")}</div></div>`;
-  // en plus des faits du match : les blessés importants sortis pendant la nuit et ce qui a bougé au classement
-  // (avant dans une rubrique « Et aussi » à part ; 21/11, Kiki : « pourquoi pas dans les faits marquants ? »)
-  const extra = [];
-  const vb = (t, one, many) => SING.has(t.name) ? one : many;
-  if (INJ) posts.forEach((g, i) => {
-    const ph = AVANT[g.id], sm = sums[i]; if (!ph || !sm) return;
-    for (const [side, T] of [["a", g.teams.away], ["h", g.teams.home]]) {
-      const before = new Set(((ph[side] && ph[side].out) || []).map(o => o.n));
-      for (const o of INJ[T.id] || []) {
-        if (before.has(o.n) || !/out|day|question/i.test(o.st)) continue;
-        // seulement un joueur qui compte : titulaire, ou vraies minutes / vrais points ce soir-là (pas le bout de banc)
-        const pl = sm.players.find(p => p.tid === T.id && (p.name === o.n || p.full === o.n));
-        const mins = pl ? parseInt(pl.min, 10) || 0 : 0;
-        if (!pl || !(pl.starter || mins >= 18 || pl.pts >= 10)) continue;
-        const out = /^out$/i.test(o.st);
-        extra.push({ g, aw: g.teams.away.score > g.teams.home.score, p: 6 + (pl.starter ? 1 : 0) + (out ? .5 : 0), k: "blesse", tag: "Sorti blessé",
-          t: `${pl.full || pl.name} sorti blessé`,
-          x: `${T.name} · ${o.ty ? blessFr(o.ty) : "blessure"} · ${out ? "forfait" : "incertain"} pour la suite`, pl });
-      }
-    }
-  });
-  for (const m of moves) {
-    const T = team(m.id), g = posts.find(x => x.teams.away.id === m.id || x.teams.home.id === m.id); if (!g) continue;
-    const up = m.a < m.b, n = Math.abs(m.a - m.b);
-    const t = m.crossed === "prend la tête" ? `${cap1(le(T))} ${vb(T, "prend", "prennent")} la tête de l'${m.conf}`
-      : m.crossed ? `${cap1(le(T))} ${m.crossed.startsWith("entre") ? vb(T, "entre", "entrent") : vb(T, "sort", "sortent")} ${m.crossed.replace(/^(entre|sort) /, "")}`
-      : `${cap1(le(T))} ${up ? vb(T, "gagne", "gagnent") : vb(T, "perd", "perdent")} ${plural(n, "place")}`;
-    extra.push({ g, aw: g.teams.away.score > g.teams.home.score, p: 4 + m.sc / 15, k: "classement", tag: "Au classement",
-      t, x: `Conférence ${m.conf} : ${m.b + 1}e → ${m.a + 1}e` });
-  }
-  // les faits marquants
-  // sans la perf du MVP (doublon avec sa carte juste au-dessus, demande de Kiki)
-  const facts = nightFacts(posts, sums, extra).filter(f => !(f.pl && f.pl.aid && f.pl.aid === mvp.aid));
-  const factsBlock = facts.length ? `<div class="ess-h"><span class="tag">Les faits marquants</span><i></i></div><div class="facts">${facts.map(factHTML).join("")}</div>` : "";
-  // les Français
-  // un MVP français est déjà en vedette juste au-dessus : la rubrique montre alors les AUTRES Français
-  const mvpFr = frIds.has(mvp.aid);
-  const fr = all.filter(p => frIds.has(p.aid) && p !== mvp).sort((a, b) => gscore(b) - gscore(a));
-  const frCols = fr.length <= 5 ? Math.max(1, fr.length) : fr.length === 6 ? 3 : 4; // 1 à 5 sur une ligne, 6 = 2 × 3, puis 4 par ligne
-  const frBlock = `<div class="ess-h"><span class="tag">${mvpFr ? "Les autres Français de la nuit" : "Les Français de la nuit"}</span><i></i></div>${fr.length ? `<div class="frg" style="--n:${frCols}">${fr.map((p, i) => {
-      const pt = team(p.tid), og = p.g.teams.away.id === p.tid ? p.g.teams.home : p.g.teams.away;
-      const ph = /^\d+$/.test(p.aid) && !DEMO ? `<img src="https://a.espncdn.com/i/headshots/nba/players/full/${p.aid}.png" alt="" loading="lazy" onerror="this.remove()">` : "";
-      return `<div class="frt" style="--tc:${pt.color};animation-delay:${i * 60}ms"><span class="frp">${ph}${logoHTML(pt)}</span>
-        <span class="frn"><b>${p.full || p.name}</b><small>${pt.tri} contre ${og.tri} · ${p.min} min</small>
-        <span class="frs"><b>${p.pts}</b><small>pts</small><b>${p.reb}</b><small>reb</small><b>${p.ast}</b><small>pd</small>${p.blk ? `<b>${p.blk}</b><small>ctr</small>` : ""}</span></span></div>`;
-    }).join("")}</div>` : `<p class="essn pad">${mvpFr ? "Aucun autre Français sur les parquets cette nuit." : "Aucun Français sur les parquets cette nuit."}</p>`}`;
-  btn.hidden = true;
-  const body = $("#mvpbody");
-  body.innerHTML = `<div class="ess"><div class="ess-top"><span class="q">L'essentiel <em>de la nuit</em></span><small>Tout ce qu'il faut retenir, en une minute</small>${topPlay}</div>
-    <div class="ess-h"><span class="tag">Le MVP et les grosses perfs</span><i></i></div>${mvpBlock}${frBlock}${factsBlock}</div>`;
-  for (const v of body.querySelectorAll("[data-count]")) countUp(v, +v.dataset.count, 1100);
+  // les Français : connus d'avance (effectifs des équipes de la nuit) ; un MVP français est déjà en vedette au-dessus
+  const mvpFr = frMap.has(mvp.aid);
+  const frs = [...frMap].map(([aid, f]) => {
+    const g = posts.find(x => x.teams.away.id === f.tid || x.teams.home.id === f.tid); if (!g) return null;
+    const p = all.find(x => x.aid === aid);
+    return { aid, n: (p && (p.full || p.name)) || f.n, tid: f.tid, g, p };
+  }).filter(Boolean).sort((a, b) => a.n.localeCompare(b.n));
+  const rank = new Map([...frs].filter(f => f.p).sort((a, b) => gscore(b.p) - gscore(a.p)).map((f, i) => [f.aid, i]));
+  const nFr = frs.length - (mvpFr ? 1 : 0);
+  const frCols = n => n <= 5 ? Math.max(1, n) : n === 6 ? 3 : 4; // 1 à 5 sur une ligne, 6 = 2 × 3, puis 4 par ligne
+  const frBlock = `<div class="ess-h"><span class="tag">${mvpFr ? hr("Les Français de la nuit", "Les autres Français de la nuit") : "Les Français de la nuit"}</span><i></i></div>${frs.length ? `<div class="frg" style="--n:${frCols(frs.length)};--nr:${frCols(nFr)}">${frs.map((f, i) => {
+      const pt = team(f.tid), og = f.g.teams.away.id === f.tid ? f.g.teams.home : f.g.teams.away, p = f.p;
+      const real = p ? `<span class="frs"><b>${p.pts}</b><small>pts</small><b>${p.reb}</b><small>reb</small><b>${p.ast}</b><small>pd</small>${p.blk ? `<b>${p.blk}</b><small>ctr</small>` : ""}<small class="frm">· ${p.min} min</small></span>`
+        : `<span class="frs"><small>N'a pas joué</small></span>`;
+      return `<div class="frt${f.aid === mvp.aid ? " ismvp" : ""}" style="--tc:${pt.color};--o:${rank.has(f.aid) ? rank.get(f.aid) : 99};animation-delay:${i * 60}ms"><span class="frp">${face(f.aid, true)}${logoHTML(pt)}</span>
+        <span class="frn"><b>${f.n}</b><small>${pt.tri} contre ${og.tri}</small>
+        ${hr(`<span class="frs"><b>??</b><small>pts</small><b>??</b><small>reb</small><b>??</b><small>pd</small></span>`, real)}</span></div>`;
+    }).join("")}</div>` : `<p class="essn pad">Aucun Français sur les parquets cette nuit.</p>`}`;
+  const open = settings.showAll || state.essOpen === night || !state.games.some(g => g.state !== "pre" && !state.revealed.has(g.id));
+  body.innerHTML = `<div class="ess hide" data-ready="1">${essTop(cta)}
+    <div class="ess-h"><span class="tag">Le MVP et les grosses perfs</span><i></i></div>${mvpBlock}${frBlock}</div>`;
+  $("#essrev").addEventListener("click", revealEss);
+  if (open) revealEss();
 }
 
 /* la nuit prochaine, en un clin d'œil */

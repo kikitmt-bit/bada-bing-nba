@@ -259,6 +259,17 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     Les raisons de la hype sont aussi des **infos clés** (`keyFacts`, AVANT le match seulement car le classement ESPN est celui du jour) :
     « Choc au sommet · 1er contre 2e de l'Ouest » (9,5), « Duel direct » (7,5), « Haut de tableau » (deux du top 6, 7), « En feu » (série ≥ 5,
     6,5), « Rivalité » (`RIVAL`, 6) : elles passent devant les infos de secours (infirmerie, meneurs, bilans), qui sautent.
+  - **Après la révélation, les 3 lignes d'un match deviennent ses 3 faits (28/11, demande de Kiki)** : `finishReveal` → `setFacts`
+    (feuille de match `cachedSummary`, `matchFacts` = `gameFacts` (surprise, prolongation/thriller, remontée, démonstration, perfs)
+    + blessés sortis et mouvements au classement du match (`nightExtras`) + « Le patron » (meilleur du vainqueur), « Le tournant »
+    (quart-temps gagné de 7+), « En face », « La victoire / Sans trembler » ; 3 max, un par type sauf 2 perfs), gardés dans `MF`.
+    La rubrique « Les faits marquants » de l'essentiel est SUPPRIMÉE (remplacée par ça).
+  - **L'essentiel toujours déplié (28/11)** : plus de bouton « Voir l'essentiel » ; `loadEss` construit tout, masqué (`.ess.hide`,
+    balises `<x-h>` = avant / `<x-r>` = après) : « ? » à la place de la photo du MVP et des grosses perfs, LED « ?? », couleurs
+    neutres. Révélé par « Révéler l'essentiel » (`#essrev`), ou quand toute la nuit est révélée (`updateRevealAll` → `revealEss`),
+    ou « toujours montrer ». Français connus d'avance (`frenchPlayers` : effectifs, cache `bb2_fr2` id → nom/équipe) : photo, nom,
+    adversaire visibles, stats « ?? » ; après : stats + minutes, triés par perf (`order:var(--o)`), « N'a pas joué » sinon ;
+    MVP français retiré de la liste à la révélation (`.ismvp`). **Les plus belles actions** = grande plaque `.topcta` sous le titre.
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

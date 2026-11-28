@@ -359,6 +359,22 @@ function keyFacts(g) {
       if (/day|question|doubt|probable/i.test(o.st)) { F.push({ p: 7, t: "Incertain", x: `${o.n} (${t.tri}) incertain${what}` }); break; }
     }
   }
+  // ce qui fait la hype (28/11, demande de Kiki : dire clairement pourquoi c'est un gros match) : classement, séries, rivalité.
+  // Le classement ESPN est celui d'aujourd'hui : seulement AVANT le match (après, il contient le résultat)
+  const R = g.state === "pre" && RANKS ? RANKS : null, ra = R && R.get(a.id), rh = R && R.get(h.id);
+  if (ra && rh && Math.min(ra.gp, rh.gp) >= 8) {
+    const conf = r => /east/i.test(r.conf) ? "de l'Est" : "de l'Ouest", ord = k => k === 1 ? "1er" : k + "e";
+    const [x, y] = ra.rank <= rh.rank ? [ra, rh] : [rh, ra];
+    if (ra.rank <= 3 && rh.rank <= 3) add(9.5, "niveau", "Choc au sommet", ra.conf === rh.conf
+      ? `${ord(x.rank)} contre ${ord(y.rank)} ${conf(x)}` : `${ord(ra.rank)} ${conf(ra)} contre ${ord(rh.rank)} ${conf(rh)}`);
+    else if (ra.conf === rh.conf && ra.rank <= 10 && rh.rank <= 10 && Math.abs(ra.rank - rh.rank) <= 2)
+      add(7.5, "niveau", "Duel direct", `${ord(x.rank)} contre ${ord(y.rank)} ${conf(x)}`);
+    else if (ra.rank <= 6 && rh.rank <= 6) add(7, "niveau", "Haut de tableau",
+      `${ord(ra.rank)} ${conf(ra)} contre ${ord(rh.rank)} ${conf(rh)}`);
+    const hot = [[ra, a], [rh, h]].filter(([r]) => r.streak >= 5).sort((u, v) => v[0].streak - u[0].streak)[0];
+    if (hot) add(6.5, "serie", "En feu", `${hot[1].name} : ${hot[0].streak} victoires de suite`);
+  }
+  if (RIVAL.has([a.tri, h.tri].sort().join("-"))) add(6, "rival", "Rivalité", `${a.name} – ${h.name}, un classique de la NBA`);
   const pa = winpct(a.record), ph = winpct(h.record), n = Math.min(played(a.record), played(h.record));
   if (n >= 8 && pa >= .65 && ph >= .65) add(9, "niveau", "Choc au sommet", "Deux des meilleurs bilans de la ligue");
   else if (n >= 6 && Math.abs(pa - ph) >= .35) add(6, "niveau", "Grand favori", `Victoire attendue : ${pa > ph ? a.name : h.name}`);

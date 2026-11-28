@@ -286,6 +286,11 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     (plus de nom « ? ? ? »), grosses perfs = « Grosse perf n° X » sans stats, Français = un seul « ? ». **Les plus belles actions** =
     bande `.topstrip` (bouton ambre « ▶ Top 10 » + compte à rebours de cases LED 10 → 1, le n° 1 doré, elles s'allument au survol),
     toute la bande lance la vidéo.
+  - **28/11 (fin)** : bande LED du top RETIRÉE (« aucun intérêt » sans les joueurs) → titre + bouton « ▶ Top 10 » ; un visuel avec
+    les têtes des 10 joueurs seulement quand le téléphone saura les reconnaître À COUP SÛR (pistes : le son, le commentateur répète le
+    nom ; l'équipe lue à l'écran pour confirmer). MVP masqué = « MVP de la nuit » au format des « Grosse perf n° X » ; Français
+    masqués sans « ? ». Firefox : le lecteur YouTube intégré demande « confirmez que vous n'êtes pas un robot » (cookies tiers
+    isolés) → couper la protection renforcée (bouclier) pour le site, vérifié par Kiki.
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

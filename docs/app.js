@@ -1620,12 +1620,14 @@ async function renderCup() {
   const champHTML = champ ? (() => { const t = team(champ); return `<div class="cchamp" style="--tc:${t.color}">${logoHTML(t)}<span><small>Vainqueur de la NBA Cup</small><b>${t.city} ${t.name}</b></span></div>`; })() : "";
   const hidKO = ko.filter(g => g.state === "post" && !cupShown(g)).length;
   const toReveal = hiddenG + hidKO;
-  const phase = left ? `Phase de groupes en cours · ${plural(left, "match")} à jouer` : champ ? "La Coupe est jouée."
-    : ko.some(g => g.state !== "pre") ? "Phase finale en cours." : "Phase de groupes terminée.";
+  // où on en est : entre parenthèses dans le titre de chaque partie (28/11, Kiki)
+  const koLeft = ko.filter(g => g.state !== "post").length;
+  const stGroups = left ? `(en cours · ${plural(left, "match")} à jouer)` : "(terminée)";
+  const stKO = !qfs.length || ko.every(g => g.state === "pre") ? "" : koLeft ? "(en cours)" : "(terminé)";
   // 28/11 (Kiki) : d'abord le principe de la Coupe, puis où on en est, tout à la même taille (plus de gros titre)
-  main.innerHTML = `<div class="cuptop"><p><span>6 groupes de 5 · le 1er de chaque groupe et le meilleur 2e de chaque conférence vont en quarts · finale le ${fin ? FR({ day: "numeric", month: "long" }).format(fin.date) : "en décembre"}${fin && fin.city ? " à " + fin.city : ""}</span><span>${phase}</span></p>
+  main.innerHTML = `<div class="cuptop"><p><span>6 groupes de 5 · le 1er de chaque groupe et le meilleur 2e de chaque conférence vont en quarts.</span></p>
       ${toReveal ? `<button class="btn nightb big" id="cuprev"><svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la Coupe</button>` : ""}</div>
-    ${sect("Le tableau final")}
+    ${sect(`Le tableau final${stKO ? ` <small>${stKO}</small>` : ""}`)}
     <div class="cbr">
       <div class="cbc"><div class="cbt">Est</div>${colQF(qfE)}</div>
       <div class="cbc mid1">${sfPlate(sfE)}</div>
@@ -1633,7 +1635,7 @@ async function renderCup() {
       <div class="cbc mid1">${sfPlate(sfW)}</div>
       <div class="cbc"><div class="cbt">Ouest</div>${colQF(qfW)}</div>
     </div>
-    ${sect("La phase de groupes")}
+    ${sect(`La phase de groupes <small>${stGroups}</small>`)}
     <div class="cgrid">${gl.map(groupHTML).join("")}</div>`;
   const rv = $("#cuprev");
   if (rv) rv.addEventListener("click", () => { all.forEach(g => { if (g.state === "post") state.revealed.add(g.id); }); renderCup(); });

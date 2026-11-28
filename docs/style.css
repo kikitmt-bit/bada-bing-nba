@@ -1769,3 +1769,7 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
   .cbc:nth-child(n){grid-column:1;grid-row:auto}
   .cbc:nth-child(1){order:1}.cbc:nth-child(5){order:2}.cbc:nth-child(2){order:3}.cbc:nth-child(4){order:4}.cbc.fin{order:5;max-width:none}
   .cgrid{grid-template-columns:1fr} .cgr{grid-template-columns:18px 26px minmax(0,1fr) 36px 40px 64px;gap:6px} }
+.sect h2 small{font-size:.82em;letter-spacing:.2em;color:var(--ink3)}
+.cuptop{flex-wrap:nowrap}
+.cuptop p{flex:1 1 auto}
+@media (max-width:640px){ .cuptop{flex-wrap:wrap} }

@@ -720,8 +720,38 @@ function reveal(id, instant, quick) {
 function updateRevealAll() {
   const left = state.games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).length;
   if (!left && state.games.some(g => g.state === "post")) revealEss();
+}
+/* ---------- UN SEUL bouton pour tout le site (28/11, idée de Kiki) : « Révéler la nuit », dans la barre du haut ----------
+   Il dévoile tout ce qui est joué jusqu'à la dernière nuit : les scores et les faits de toutes les nuits, l'essentiel,
+   la NBA Cup, le classement à jour. Un 2e appui recache tout. Gardé le temps de la visite seulement (comme les scores). */
+const MBSVG = `<svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>`;
+function paintRev() {
   const b = $("#revall"); if (!b) return;
-  if (!left) { b.classList.add("done"); b.disabled = !!settings.showAll; b.innerHTML = `✓ Nuit révélée${settings.showAll ? "" : "<small>· toucher pour recacher</small>"}`; }
+  const on = !!(settings.showAll || state.allOpen);
+  const d1 = keyDate(defaultNight()), d2 = keyDate(addDays(defaultNight(), 1));
+  const nt = EURO ? `${d1.getUTCDate()} → ${d2.getUTCDate()}` : FR({ day: "numeric", month: "short" }).format(d1);
+  b.hidden = false;
+  b.classList.toggle("done", on);
+  b.disabled = !!settings.showAll;
+  b.title = settings.showAll ? "Les scores sont toujours montrés (réglage « Toujours montrer les scores »)"
+    : on ? "Toucher pour tout recacher" : `Dévoile tous les résultats jusqu'à la nuit du ${nt} : scores, NBA Cup, classement`;
+  b.setAttribute("aria-label", b.title);
+  b.innerHTML = on ? `<span>✓ Nuit révélée</span>${settings.showAll ? "" : `<small class="rc">· recacher</small>`}` : `${MBSVG}<span>Révéler la nuit</span>`;
+}
+function toggleRevealAll() {
+  if (settings.showAll) return;
+  state.allOpen = !state.allOpen;
+  if (!state.allOpen) { state.revealed.clear(); state.essOpen = null; }
+  paintRev();
+  if (state.vue === "nuit") {
+    if (!state.allOpen) { renderNight(true); return; }
+    // la cérémonie : du moins bon au meilleur, le match de la nuit en dernier ; tous les scores s'allument en moins d'une seconde
+    let order = state.games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).sort((x, y) => watchScore(x) - watchScore(y));
+    order = order.filter(g => g.id !== state.heroId).concat(order.filter(g => g.id === state.heroId));
+    order.forEach((g, i) => setTimeout(() => reveal(g.id, false, true), RM ? 0 : i * 60));
+    if (!order.length) revealEss();
+  } else if (state.vue === "cup") renderCup();
+  else if (state.vue === "classement") renderStandings();
 }
 
 /* ---------- le brief : la nuit, comme une retransmission ---------- */
@@ -781,7 +811,6 @@ function skyHTML(games, hero, scored) {
       <div class="nights" id="nights" data-ctx="${ctx}"></div>
       ${board}
       ${started || nvid || jr || nplus ? `<div class="actions">
-      ${started ? `<button class="btn nightb big${left ? "" : " done"}" id="revall" ${left || !settings.showAll ? "" : "disabled"}>${left ? `<svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la nuit` : `✓ Nuit révélée${settings.showAll ? "" : "<small>· toucher pour recacher</small>"}`}</button>` : ""}
       ${nplus ? `<button class="btn amber" data-nuitplus="${state.night}" title="Le résumé de la nuit, avec la liste des matchs et les scores qui suivent la vidéo"><span class="pl">▶</span>Résumé de la nuit<span class="plus">+</span></button>`
         : nvid ? `<button class="btn amber" data-vplay="${nvid}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
       ${jr ? `<button class="btn amber" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin"><span class="pl">▶</span>NBA Extra</button>` : ""}
@@ -800,7 +829,7 @@ async function renderNight(soft) {
   if (tok !== state.tok) return;
   state.games = games;
   state.lastLoad = Date.now();
-  if (settings.showAll) games.forEach(g => state.revealed.add(g.id));
+  if (settings.showAll || state.allOpen) games.forEach(g => { if (g.state !== "pre") state.revealed.add(g.id); });
   if (games.some(g => g.state !== "pre")) markSeen(state.night);
   // pour les infos clés : « 2e soir », blessés (avant le match), photo d'avant-match (après)
   await Promise.all([loadPrevNight(state.night), games.some(g => g.state === "pre") ? loadInjuries() : null,
@@ -815,6 +844,7 @@ async function renderNight(soft) {
   if (late) notes.then(ch => { if (ch && tok === state.tok && !document.body.classList.contains("vidon")) renderNight(true); });
   const scored = games.map(g => ({ g, lvl: watchLevel(g), s: watchScore(g) })).sort((x, y) => y.s - x.s || jitter(x.g.id) - jitter(y.g.id));
   const hero = scored.length && scored[0].lvl >= 4 ? scored[0] : null;
+  state.heroId = hero ? hero.g.id : null;
   const isFav = g => settings.fav && (g.teams.away.id === settings.fav || g.teams.home.id === settings.fav) ? 1 : 0;
   const rest = games.filter(g => !hero || g.id !== hero.g.id)
     .sort((x, y) => isFav(y) - isFav(x) || watchScore(y) - watchScore(x) || x.date - y.date);
@@ -832,19 +862,6 @@ async function renderNight(soft) {
   for (const id of state.revealed) reveal(id, true);
   for (const v of $$("[data-count]")) countUp(v, +v.dataset.count, 900);
   startCountdown();
-  const all = $("#revall");
-  if (all) all.addEventListener("click", () => {
-    if (all.classList.contains("done")) { // tout recacher (demande de Kiki 28/11)
-      if (settings.showAll) return;
-      state.revealed.clear(); state.essOpen = null; renderNight(true); return;
-    }
-    // la cérémonie : du moins bon au meilleur, le match de la nuit en dernier
-    let order = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).sort((x, y) => watchScore(x) - watchScore(y));
-    if (hero) order = order.filter(g => g.id !== hero.g.id).concat(order.filter(g => g.id === hero.g.id));
-    // 21/11 (Kiki : « ça descend tout en bas, ça ne s'arrête pas ») : on reste où on est, tous les scores s'allument ensemble
-    // en moins d'une seconde (petit décalage de 60 ms d'un match à l'autre), sans course quart-temps par quart-temps
-    order.forEach((g, i) => setTimeout(() => reveal(g.id, false, true), RM ? 0 : i * 60));
-  });
   if (nPost >= 2) loadEss();
   nextStrip();
   renderChips();
@@ -1487,7 +1504,7 @@ async function renderStandings() {
   // plus d'interrupteur (28/11, Kiki : « moche, pas très utile ») : le classement suit la révélation. La dernière nuit compte
   // dès qu'elle a été révélée (bouton « Révéler la nuit ») ou avec « toujours montrer » ; sinon il s'arrête juste avant.
   let lastGames = []; try { lastGames = (await scoreboard(defaultNight())).filter(g => g.state === "post"); } catch (e) { /* déjà vu plus haut */ }
-  const cut = cutPossible && !settings.showAll && !lastGames.every(g => state.revealed.has(g.id));
+  const cut = cutPossible && !settings.showAll && !state.allOpen && !lastGames.every(g => state.revealed.has(g.id));
   const confs = [];
   for (const ch of data.children || []) {
     const rows = [];
@@ -1522,7 +1539,7 @@ async function renderStandings() {
   const d1 = keyDate(defaultNight()), d2 = keyDate(addDays(defaultNight(), 1));
   const nuitTxt = EURO ? `${d1.getUTCDate()} → ${d2.getUTCDate()}` : FR({ day: "numeric", month: "short" }).format(d1);
   main.innerHTML = `<div class="standwrap">${confs.map(confHTML).join("")}</div>
-    ${cut ? `<p class="standnote">Sans les résultats de la nuit du ${nuitTxt} : révèle cette nuit pour les inclure.</p>` : ""}`;
+    ${cut ? `<p class="standnote">Sans les résultats de la nuit du ${nuitTxt} : « Révéler la nuit », en haut, les ajoute.</p>` : ""}`;
 
 }
 
@@ -1547,6 +1564,7 @@ async function renderCup() {
   try { all = (await Promise.all(CUP.dates.map(k => scoreboard(k).catch(() => [])))).flat().filter(g => g.cup); }
   catch (e) { all = []; }
   if (tok !== state.tok) return;
+  if (settings.showAll || state.allOpen) all.forEach(g => { if (g.state === "post") state.revealed.add(g.id); });
   if (!all.length) { main.innerHTML = `<p class="loadmsg">La NBA Cup n'est pas encore disponible chez ESPN. Réessaie dans un instant.</p>`; return; }
   const grp = all.filter(g => g.cup === "group"), ko = all.filter(g => g.cup !== "group");
   // les groupes : composantes du graphe des matchs de groupe
@@ -1627,7 +1645,7 @@ async function renderCup() {
   const stKO = !qfs.length || ko.every(g => g.state === "pre") ? "" : koLeft ? "(en cours)" : "(terminé)";
   // 28/11 (Kiki) : d'abord le principe de la Coupe, puis où on en est, tout à la même taille (plus de gros titre)
   main.innerHTML = `<div class="cuptop"><p><span>6 groupes de 5 · le 1er de chaque groupe et le meilleur 2e de chaque conférence vont en quarts.</span></p>
-      ${toReveal ? `<button class="btn nightb big" id="cuprev"><svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la Coupe</button>` : ""}</div>
+</div>
     ${sect(`Le tableau final${stKO ? ` <small>${stKO}</small>` : ""}`)}
     <div class="cbr">
       <div class="cbc"><div class="cbt">Ouest</div>${colQF(qfW)}</div>
@@ -1638,8 +1656,6 @@ async function renderCup() {
     </div>
     ${sect(`La phase de groupes <small>${stGroups}</small>`)}
     <div class="cgrid">${gl.map(groupHTML).join("")}</div>`;
-  const rv = $("#cuprev");
-  if (rv) rv.addEventListener("click", () => { all.forEach(g => { if (g.state === "post") state.revealed.add(g.id); }); renderCup(); });
 }
 document.addEventListener("click", e => { // un afficheur « ?? » du tableau : ce match seulement
   const l = e.target.closest(".cupled"); if (!l) return;
@@ -1672,6 +1688,7 @@ function openSettings() {
     if (sw) {
       settings.showAll = !settings.showAll; store.set("showall", settings.showAll);
       sw.classList.toggle("on", settings.showAll); sw.setAttribute("aria-checked", settings.showAll);
+      paintRev();
       return;
     }
     const tz = e.target.closest("[data-tz]");
@@ -1764,6 +1781,7 @@ document.addEventListener("click", e => {
   if (e.target === vidovl || (e.target.closest(".x") && e.target.closest("#vidovl"))) { closeResume(); return; }
   if (e.target === shotovl || (e.target.closest(".x") && e.target.closest("#shotovl"))) { closeShots(); return; }
   if (e.target.closest("#gear") || e.target.closest("#gear2")) { openSettings(); return; }
+  if (e.target.closest("#revall")) { toggleRevealAll(); return; }
   const tab = e.target.closest(".tab[data-vue]");
   if (tab) { go(tab.dataset.vue); return; }
   const pn = e.target.closest("[data-prog-night]");
@@ -1801,7 +1819,7 @@ function welcome() {
   const w = $("#welcome");
   w.hidden = false;
   w.innerHTML = `<div class="welcome"><p><b>Nouveau sur Nocturne ?</b> Aucun score ne s'allume tant que <b>tu</b> ne le demandes pas :
-    touche un afficheur pour revivre ce match, et seulement celui-là.</p>
+    touche un afficheur pour un seul match, ou <b>« Révéler la nuit »</b>, en haut, pour tout dévoiler d'un coup (scores, NBA Cup, classement).</p>
     <button class="btn prime" id="hellok">Compris</button></div>`;
   $("#hellok").addEventListener("click", () => { store.set("hello", true); w.hidden = true; });
 }
@@ -1913,5 +1931,6 @@ function startSite() {
   trackVisitor();
   const vue = QS.get("vue");
   if (cupOn()) $$(".tab.cuptab").forEach(t => { t.hidden = false; });
+  paintRev();
   go(vue === "programme" || vue === "classement" || (vue === "cup" && cupOn()) ? vue : "nuit");
 }

@@ -1045,26 +1045,30 @@ async function loadEss() {
   const mvpPlay = pi >= 0 && N ? `<button class="btn amber mvplay" data-nuitsolo="potn" data-night="${night}"><span class="pl">▶</span>Ses meilleures actions</button>` : "";
   // les plus belles actions : une rubrique à part, titre + bouton « ▶ Top 10 » (ou 5) (demande de Kiki 28/11)
   const topV = findTopPlays(night), topN = topV ? (/top 10/i.test(topV.t) ? 10 : 5) : top && top.plays && top.plays.length;
-  const cta = topV || (top && N) ? sect(`Les ${topN ? topN + " " : ""}plus belles actions de la nuit`,
-    `<button class="btn amber" data-nuitsolo="top" data-night="${night}"><span class="pl">▶</span>Top ${topN || ""}</button>`) : "";
+  // 28/11 (Kiki : « pas assez mis en avant ») : un compte à rebours de cases LED, 10 → 1, toute la bande lance la vidéo
+  const nT = topN || 5;
+  const cta = topV || (top && N) ? sect(`Les ${nT} plus belles actions de la nuit`) +
+    `<button class="topstrip" data-nuitsolo="top" data-night="${night}" style="--n:${nT}" aria-label="Voir les ${nT} plus belles actions de la nuit">
+      <span class="btn amber big"><span class="pl">▶</span>Top ${nT}</span>
+      <span class="tsc">${Array.from({ length: nT }, (_, k) => `<span class="led${k === nT - 1 ? " one" : ""}" style="--k:${k}"><span class="v">${nT - k}</span></span>`).join("")}</span></button>` : "";
   const opp = mvp.g.teams.away.id === mvp.tid ? mvp.g.teams.home : mvp.g.teams.away;
   const face = (aid, lazy, cl) => /^\d+$/.test(aid) && !DEMO ? `<img${cl ? ` class="${cl}"` : ""} src="https://a.espncdn.com/i/headshots/nba/players/full/${aid}.png" alt=""${lazy ? ' loading="lazy"' : ""} onerror="this.remove()">` : "";
-  const stat = (v, l) => `<div class="stat">${hr(`<span class="led off"><span class="v">??</span></span>`, `<span class="led"><span class="v" data-count="${v}">0</span></span>`)}<small>${l}</small></div>`;
+  const stat = (v, l) => `<div class="stat">${hr(`<span class="led off"><span class="v">?</span></span>`, `<span class="led"><span class="v" data-count="${v}">0</span></span>`)}<small>${l}</small></div>`;
   const full = (mvp.full || mvp.name).trim(), sp = full.indexOf(" ");
   const nameHTML = sp > 0 ? `<span>${full.slice(0, sp)}</span><span>${full.slice(sp + 1)}</span>` : `<span>${full}</span>`;
   const qm = `<span class="qm">?</span>`;
   const mvpBlock = `<div class="mvpw"><div class="mvp">
       <div class="card" style="--tc:${t.color}">${hr(qm, face(mvp.aid, false, "mph") + logoHTML(t))}</div>
       <div style="min-width:0">
-        <h3>${hr(`<span>Le MVP de la nuit</span><span>? ? ?</span>`, nameHTML)}</h3>
-        <div class="sub">${hr("Qui a été le meilleur cette nuit ?", `${t.city} ${t.name} · contre ${le(opp)}`)}</div>
+        <h3>${hr("", nameHTML)}</h3>
+        <div class="sub">${hr("Qui a régné sur la nuit ?", `${t.city} ${t.name} · contre ${le(opp)}`)}</div>
         ${mvpPlay ? `<x-r>${mvpPlay}</x-r>` : ""}
         <div class="row">${stat(mvp.pts, "points")}${stat(mvp.reb, "rebonds")}${stat(mvp.ast, "passes")}${stat(mvp.blk || 0, "contres")}</div>
       </div></div>
     <div class="perfs"><span class="tag ghost">Les grosses perfs</span>${all.slice(1, 7).map((p, i) => {
       const pt = team(p.tid);
       return `<div class="perf" style="--tc:${pt.color};animation-delay:${200 + i * 70}ms"><span class="slab">${hr(qm, logoHTML(pt))}</span>
-        <b>${hr(`Grosse perf n° ${i + 2}`, p.full || p.name)}</b><small>${hr("?? PTS · ?? REB · ?? PAS", `${p.pts} PTS · ${p.reb} REB · ${p.ast} PAS${p.blk >= 3 ? ` · ${p.blk} CTR` : ""}`)}</small></div>`;
+        <b>${hr(`Grosse perf n° ${i + 2}`, p.full || p.name)}</b><small>${hr("", `${p.pts} PTS · ${p.reb} REB · ${p.ast} PAS${p.blk >= 3 ? ` · ${p.blk} CTR` : ""}`)}</small></div>`;
     }).join("")}</div></div>`;
   // les Français : connus d'avance (effectifs des équipes de la nuit) ; un MVP français est déjà en vedette au-dessus
   const mvpFr = frMap.has(mvp.aid);
@@ -1082,7 +1086,7 @@ async function loadEss() {
         : `<span class="frs"><small>N'a pas joué</small></span>`;
       return `<div class="frt${f.aid === mvp.aid ? " ismvp" : ""}" style="--tc:${pt.color};--o:${rank.has(f.aid) ? rank.get(f.aid) : 99};animation-delay:${i * 60}ms"><span class="frp">${face(f.aid, true)}${logoHTML(pt)}</span>
         <span class="frn"><b>${f.n}</b><small>${pt.tri} contre ${og.tri}</small>
-        ${hr(`<span class="frs"><b>??</b><small>pts</small><b>??</b><small>reb</small><b>??</b><small>pd</small></span>`, real)}</span></div>`;
+        ${hr(`<span class="frs"><b>?</b></span>`, real)}</span></div>`;
     }).join("")}</div>` : `<p class="essn pad">Aucun Français sur les parquets cette nuit.</p>`}`;
   const open = settings.showAll || state.essOpen === night || !state.games.some(g => g.state !== "pre" && !state.revealed.has(g.id));
   body.innerHTML = `<div class="ess hide" data-ready="1">${cta}${sect("Le MVP et les grosses perfs")}${mvpBlock}${frBlock}</div>`;

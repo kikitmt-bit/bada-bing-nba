@@ -1667,3 +1667,20 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .btn.prime.done{--bg:rgba(255,255,255,.09);--fg:var(--ink);box-shadow:none;flex-direction:column;gap:2px;line-height:1.1}
 .btn.prime.done:hover{--bg:rgba(255,255,255,.16)}
 .btn.prime.done small{font:600 10px var(--disp);letter-spacing:.12em;color:var(--ink3)}
+/* 28/11 (soir) : titres de rubrique un peu plus grands ; masqué = un seul « ? » ; le top de la nuit en compte à rebours LED */
+.sect h2{font-size:17px}
+.ess.hide .mvp h3{display:none}
+.ess.hide .mvp .sub{font:800 clamp(22px,2.2vw,30px)/1.1 var(--disp);text-transform:uppercase;color:var(--ink2)}
+.ess.hide .perf small{font-family:var(--led);font-size:18px}
+.topstrip{display:flex;align-items:center;gap:18px;width:100%;padding:14px 16px;border:0;cursor:pointer;color:var(--ink);text-align:left;
+  background:linear-gradient(100deg,rgba(255,176,46,.14),rgba(255,255,255,.03) 60%);
+  clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);transition:background .2s}
+.topstrip:hover,.topstrip:focus-visible{outline:none;background:linear-gradient(100deg,rgba(255,176,46,.24),rgba(255,255,255,.05) 60%)}
+.topstrip>.btn{flex:none;pointer-events:none}
+.tsc{flex:1;min-width:0;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:6px}
+.tsc .led{min-width:0;width:100%;height:54px;padding:0;font-size:30px;color:rgba(255,176,46,.45);text-shadow:none;transition:color .2s,text-shadow .2s}
+.tsc .led.one{color:var(--moon);text-shadow:0 0 12px rgba(243,197,82,.8)}
+.topstrip:hover .tsc .led,.topstrip:focus-visible .tsc .led{animation:tslit .5s both;animation-delay:calc(var(--k) * 45ms)}
+@keyframes tslit{to{color:var(--amber);text-shadow:0 0 10px rgba(255,176,46,.8)}}
+@media (max-width:700px){ .topstrip{flex-direction:column;align-items:stretch;gap:12px}.topstrip>.btn{align-self:flex-start}
+  .tsc{gap:3px}.tsc .led{height:38px;font-size:18px} }

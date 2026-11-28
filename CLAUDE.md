@@ -270,6 +270,13 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     ou « toujours montrer ». Français connus d'avance (`frenchPlayers` : effectifs, cache `bb2_fr2` id → nom/équipe) : photo, nom,
     adversaire visibles, stats « ?? » ; après : stats + minutes, triés par perf (`order:var(--o)`), « N'a pas joué » sinon ;
     MVP français retiré de la liste à la révélation (`.ismvp`). **Les plus belles actions** = grande plaque `.topcta` sous le titre.
+  - **Rubriques et couleurs (28/11, demande de Kiki)** : un seul bouton de révélation, « Révéler la nuit » (blanc `.btn.prime`,
+    logo lune-ballon `.mb`, plus de 🎬), qui révèle aussi l'essentiel (plus de « Révéler l'essentiel » ni de grand titre / cadre
+    « L'essentiel de la nuit »). Toutes les rubriques ont le titre gris à trait de « Les matchs de la nuit » (`sect(titre, bouton)`) :
+    Les matchs de la nuit · Les 10 plus belles actions de la nuit [▶ Top 10] · Le MVP et les grosses perfs · Les Français de la nuit.
+    **Ambre = bouton qui lance une vidéo** (Replay, Résumé de la nuit (+), NBA Extra, Top 10, Ses meilleures actions) ; titres jamais
+    en ambre. MVP masqué : ni « MVP » ni « ? » dans le cadre photo. Photo du MVP = `img.mph` (avant, la règle `.mvp .card img`
+    étirait aussi le logo de l'équipe, coupé en haut).
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

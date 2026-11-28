@@ -322,7 +322,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .mvp{display:grid;grid-template-columns:auto minmax(0,1fr);gap:22px;align-items:center;padding:24px 28px;animation:pagein .5s}
 .mvp .card{position:relative;width:168px;height:208px;background:linear-gradient(160deg,var(--tc),color-mix(in srgb,var(--tc) 40%,#000));
   clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,16px 100%,0 calc(100% - 16px));overflow:hidden;animation:logoin .7s cubic-bezier(.2,1.3,.4,1)}
-.mvp .card img{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:150%;max-width:none;height:auto}
+.mvp .card img.mph{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:150%;max-width:none;height:auto}
 .mvp .card .lg{position:absolute;top:10px;left:10px;width:34px;height:34px}
 .mvp .card::after{content:"MVP";position:absolute;right:10px;top:8px;font:900 18px var(--disp);letter-spacing:.14em;color:var(--moon);text-shadow:0 0 12px rgba(243,197,82,.8)}
 .mvp h3{margin:6px 0 2px;font:900 clamp(30px,4vw,52px)/.95 var(--disp);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1637,17 +1637,11 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 /* ---------- L'essentiel déjà en place, contenu masqué (28/11) : x-h = avant la révélation, x-r = après ---------- */
 .ess x-h,.ess x-r{display:contents}
 .ess.hide x-r,.ess:not(.hide) x-h{display:none}
-.ess:not(.hide) #essrev{display:none}
-.ess-top{display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px 20px}
-.ess-top .q,.ess-top small{flex:1 1 100%}
-.ess-top #essrev{order:3}
-@media (min-width:900px){ .ess-top{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end}
-  .ess-top .q{grid-column:1}.ess-top small{grid-column:1}.ess-top #essrev{grid-column:2;grid-row:1/3;align-self:center} }
 .qm{position:absolute;inset:0;display:grid;place-items:center;font:900 96px var(--led);color:rgba(255,176,46,.35);text-shadow:0 0 18px rgba(255,176,46,.25);animation:ledidle 2.6s ease-in-out infinite}
 .perf .slab{position:relative}
 .perf .slab .qm{font-size:24px}
 .ess.hide .mvp .card,.ess.hide .perf{--tc:#2a3048 !important}
-.ess.hide .mvp .card::after{content:"MVP ?"}
+.ess.hide .mvp .card::after{content:none}
 .ess.hide .mvp h3 span:last-child{color:rgba(255,176,46,.35);font-family:var(--led)}
 .ess.hide .perf b{color:var(--ink3)}
 .ess.hide .perf small,.ess.hide .frs b{color:rgba(255,176,46,.35)}
@@ -1658,19 +1652,11 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .ess:not(.hide) .frt.ismvp{display:none}
 .ess:not(.hide) .frg{--n:var(--nr)}
 .frm{margin-left:6px}
-/* les plus belles actions : une plaque à part entière */
-.topcta{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:18px;width:100%;margin:18px 0 4px;
-  padding:14px 22px 14px 14px;border:0;cursor:pointer;text-align:left;color:var(--ink);
-  background:linear-gradient(100deg,rgba(255,176,46,.22),rgba(255,176,46,.06) 55%,rgba(255,255,255,.03));
-  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);transition:background .2s}
-.topcta:hover,.topcta:focus-visible{background:linear-gradient(100deg,rgba(255,176,46,.34),rgba(255,176,46,.1) 55%,rgba(255,255,255,.05));outline:none}
-.topcta .tpl{display:grid;place-items:center;width:62px;height:62px;background:var(--amber);color:#14100a;font-size:26px;padding-left:4px;
-  clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);box-shadow:0 0 24px rgba(255,176,46,.5)}
-.topcta .tpt{min-width:0;display:flex;flex-direction:column;gap:4px}
-.topcta b{font:900 clamp(20px,2.2vw,30px)/1 var(--disp);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.topcta b em{font-style:normal;color:var(--moon)}
-.topcta small{color:var(--ink2);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.topcta .tpn{height:46px;font-size:24px;min-width:0;padding:0 12px}
-@media (max-width:900px){ .topcta{margin:14px 0 4px;gap:12px}.topcta .tpl{width:50px;height:50px;font-size:20px}
-  .topcta .tpn{display:none}.topcta b{white-space:normal} }
+/* bouton principal (Révéler la nuit) : blanc, avec le logo ; l'ambre est réservé aux vidéos (28/11) */
+.btn.prime{--bg:#f3efe6;--fg:#0b0d16;box-shadow:0 0 22px rgba(255,255,255,.18)}
+.btn.prime:hover{--bg:#fff}
+.btn.prime:disabled{--bg:rgba(255,255,255,.07);--fg:var(--ink2);box-shadow:none;cursor:default}
+.btn .mb{width:1.55em;height:1.55em;flex:none;margin:-4px 0}
+.sect .btn{flex:none}
 .kfs.post{animation:pagein .4s}
+@media (max-width:600px){ .sect h2{white-space:normal;min-width:0;line-height:1.5} }

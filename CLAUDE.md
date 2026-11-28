@@ -339,6 +339,7 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     Puis (même jour) : placé JUSTE APRÈS LE LOGO, avant les onglets (le plus important), largeur fixe 254 px sur PC (les onglets ne
     bougent pas) ; libellé « Révéler tous les résultats » / « ✓ Résultats révélés · recacher », sur téléphone « Tout révéler » /
     « ✓ Révélé » (`.rl` / `.rs` ; surtout pas `.lg`, classe des logos).
+    Plus de logo lune-ballon dans ce bouton (doublon avec celui du mot-symbole juste à côté, demande de Kiki).
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

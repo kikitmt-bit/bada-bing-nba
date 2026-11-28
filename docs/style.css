@@ -1660,3 +1660,10 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .sect .btn{flex:none}
 .kfs.post{animation:pagein .4s}
 @media (max-width:600px){ .sect h2{white-space:normal;min-width:0;line-height:1.5} }
+/* 28/11 : plus de trait à côté des titres de rubrique ; avant-match = intitulés en blanc, match révélé = en ambre */
+.sect i{display:none}
+.kf b{color:var(--ink)}
+.kfs.post .kf b{color:var(--amber)}
+.btn.prime.done{--bg:rgba(255,255,255,.09);--fg:var(--ink);box-shadow:none;flex-direction:column;gap:2px;line-height:1.1}
+.btn.prime.done:hover{--bg:rgba(255,255,255,.16)}
+.btn.prime.done small{font:600 10px var(--disp);letter-spacing:.12em;color:var(--ink3)}

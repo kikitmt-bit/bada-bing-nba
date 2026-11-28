@@ -261,15 +261,13 @@ async function loadNotes(games) {
 function watchScore(g) {
   const n = noteOf(g); if (n !== null) return n;
   const C = typeof Note !== "undefined" ? Note.CUT : [0, 1.3, 3.0, 5.0, 7.2], l = watchLevel(g);
-  return l === 0 ? C[0] - .5 : l >= 5 ? C[4] + .5 : (C[l - 1] + C[l]) / 2;
+  const fin = g.state === "pre" ? afficheOf(g).s * .01 : 0; // entre deux affiches du même niveau : la plus hype d'abord
+  return fin + l === 0 ? C[0] - .5 : l >= 5 ? C[4] + .5 : (C[l - 1] + C[l]) / 2;
 }
 function watchLevel(g) {
   const nt = noteOf(g); if (nt !== null) return Note.level(nt);
   const pa = winpct(g.teams.away.record), ph = winpct(g.teams.home.record);
-  if (g.state === "pre") { // affiche d'avant-match : la qualité des deux équipes
-    let n = 1.8 + (pa + ph - 1) * 3 + jitter(g.id);
-    return Math.max(0, Math.min(4, Math.round(n)));
-  }
+  if (g.state === "pre") return hypeLevel(g); // avant le match : la hype sur le papier (classement, stars, séries, rivalités)
   const margin = Math.abs(g.teams.home.score - g.teams.away.score);
   let n = 0;
   n += margin <= 3 ? 3 : margin <= 6 ? 2.2 : margin <= 10 ? 1.4 : margin <= 15 ? .7 : 0;
@@ -283,6 +281,12 @@ function watchLevel(g) {
   if (g.state === "live") n = Math.max(n, 2.2); // un direct mérite un œil
   return Math.max(0, Math.min(5, Math.round(n * 5 / 4.6)));
 }
+/* hype d'avant-match (28/11, retour Kiki : Lakers-Spurs, 1er contre 2e de l'Ouest, Doncic contre Wembanyama, n'avait que 3 barres) :
+   la jauge suit la note d'affiche (afficheOf), 5 barres = le choc de la saison ; ≥ 3,5 = 3 barres, comme le ◆ du programme */
+const HYPE = [0.7, 2, 3.5, 5, 7];
+const HYPL = ["Sans enjeu", "Discret", "Correct", "Belle affiche", "Grosse affiche", "Le choc"];
+function hypeLevel(g) { const s = afficheOf(g).s; return HYPE.filter(x => s >= x).length; }
+function hypeTip(g) { const w = afficheOf(g).why; return w.length ? ` title="${w.join(" · ").replace(/"/g, "&quot;")}"` : ""; }
 const RAR = [
   ["nop", "⛔ À fuir"], ["low", "💤 Bof"], ["mid", "😐 Sans plus"],
   ["rar", "🔥 Sympa"], ["epi", "🔥🔥 Génial"], ["leg", "🔥🔥🔥 Immanquable"],
@@ -573,7 +577,7 @@ function heroHTML(g, lvl) {
     <div class="jumbo-in">
       <div class="beam l"></div><div class="beam r"></div>
       <div class="jtop"><span class="tag">${pre ? "L'affiche de la nuit" : "Le match de la nuit"}</span>
-        <span class="when r${lvl}">${pre ? `Affiche · ${hourLocal(g.date)}` : `${heatHTML(lvl)}<span>${RARL[lvl]}</span>`}</span></div>
+        <span class="when r${lvl}"${pre ? hypeTip(g) : ""}>${heatHTML(lvl)}<span>${pre ? `${HYPL[lvl]} · ${hourLocal(g.date)}` : RARL[lvl]}</span></span></div>
       <div class="jmid">${side(a, "away")}${mid}${side(h, "home")}</div>
       ${foot ? `<div class="jfoot">${foot}</div>` : ""}
     </div>
@@ -607,7 +611,7 @@ function cardHTML(g, i) {
   return `<article class="bug r${lvl} ${g.state === "live" ? "is-live" : ""}" data-card="${g.id}" style="--d:${Math.min(i * 80, 640)}ms">
     <div class="floor"></div>
     <div class="bug-in">
-      <div class="bh">${clockHTML(g)}${fav ? `<span class="fav">★</span>` : ""}${heatHTML(lvl)}<span class="hl">${pre ? "Affiche" : RARL[lvl]}</span></div>
+      <div class="bh">${clockHTML(g)}${fav ? `<span class="fav">★</span>` : ""}<span class="hyp"${pre ? hypeTip(g) : ""}>${heatHTML(lvl)}<span class="hl">${pre ? HYPL[lvl] : RARL[lvl]}</span></span></div>
       ${row(a, "away")}${row(h, "home")}
       ${kf || acts ? `<div class="bf">${kf}${acts ? `<div class="acts">${acts}</div>` : ""}</div>` : ""}
     </div>
@@ -778,6 +782,7 @@ async function renderNight(soft) {
   if (games.some(g => g.state !== "pre")) markSeen(state.night);
   // pour les infos clés : « 2e soir », blessés (avant le match), photo d'avant-match (après)
   await Promise.all([loadPrevNight(state.night), games.some(g => g.state === "pre") ? loadInjuries() : null,
+    games.some(g => g.state === "pre") ? loadRanks() : null,
     games.some(g => g.state !== "pre") ? loadAvant(state.night) : null, games.some(g => g.state === "post") ? loadNuit(state.night) : null]);
   if (tok !== state.tok) return;
 
@@ -1024,7 +1029,7 @@ async function nextStrip() {
   const el = $("#nextstrip"); if (!el || state.night !== defaultNight()) return;
   const next = addDays(state.night, 1);
   let games;
-  try { games = await scoreboard(next); } catch (e) { return; }
+  try { [games] = await Promise.all([scoreboard(next), loadRanks()]); } catch (e) { return; }
   const pre = games.filter(g => g.state === "pre");
   if (!pre.length || state.night !== defaultNight() || !$("#nextstrip")) return;
   const top = [...pre].sort((x, y) => watchLevel(y) - watchLevel(x))[0];

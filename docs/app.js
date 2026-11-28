@@ -738,7 +738,7 @@ function paintRev() {
   b.setAttribute("aria-label", b.title);
   // libellé parlant (28/11, Kiki) : long sur PC, court sur téléphone (.rl / .rs ; pas .lg = les logos)
   b.innerHTML = on ? `<span class="rl">✓ Résultats révélés</span><span class="rs">✓ Révélé</span>${settings.showAll ? "" : `<small class="rc">· recacher</small>`}`
-    : `${MBSVG}<span class="rl">Révéler tous les résultats</span><span class="rs">Tout révéler</span>`;
+    : `<span class="rl">Révéler tous les résultats</span><span class="rs">Tout révéler</span>`;
 }
 function toggleRevealAll() {
   if (settings.showAll) return;

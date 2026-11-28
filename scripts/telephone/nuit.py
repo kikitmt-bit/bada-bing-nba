@@ -55,7 +55,16 @@ def nuit_de(titre):
     return datetime.strptime(m.group(1), "%B %d, %Y").strftime("%Y%m%d") if m else None
 
 
+_CHAPITRES = {}  # 28/11 : analyse() est appelée 2 fois (chapitres, puis vidéo) : une seule demande à YouTube
+
+
 def chapitres(vid):
+    if vid not in _CHAPITRES:
+        _CHAPITRES[vid] = _chapitres(vid)
+    return _CHAPITRES[vid]
+
+
+def _chapitres(vid):
     out = subprocess.run(["yt-dlp", "-J", "--no-warnings", "--skip-download", "https://www.youtube.com/watch?v=" + vid],
                          capture_output=True, text=True, check=True).stdout
     d = json.loads(out)

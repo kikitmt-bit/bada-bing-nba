@@ -17,6 +17,7 @@ import threading
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 import chrono_video
@@ -36,6 +37,18 @@ DEPUIS = os.path.join(ICI, "depuis.txt")  # date ISO : rien avant (créée au 1e
 ESSAIS = 4         # au-delà, on abandonne une vidéo
 ATTENTE = (300, 1800, 5400)  # après le 1er, 2e, 3e échec : 5 min, 30 min, 1 h 30 (24/11 : 3 essais en 15 min = 5 matchs perdus)
 PAUSE = (1800, 3600, 7200)   # YouTube refuse (« not a bot ») : on ne lui demande plus rien pendant 30 min, 1 h, puis 2 h
+# 28/11 (choix de Kiki) : YouTube refuse après ~6 vidéos rapprochées. Donc UN téléchargement à la fois (les analyses,
+# elles, restent en parallèle), ESPACE secondes entre deux, et yt-dlp ralenti entre ses demandes. Après un refus,
+# la 1re vidéo sert d'essai : si YouTube refuse encore, les autres ne lui demandent rien (pause vue sous la porte).
+ESPACE = 180
+FORMAT = "bv*[height=720][vcodec^=avc1]/bv*[height=720][vcodec^=vp]/bv*[height=720]/bv*[height<=720]"
+YTDLP = ("yt-dlp", "-q", "--no-warnings", "--sleep-requests", "2", "-f", FORMAT)
+PORTE = threading.Lock()  # un seul téléchargement à la fois
+_DERNIER = [0.0]          # fin du dernier téléchargement
+
+
+class Reporte(Exception):
+    """YouTube nous a refusés pendant qu'on attendait notre tour : on ne demande rien, ça ne compte pas comme un essai."""
 
 
 def log(*a):
@@ -89,6 +102,24 @@ def rater(etat, e, ex):
         d = PAUSE[min(n, len(PAUSE) - 1)]
         etat["pause"] = {"n": n + 1, "fin": time.time() + d}
         log("YouTube refuse : pause de %d min" % (d // 60))
+
+
+@contextmanager
+def tour(etat, verrou):
+    """Attend son tour pour parler à YouTube (un à la fois, ESPACE s après le précédent) ; Reporte si on est en pause."""
+    with PORTE:
+        reste = _DERNIER[0] + ESPACE - time.time()
+        if reste > 0:
+            time.sleep(reste)
+        with verrou:
+            if en_pause(etat):
+                raise Reporte()
+        try:
+            yield
+            with verrou:
+                etat.pop("pause", None)  # YouTube répond
+        finally:
+            _DERNIER[0] = time.time()
 
 
 def a_essayer(e):
@@ -418,15 +449,16 @@ def traiter_nuit(v, etat, verrou):
         def pub(res):
             with verrou:
                 publier_fichiers({"v2/nuit/%s.json" % res["nuit"]: res}, "résumé de la nuit %s : %s" % (res["nuit"], "complet" if res["fait"] else "chapitres"))
-        nuit.analyse(v["id"], v.get("t", ""), None, pub)  # les chapitres d'abord (quelques secondes)
-        sh("yt-dlp", "-q", "--no-warnings", "-f", "bv*[height=720][vcodec^=avc1]/bv*[height=720][vcodec^=vp]/bv*[height=720]/bv*[height<=720]",
-           "-o", video, "https://www.youtube.com/watch?v=" + v["id"])
-        with verrou:
-            etat.pop("pause", None)
+        with tour(etat, verrou):
+            nuit.analyse(v["id"], v.get("t", ""), None, pub)  # les chapitres d'abord (quelques secondes)
+            sh(*YTDLP, "-o", video, "https://www.youtube.com/watch?v=" + v["id"])
         res = nuit.analyse(v["id"], v.get("t", ""), video, pub)
         if res and res.get("fait"):
             e["ok"] = True
             log("résumé de la nuit publié :", jour)
+    except Reporte:
+        with verrou:
+            e["essais"] -= 1
     except Exception as ex:
         log("résumé de la nuit raté", v["id"], erreur(ex))
         with verrou:
@@ -481,16 +513,15 @@ def passage():
         video = os.path.join(TRAVAIL, vid + ".mp4")
         suivi = {"v": vid, "t": v.get("t", ""), "note": v.get("note"), "yt": v.get("p", ""), "debut": heure(),
                  "fils": EN_MEME_TEMPS, "etat": "échec"}
+        reporte = False
         try:
             if os.path.exists(video):
                 os.remove(video)
             # 720p obligatoire (en 480p le bandeau est illisible) ; H.264 puis VP9 avant l'AV1, qui fait planter le décodeur du téléphone
-            sh("yt-dlp", "-q", "--no-warnings", "-f", "bv*[height=720][vcodec^=avc1]/bv*[height=720][vcodec^=vp]/bv*[height=720]/bv*[height<=720]",
-               "-o", video, "https://www.youtube.com/watch?v=" + vid)
+            with tour(etat, verrou):
+                sh(*YTDLP, "-o", video, "https://www.youtube.com/watch?v=" + vid)
             suivi["telecharge"] = heure()
-            with verrou:
-                etat.pop("pause", None)  # YouTube répond
-            res = chrono_video.analyse(video, os.path.join(TRAVAIL, vid + ".json"), vid, v.get("gid"))
+            res =chrono_video.analyse(video, os.path.join(TRAVAIL, vid + ".json"), vid, v.get("gid"))
             res["t"] = v.get("t", "")
             pts = res["pts"]
             bon = len(pts) >= 40 and max(p[1] for p in pts) >= 4  # un résumé complet va jusqu'au 4e quart-temps
@@ -504,6 +535,10 @@ def passage():
                     log("table pas assez sûre, non publiée :", v.get("t", vid), len(pts), "points")
                     if not bon and res["n"] > 120:
                         e["essais"] = ESSAIS  # vidéo entière lue mais bandeau illisible : inutile de réessayer
+        except Reporte:
+            reporte = True
+            with verrou:
+                e["essais"] -= 1
         except Exception as ex:
             log("échec", vid, erreur(ex))
             with verrou:
@@ -517,7 +552,8 @@ def passage():
                     json.dump(etat, f)
                 suivi["fin"] = heure()
                 try:
-                    suivre(suivi)
+                    if not reporte:  # rien demandé à YouTube : rien à suivre
+                        suivre(suivi)
                 except Exception as ex:
                     log("suivi non publié :", str(ex)[-200:])
 

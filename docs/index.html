@@ -21,7 +21,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,700&family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;0,900;1,800;1,900&family=Doto:wght@700;900&display=swap">
 <script>/* Firefox affiche des artefacts (scintillements, morceaux de page qui disparaissent) avec certains calques composés : styles simplifiés */
 if (/firefox/i.test(navigator.userAgent)) document.documentElement.classList.add("ff");</script>
-<link rel="stylesheet" href="style.css?v=20261128l">
+<link rel="stylesheet" href="style.css?v=20261128m">
 <link rel="preconnect" href="https://www.youtube.com">
 <link rel="preconnect" href="https://i.ytimg.com">
 <link rel="preconnect" href="https://www.google.com">
@@ -63,6 +63,7 @@ if (/firefox/i.test(navigator.userAgent)) document.documentElement.classList.add
     <a class="wordmark" href="./" id="brand" aria-label="Nocturne, accueil">N<svg class="o" viewBox="0 0 64 64"><use href="#moonball"/></svg>CTURNE</a>
     <nav class="tnav" aria-label="Navigation">
       <button class="tab on" data-vue="nuit">La nuit</button>
+      <button class="tab cuptab" data-vue="cup" hidden>NBA Cup</button>
       <button class="tab" data-vue="programme">Programme</button>
       <button class="tab" data-vue="classement">Classement</button>
     </nav>
@@ -84,6 +85,7 @@ if (/firefox/i.test(navigator.userAgent)) document.documentElement.classList.add
 
 <nav class="bbar" aria-label="Navigation">
   <button class="tab on" data-vue="nuit"><svg viewBox="0 0 64 64"><use href="#moonball"/></svg><span>La nuit</span></button>
+  <button class="tab cuptab" data-vue="cup" hidden><svg viewBox="0 0 24 24" class="ic"><path d="M7 3h10v5a5 5 0 0 1-10 0V3ZM7 5H4c0 3 1.5 5 4 5.5M17 5h3c0 3-1.5 5-4 5.5M10 14h4v3h-4zM8 20h8"/></svg><span>NBA Cup</span></button>
   <button class="tab" data-vue="programme"><svg viewBox="0 0 24 24" class="ic"><rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Programme</span></button>
   <button class="tab" data-vue="classement"><svg viewBox="0 0 24 24" class="ic"><path d="M4 20V11h4v9M10 20V5h4v15M16 20v-6h4v6"/></svg><span>Classement</span></button>
   <button class="tab" id="gear2"><svg viewBox="0 0 24 24" class="ic"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M5.5 18.5l2.1-2.1M16.4 7.6l2.1-2.1"/></svg><span>Réglages</span></button>
@@ -98,7 +100,7 @@ if (/firefox/i.test(navigator.userAgent)) document.documentElement.classList.add
 
 <script src="demo.js?v=20261125a"></script>
 <script src="note.js?v=20261125a"></script>
-<script src="app.js?v=20261128j"></script>
+<script src="app.js?v=20261128m"></script>
 <script src="chrono.js?v=20261125a"></script>
 </body>
 </html>

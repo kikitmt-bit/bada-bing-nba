@@ -308,6 +308,17 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     À fuir** (`SEUIL = 3`). ⚠️ Sur le téléphone, `note.js` doit être copié à côté de `boucle.py` (`~/nocturne/note.js`), sinon secours.
     Installation sur le téléphone à faire depuis un ordinateur qui a `ssh telephone` (session cloud sans accès). Une mise à jour
     automatique des scripts depuis main a été écartée (refusée par les permissions : à décider par Kiki).
+  - **NBA Cup (28/11, carte blanche de Kiki)** : onglet « NBA Cup » (`renderCup`, `?vue=cup`) affiché jusqu'au `CUP.until`
+    (lendemain de la finale) ; ensuite Kiki veut le retirer et mettre les résultats dans le classement. ESPN marque chaque match dans
+    `competitions[0].notes` : « NBA Cup - Group Play / - Quarterfinals / - Semifinals », « NBA Cup Championship » (`g.cup` dans
+    `normEvent`) ; dates de la saison 2026 dans `CUP.dates` (sondées le 28/11 : groupes 30/10 → 27/11, quarts 4-5/12, demies 8/12,
+    finale 11/12). ESPN ne donne PAS les groupes : retrouvés par le graphe des matchs de groupe (6 paquets de 5), nommés « Groupe Est 1 »
+    (on ne connaît pas les lettres officielles). Départage : V, face-à-face, diff., points ; les qualifiés (équipes des quarts) passent
+    en tête (« Qualifié » / « Repêché »). Sans spoil : `cupShown` = nuit d'avant la dernière, ou révélé (même `state.revealed` que les
+    nuits), ou « toujours montrer » ; qualifiés « ? » tant qu'un match de groupe est caché ; un vainqueur ne monte que si son match est
+    montrable ; « Révéler la Coupe » (bouton de nuit) ou clic sur un « ?? ». Tableau : Est à gauche, Ouest à droite, finale + trophée au
+    centre, vainqueur en plaque ; demies = vainqueurs des quarts de la même conférence. cdn.nba.com refuse (403) : ESPN seulement.
+    Banc d'essai : faux ESPN construit depuis les vrais résultats (Playwright, `clock.setFixedTime` pour simuler la fin de la Coupe).
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

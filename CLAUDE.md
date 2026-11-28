@@ -340,6 +340,10 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     bougent pas) ; libellé « Révéler tous les résultats » / « ✓ Résultats révélés · recacher », sur téléphone « Tout révéler » /
     « ✓ Révélé » (`.rl` / `.rs` ; surtout pas `.lg`, classe des logos).
     Plus de logo lune-ballon dans ce bouton (doublon avec celui du mot-symbole juste à côté, demande de Kiki).
+  - **28/11 (bugs)** : Français de la nuit : les stats étaient coupées (« 2.. p.. ») car la règle des noms (`.frt .frn b` / `small`,
+    nowrap + « … ») touchait aussi les chiffres de `.frs` → règles propres à `.frs` (jamais coupées, retour à la ligne si besoin),
+    minutes passées sur la ligne « SAS contre LAL · 35 min » ; testé à 28 pts 12 reb 10 pd 3 ctr en 4 colonnes. NBA Cup : « Ouest » /
+    « Est » (`.cbt`) alignés au pixel sur « Quart de finale » (même retrait de 10 px que les plaques).
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

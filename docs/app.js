@@ -593,7 +593,7 @@ function heroHTML(g, lvl) {
     <div class="glow"></div>
     <div class="jumbo-in">
       <div class="beam l"></div><div class="beam r"></div>
-      <div class="jtop"><span class="tag">${pre ? "L'affiche de la nuit" : "Le match de la nuit"}</span>
+      <div class="jtop"><span></span>
         <span class="when r${lvl}"${pre ? hypeTip(g) : ""}>${heatHTML(lvl)}<span>${pre ? `${HYPL[lvl]} · ${hourLocal(g.date)}` : RARL[lvl]}</span></span></div>
       <div class="jmid">${side(a, "away")}${mid}${side(h, "home")}</div>
       ${foot ? `<div class="jfoot">${foot}</div>` : ""}
@@ -718,7 +718,7 @@ function updateRevealAll() {
   const left = state.games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).length;
   if (!left && state.games.some(g => g.state === "post")) revealEss();
   const b = $("#revall"); if (!b) return;
-  if (!left) { b.disabled = true; b.innerHTML = "✓ Nuit révélée"; }
+  if (!left) { b.classList.add("done"); b.disabled = !!settings.showAll; b.innerHTML = `✓ Nuit révélée${settings.showAll ? "" : "<small>Toucher pour recacher</small>"}`; }
 }
 
 /* ---------- le brief : la nuit, comme une retransmission ---------- */
@@ -778,7 +778,7 @@ function skyHTML(games, hero, scored) {
       <div class="nights" id="nights" data-ctx="${ctx}"></div>
       ${board}
       ${started || nvid || jr || nplus ? `<div class="actions">
-      ${started ? `<button class="btn prime big" id="revall" ${left ? "" : "disabled"}>${left ? `<svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la nuit` : "✓ Nuit révélée"}</button>` : ""}
+      ${started ? `<button class="btn prime big${left ? "" : " done"}" id="revall" ${left || !settings.showAll ? "" : "disabled"}>${left ? `<svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la nuit` : `✓ Nuit révélée${settings.showAll ? "" : "<small>Toucher pour recacher</small>"}`}</button>` : ""}
       ${nplus ? `<button class="btn amber" data-nuitplus="${state.night}" title="Le résumé de la nuit, avec la liste des matchs et les scores qui suivent la vidéo"><span class="pl">▶</span>Résumé de la nuit<span class="plus">+</span></button>`
         : nvid ? `<button class="btn amber" data-vplay="${nvid}" data-vlabel="Le résumé de la nuit NBA"><span class="pl">▶</span>Résumé de la nuit</button>` : ""}
       ${jr ? `<button class="btn amber" data-vplay="${jr.id}" data-vlabel="NBA Extra · le journal du matin"><span class="pl">▶</span>NBA Extra</button>` : ""}
@@ -819,7 +819,7 @@ async function renderNight(soft) {
 
   main.innerHTML = `${skyHTML(games, hero, scored)}
     ${!games.length ? `<p class="loadmsg">Pas de match cette nuit-là. Les joueurs dorment aussi. 🌙</p>` : ""}
-    ${hero ? heroHTML(hero.g, hero.lvl) : ""}
+    ${hero ? sect(hero.g.state === "pre" ? "L'affiche de la nuit" : "Le match de la nuit") + heroHTML(hero.g, hero.lvl) : ""}
     ${rest.length ? sect(hero ? "Les autres matchs" : "Les matchs de la nuit") + `
     <div class="bugs">${rest.map((g, i) => cardHTML(g, i)).join("")}</div>` : ""}
     ${nPost >= 2 ? `<div id="mvpbody"><div class="ess hide">${sect("Le MVP et les grosses perfs")}
@@ -831,6 +831,10 @@ async function renderNight(soft) {
   startCountdown();
   const all = $("#revall");
   if (all) all.addEventListener("click", () => {
+    if (all.classList.contains("done")) { // tout recacher (demande de Kiki 28/11)
+      if (settings.showAll) return;
+      state.revealed.clear(); state.essOpen = null; renderNight(true); return;
+    }
     // la cérémonie : du moins bon au meilleur, le match de la nuit en dernier
     let order = games.filter(g => g.state !== "pre" && !state.revealed.has(g.id)).sort((x, y) => watchScore(x) - watchScore(y));
     if (hero) order = order.filter(g => g.id !== hero.g.id).concat(order.filter(g => g.id === hero.g.id));
@@ -860,6 +864,8 @@ const le = t => (SING.has(t.name) ? "le " : "les ") + t.name;
 const du = t => (SING.has(t.name) ? "du " : "des ") + t.name;
 const au = t => (SING.has(t.name) ? "au " : "aux ") + t.name;
 const cap1 = x => x[0].toUpperCase() + x.slice(1);
+// le nom dans une ligne de fait : en entier s'il est court, sinon « S. Gilgeous-Alexander » (une ligne, jamais coupée)
+const nm = p => { const f = (p.full || p.name || "").trim(); return f.length <= 15 ? f : (p.name || f); };
 function gameFacts(g, s) { // les faits d'un match terminé (c = le texte court pour la tuile du match)
   const F = [];
   const A = g.teams.away, H = g.teams.home, aw = A.score > H.score, W = aw ? A : H, L = aw ? H : A, m = Math.abs(A.score - H.score);
@@ -867,7 +873,7 @@ function gameFacts(g, s) { // les faits d'un match terminé (c = le texte court 
   // la surprise : le moins bon bilan d'avant-match l'emporte nettement
   const ra = moins(A.record, aw), rh = moins(H.record, !aw), rw = aw ? ra : rh, rl = aw ? rh : ra;
   if (Math.min(played(ra), played(rh)) >= 6 && winpct(rl) - winpct(rw) >= .2)
-    F.push({ ...base, p: 7 + (winpct(rl) - winpct(rw)) * 6, k: "surprise", tag: "La surprise", t: `Exploit ${du(W)} face ${au(L)}`, c: `Exploit ${du(W)} (${rw} avant le match, contre ${rl})` });
+    F.push({ ...base, p: 7 + (winpct(rl) - winpct(rw)) * 6, k: "surprise", tag: "La surprise", t: `Exploit ${du(W)} face ${au(L)}`, c: `Exploit ${du(W)} (${rw} contre ${rl} avant le match)` });
   const nOt = s.quarters ? s.quarters.home.q.length - 4 : 1;
   if (s.ot) F.push({ ...base, p: 9, k: "fin", tag: "Prolongation", t: `${A.name} – ${H.name} en prolongation`, c: nOt > 1 ? `${nOt} prolongations pour se départager` : "Il a fallu une prolongation" });
   else if (m <= 3) F.push({ ...base, p: 8, k: "fin", tag: "Le thriller", t: `Décidé à ${plural(m, "point")}`, c: `Décidé à ${plural(m, "point")}, jusqu'au bout` });
@@ -877,13 +883,13 @@ function gameFacts(g, s) { // les faits d'un match terminé (c = le texte court 
     const deficit = aw ? Math.max(...dv) : -Math.min(...dv);
     if (deficit >= 15) F.push({ ...base, p: 7 + deficit / 10, k: "remontee", tag: "La remontée", t: `Remontée de ${deficit} points pour ${le(W)}`, c: `${cap1(le(W))} ${SING.has(W.name) ? "revient" : "reviennent"} de ${deficit} points` });
   }
-  if (m >= 25) F.push({ ...base, p: 4 + m / 20, k: "raclee", tag: "La démonstration", t: `Victoire ${du(W)} avec ${m} points d'écart`, c: `${m} points d'écart, ${le(L)} jamais dans le match` });
+  if (m >= 25) F.push({ ...base, p: 4 + m / 20, k: "raclee", tag: "La démonstration", t: `Victoire ${du(W)} avec ${m} points d'écart`, c: `${m} points d'écart, sans appel` });
   // les perfs individuelles
   for (const pl of s.players || []) {
-    const t3 = +((pl.tp || "").split("-")[0]) || 0, nom = pl.full || pl.name;
-    if (pl.pts >= 40) F.push({ ...base, p: 9 + (pl.pts - 40) / 4, k: "perf", tag: "La perf", t: `${pl.pts} points pour ${nom}`, c: `${nom} : ${pl.pts} pts · ${pl.reb} reb · ${pl.ast} pd`, pl });
-    else if (pl.pts >= 10 && pl.reb >= 10 && pl.ast >= 10) F.push({ ...base, p: 8, k: "perf", tag: "Triple-double", t: `Triple-double de ${nom}`, c: `${nom} : ${pl.pts} pts · ${pl.reb} reb · ${pl.ast} pd`, pl });
-    else if (t3 >= 8) F.push({ ...base, p: 7, k: "perf", tag: "Adresse folle", t: `${t3} paniers à 3 points pour ${nom}`, c: `${nom} : ${t3} paniers à 3 pts, ${pl.pts} pts`, pl });
+    const t3 = +((pl.tp || "").split("-")[0]) || 0, nom = pl.full || pl.name, nc = nm(pl);
+    if (pl.pts >= 40) F.push({ ...base, p: 9 + (pl.pts - 40) / 4, k: "perf", tag: "La perf", t: `${pl.pts} points pour ${nom}`, c: `${nc} : ${pl.pts} pts · ${pl.reb} reb · ${pl.ast} pd`, pl });
+    else if (pl.pts >= 10 && pl.reb >= 10 && pl.ast >= 10) F.push({ ...base, p: 8, k: "perf", tag: "Triple-double", t: `Triple-double de ${nom}`, c: `${nc} : ${pl.pts} pts · ${pl.reb} reb · ${pl.ast} pd`, pl });
+    else if (t3 >= 8) F.push({ ...base, p: 7, k: "perf", tag: "Adresse folle", t: `${t3} paniers à 3 points pour ${nom}`, c: `${nc} : ${t3} paniers à 3 pts, ${pl.pts} pts`, pl });
   }
   return F;
 }
@@ -894,7 +900,7 @@ function matchFacts(g, s, extra) {
   const F = gameFacts(g, s).concat((extra || []).filter(f => f.g.id === g.id));
   const named = new Set(F.filter(f => f.pl).map(f => f.pl.aid));
   const best = tid => s.players.filter(p => p.tid === tid).sort((a, b) => gscore(b) - gscore(a))[0];
-  const line = p => `${p.full || p.name} : ${p.pts} pts · ${p.reb} reb · ${p.ast} pd`;
+  const line = p => `${nm(p)} : ${p.pts} pts · ${p.reb} reb · ${p.ast} pd`;
   const bw = best(W.id), bl = best(L.id);
   if (bw && !named.has(bw.aid)) F.push({ p: 5, k: "patron", tag: "Le patron", c: line(bw) });
   const la = A.ls || [], lh = H.ls || []; // le quart-temps qui a fait la différence
@@ -946,7 +952,7 @@ function nightExtras() {
           if (!pl || !(pl.starter || mins >= 18 || pl.pts >= 10)) continue;
           const out = /^out$/i.test(o.st);
           extra.push({ g, p: 6 + (pl.starter ? 1 : 0) + (out ? .5 : 0), k: "blesse", tag: "Sorti blessé",
-            c: `${pl.full || pl.name} · ${o.ty ? blessFr(o.ty) : "blessure"} · ${out ? "forfait" : "incertain"} pour la suite` });
+            c: `${nm(pl)} · ${o.ty ? blessFr(o.ty) : "blessure"} · ${out ? "forfait" : "incertain"}` });
         }
       }
     });
@@ -956,7 +962,7 @@ function nightExtras() {
       const t = m.crossed === "prend la tête" ? `${cap1(le(T))} ${vb(T, "prend", "prennent")} la tête de l'${m.conf}`
         : m.crossed ? `${cap1(le(T))} ${m.crossed.startsWith("entre") ? vb(T, "entre", "entrent") : vb(T, "sort", "sortent")} ${m.crossed.replace(/^(entre|sort) /, "")}`
         : `${cap1(le(T))} ${up ? vb(T, "gagne", "gagnent") : vb(T, "perd", "perdent")} ${plural(n, "place")}`;
-      extra.push({ g, p: 4 + m.sc / 15, k: "classement", tag: "Au classement", c: `${t} (${m.b + 1}e → ${m.a + 1}e à l'${m.conf})` });
+      extra.push({ g, p: 4 + m.sc / 15, k: "classement", tag: "Au classement", c: m.crossed ? t : `${t} (${m.a + 1}e à l'${m.conf})` });
     }
     return extra;
   })());
@@ -1010,7 +1016,7 @@ async function standingMoves(posts) {
    x-h = ce qu'on voit avant, x-r = ce qu'on voit après (CSS .ess.hide). */
 const hr = (h, r) => `<x-h>${h}</x-h><x-r>${r}</x-r>`;
 // un titre de rubrique : petit, gris, avec un trait (le même partout, demande de Kiki 28/11) ; `after` = un bouton juste après le titre
-const sect = (t, after) => `<div class="sect"><h2>${t}</h2>${after || ""}<i></i></div>`;
+const sect = (t, after) => `<div class="sect"><h2>${t}</h2>${after || ""}</div>`;
 function revealEss() {
   const e = $("#mvpbody .ess"); state.essOpen = state.night;
   if (!e || !e.classList.contains("hide") || !e.dataset.ready) return;

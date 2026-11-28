@@ -277,6 +277,11 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     **Ambre = bouton qui lance une vidéo** (Replay, Résumé de la nuit (+), NBA Extra, Top 10, Ses meilleures actions) ; titres jamais
     en ambre. MVP masqué : ni « MVP » ni « ? » dans le cadre photo. Photo du MVP = `img.mph` (avant, la règle `.mvp .card img`
     étirait aussi le logo de l'équipe, coupé en haut).
+  - **Retouches du 28/11 (soir)** : « Le match de la nuit » / « L'affiche de la nuit » = titre de rubrique AU-DESSUS du jumbotron
+    (plus d'étiquette dans la tuile) ; plus de trait à côté des titres (`.sect i` masqué, `sect()` ne l'écrit plus) ; « ✓ Nuit révélée »
+    + « Toucher pour recacher » : un 2e clic recache tout (`state.revealed.clear()`, sauf « toujours montrer ») ; intitulés des 3 lignes
+    en BLANC avant le match, en AMBRE une fois révélé (`.kfs.post`) ; faits raccourcis pour tenir sur une ligne (`nm` : nom court
+    au-delà de 15 lettres, classement sans « 2e → 1re » quand il y a un cap franchi, blessé sans « pour la suite »).
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

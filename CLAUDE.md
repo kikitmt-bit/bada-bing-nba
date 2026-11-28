@@ -295,6 +295,10 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     (`--night`), liseré blanc (le `--bg` blanc + `::before` sombre en retrait de 1,5 px, même biseau), texte blanc, logo lune-ballon ;
     révélée (`.done`) = le `::before` s'efface en 0,9 s, bouton blanc cassé, texte sombre, « ✓ Nuit révélée / Toucher pour recacher ».
     Aucune nouvelle couleur. `.btn.prime` (blanc) reste pour « Compris » et la page admin.
+  - **28/11 (suite)** : liseré du bouton de nuit complet sur les côtés (forme intérieure parallèle au biseau de 12 px du `.btn.big`) ;
+    révélé = UNE ligne « ✓ Nuit révélée · toucher pour recacher », même hauteur. Ordre sous les matchs : MVP et grosses perfs · Français ·
+    Les 10 plus belles actions [▶ Top 10] · **La nuit prochaine** (`nextStrip` : titre de rubrique + bouton gris « Voir la nuit › »,
+    puis les affiches en plaques `.nxm` « logo CHA @ ATL logo · 01h00 » par heure, sans logos sur téléphone).
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

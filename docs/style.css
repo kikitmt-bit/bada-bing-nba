@@ -1773,3 +1773,18 @@ body.vidon>*:not(#vidovl) *,body.vidon>*:not(#vidovl)::after{animation-play-stat
 .cuptop{flex-wrap:nowrap}
 .cuptop p{flex:1 1 auto}
 @media (max-width:640px){ .cuptop{flex-wrap:wrap} }
+/* 28/11 : titres de rubrique communs aussi en haut du programme et du classement */
+.sect.top{margin-top:26px}
+.sect.stand{flex-wrap:wrap;row-gap:10px}
+.scut{margin-left:auto;display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;justify-content:flex-end;min-width:0;color:var(--ink2);font-size:13.5px}
+.scut .sct{min-width:0}
+.scl{display:flex;align-items:center;gap:10px;white-space:nowrap;cursor:pointer}
+@media (max-width:700px){ .scut{margin-left:0;justify-content:flex-start} }
+/* le classement en sous-parties (plus de légende) */
+.spart{font:800 12px var(--disp);letter-spacing:.22em;text-transform:uppercase;margin:16px 0 8px;display:flex;align-items:center;gap:10px}
+.conf .srow.head + .spart{margin-top:4px}
+.spart::before{content:"";width:12px;height:12px;transform:skewX(-14deg);background:#3a3f55}
+.spart.po{color:#43c47a}.spart.po::before{background:#43c47a}
+.spart.pi{color:#e7a33c}.spart.pi::before{background:#e7a33c}
+.spart.out{color:var(--ink3)}
+@media (max-width:600px){ .tvleg span{white-space:normal;align-items:flex-start} }

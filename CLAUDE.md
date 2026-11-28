@@ -256,6 +256,9 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     la note d'affiche `afficheOf` (classement, stars, séries, rivalités) : seuils `HYPE = [0.7, 2, 3.5, 5, 7]`, mots `HYPL` (Sans enjeu,
     Discret, Correct, Belle affiche, Grosse affiche, Le choc) ; 3,5 = 3 barres comme le ◆ du programme ; raisons au survol (`hypeTip`).
     `loadRanks` est chargé aussi pour la nuit et « la nuit prochaine ».
+    Les raisons de la hype sont aussi des **infos clés** (`keyFacts`, AVANT le match seulement car le classement ESPN est celui du jour) :
+    « Choc au sommet · 1er contre 2e de l'Ouest » (9,5), « Duel direct » (7,5), « Haut de tableau » (deux du top 6, 7), « En feu » (série ≥ 5,
+    6,5), « Rivalité » (`RIVAL`, 6) : elles passent devant les infos de secours (infirmerie, meneurs, bilans), qui sautent.
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

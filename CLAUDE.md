@@ -329,6 +329,13 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     plus de colonne « Équipe » : V · D · % · Écart sur la ligne « Play-offs » (`.srow.spart`, même grille que les lignes). Coupure sans
     spoil AUTOMATIQUE : la dernière nuit compte dès qu'elle est révélée (tous ses matchs dans `state.revealed`) ou avec « toujours
     montrer » ; sinon petite note grise en bas (`.standnote`) « Sans les résultats de la nuit du 27 → 28 : révèle cette nuit… ».
+  - **UN SEUL bouton « Révéler la nuit » pour tout le site (28/11, idée de Kiki)** : dans la barre du haut (`#revall.tbrev`, à
+    droite des onglets ; sur téléphone à droite du logo, sans « · recacher »), `paintRev` / `toggleRevealAll`, état `state.allOpen`
+    (le temps de la visite). Révéler = TOUT ce qui est joué jusqu'à la dernière nuit (Kiki : « si on révèle la nuit en cours, on est à
+    jour ») : scores + faits de toutes les nuits (`renderNight` ajoute ses matchs à `state.revealed`), l'essentiel, la NBA Cup
+    (`renderCup`), le classement à jour (`cut` tient compte de `allOpen`). 2e appui = tout recacher. Plus de bouton dans l'en-tête de
+    la nuit ni de « Révéler la Coupe ». Bulle au survol (« Dévoile tous les résultats jusqu'à la nuit du 27 → 28 : scores, NBA Cup,
+    classement ») + phrase dans le bandeau de bienvenue. ⚠️ `classList.toggle(x, undefined)` BASCULE : toujours passer un booléen.
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

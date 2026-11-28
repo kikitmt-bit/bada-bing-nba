@@ -302,6 +302,12 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
   - **Espacement des rubriques (28/11)** : 36 px partout entre la fin d'une rubrique et le titre suivant (`.sect{margin-top:36px}`,
     `.ess` sans marge, MVP/perfs sans marge haut/bas, `.sky.one + .sect` à 21 px car l'en-tête a 15 px dessous), 18 px entre le match
     de la nuit et « Les autres matchs » (`.jumbo + .sect`). Mesuré au pixel (Playwright : bas du dernier élément visible → titre).
+  - **Ordre du téléphone (28/11, choix de Kiki)** : `boucle.py` met tout dans UNE file de 3 analyses à la fois : d'abord le résumé
+    de la nuit dès qu'il sort (`recaps` → `traiter_nuit`), puis les matchs du meilleur au moins bon selon LA NOTE DU SITE (`note_fine` :
+    summary ESPN passé à `docs/note.js` par Node.js ; ancienne formule `note` en secours). **Plus de Replay + pour Sans plus / Bof /
+    À fuir** (`SEUIL = 3`). ⚠️ Sur le téléphone, `note.js` doit être copié à côté de `boucle.py` (`~/nocturne/note.js`), sinon secours.
+    Installation sur le téléphone à faire depuis un ordinateur qui a `ssh telephone` (session cloud sans accès). Une mise à jour
+    automatique des scripts depuis main a été écartée (refusée par les permissions : à décider par Kiki).
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

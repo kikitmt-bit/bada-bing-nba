@@ -1418,7 +1418,7 @@ async function renderProgramme() {
   const tok = ++state.tok;
   const main = $("#main");
   setURL();
-  const head = `<section class="tvhead"><p class="greet"><i></i>Les prochaines nuits · ${tzName()}</p></section>`;
+  const head = `<div class="sect top"><h2>Les prochaines nuits <small>(${tzName()})</small></h2></div>`;
   main.innerHTML = head + `<div class="skel"><div class="ph" style="height:120px"></div><div class="ph" style="height:120px"></div></div>`;
   const tonight = nyKey(new Date()) > defaultNight() ? nyKey(new Date()) : defaultNight(); // la prochaine nuit à jouer
   const keys = [...Array(7)].map((_, i) => addDays(tonight, i));
@@ -1464,7 +1464,7 @@ async function renderStandings() {
   const tok = ++state.tok;
   const main = $("#main");
   setURL();
-  main.innerHTML = `<section class="tvhead"><p class="greet"><i></i>La hiérarchie</p></section>
+  main.innerHTML = `<div class="sect top"><h2>La hiérarchie</h2></div>
     <div class="skel"><div class="ph" style="height:300px"></div></div>`;
   let data;
   try {
@@ -1498,8 +1498,9 @@ async function renderStandings() {
       rows.push({ id: +en.team.id, w: Math.max(0, w), l: Math.max(0, l), streak: st ? (st.displayValue || "") : "" });
     }
     rows.sort((a, b) => (b.w / Math.max(1, b.w + b.l)) - (a.w / Math.max(1, a.w + a.l)) || b.w - a.w);
-    confs.push({ name: /east/i.test(ch.name) ? "Conférence Est" : /west/i.test(ch.name) ? "Conférence Ouest" : ch.name, rows });
+    confs.push({ name: /east/i.test(ch.name) ? "Conférence Est" : /west/i.test(ch.name) ? "Conférence Ouest" : ch.name, rows, west: /west/i.test(ch.name) });
   }
+  confs.sort((a, b) => b.west - a.west); // l'Ouest à gauche (28/11, Kiki)
   const pct = r => (r.w + r.l) ? (r.w / (r.w + r.l)) : 0;
   const confHTML = c => {
     const lead = c.rows[0];
@@ -1507,19 +1508,20 @@ async function renderStandings() {
       <div class="srow head"><span></span><span></span><span>Équipe</span><span class="n">V</span><span class="n">D</span><span class="n">%</span><span class="n gb">Écart</span></div>
       ${c.rows.map((r, i) => {
         const t = team(r.id);
+        // des sous-parties plutôt qu'une légende (28/11, carte blanche de Kiki)
+        const part = i === 0 ? `<div class="spart po">Play-offs</div>` : i === 6 ? `<div class="spart pi">Play-in</div>` : i === 10 ? `<div class="spart out">Hors course</div>` : "";
         const gb = lead ? ((lead.w - r.w) + (r.l - lead.l)) / 2 : 0;
-        return `<div class="srow ${i < 6 ? "po" : i < 10 ? "pi" : ""} ${i === 5 || i === 9 ? "cutline" : ""} ${r.id === settings.fav ? "favrow" : ""}" style="--tc:${t.color};animation-delay:${i * 30}ms">
+        return part + `<div class="srow ${i < 6 ? "po" : i < 10 ? "pi" : ""} ${r.id === settings.fav ? "favrow" : ""}" style="--tc:${t.color};animation-delay:${i * 30}ms">
           <span class="rk">${i + 1}</span>${logoHTML(t)}<span class="tn">${t.name}</span>
           <span class="n">${r.w}</span><span class="n">${r.l}</span><span class="n pc">${(pct(r) * 100).toFixed(1).replace(".", ",")}</span>
           <span class="n gb">${gb === 0 ? "–" : gb.toFixed(1).replace(".0", "").replace(".", ",")}</span></div>`;
       }).join("")}</div>`;
   };
   // plus de grand titre (déjà dans le menu, comme le programme) : étiquette, coupure sans spoil et légende sur UNE ligne
-  main.innerHTML = `<div class="cutbar onel"><p class="greet"><i></i>La hiérarchie</p>
-      ${cutPossible ? `<span>${cut ? "Arrêté avant la dernière nuit, pour ne rien te gâcher." : "À jour, dernière nuit comprise."}</span>
-      <button class="sw ${cut ? "" : "on"}" id="swcut" role="switch" aria-checked="${!cut}"></button>
-      <span>Inclure la dernière nuit</span>` : `<span>Classement à jour.</span>`}
-      <span class="legend"><span><i style="background:#43c47a"></i>Play-offs</span><span><i style="background:#e7a33c"></i>Play-in</span></span></div>
+  main.innerHTML = `<div class="sect top stand"><h2>La hiérarchie</h2>
+      <div class="scut">${cutPossible ? `<span class="sct">${cut ? "Arrêté avant la dernière nuit, pour ne rien te gâcher." : "À jour, dernière nuit comprise."}</span>
+      <label class="scl"><button class="sw ${cut ? "" : "on"}" id="swcut" role="switch" aria-checked="${!cut}" aria-label="Inclure la dernière nuit"></button>
+      <span>Inclure la dernière nuit</span></label>` : `<span class="sct">Classement à jour.</span>`}</div></div>
     <div class="standwrap">${confs.map(confHTML).join("")}</div>`;
   const sw = $("#swcut");
   if (sw) sw.addEventListener("click", () => { state.cutLast = !state.cutLast; renderStandings(); });
@@ -1572,7 +1574,7 @@ async function renderCup() {
   // le vrai classement d'un groupe départage aussi les égalités à trois : les qualifiés (vainqueur, puis repêché) passent devant
   const ranked = ids => { const r = table(ids); return r.filter(x => qual.has(x.id)).concat(r.filter(x => !qual.has(x.id))); };
   const gl = [...groups.values()].map(ids => ({ east: EAST.has(ids[0]), rows: ranked(ids), key: Math.min(...ids) }))
-    .sort((a, b) => (b.east - a.east) || a.key - b.key);
+    .sort((a, b) => (a.east - b.east) || a.key - b.key); // l'Ouest d'abord (à gauche, comme sur une carte)
   let ne = 0, nw = 0;
   gl.forEach(G => { G.name = `Groupe ${G.east ? "Est" : "Ouest"} ${G.east ? ++ne : ++nw}`; });
   const left = grp.filter(g => g.state !== "post").length, hiddenG = grp.filter(g => g.state === "post" && !cupShown(g)).length;
@@ -1615,7 +1617,7 @@ async function renderCup() {
   const blankQF = d => plate(null, [null, null], "Quart de finale", d);
   const colQF = (L) => L.length === 2 ? L.map(qfPlate).join("") : blankQF(qfs[0] && qfs[0].date) + blankQF(qfs[2] && qfs[2].date);
   const sfPlate = (S) => plate(S.g, S.g ? [S.g.teams.away.id, S.g.teams.home.id] : S.ids, "Demi-finale", S.date);
-  const fPlate = plate(realF, realF ? [realF.teams.away.id, realF.teams.home.id] : fw.map(x => x || null), "Finale", fin && fin.date, true);
+  const fPlate = plate(realF, realF ? [realF.teams.away.id, realF.teams.home.id] : [fw[1] || null, fw[0] || null], "Finale", fin && fin.date, true);
   const trophy = `<img class="ctro" src="nba-cup.png?v=1" alt="Le trophée de la NBA Cup" width="196" height="480">`; // le vrai trophée (image fournie par Kiki), fond retiré
   const champHTML = champ ? (() => { const t = team(champ); return `<div class="cchamp" style="--tc:${t.color}">${logoHTML(t)}<span><small>Vainqueur de la NBA Cup</small><b>${t.city} ${t.name}</b></span></div>`; })() : "";
   const hidKO = ko.filter(g => g.state === "post" && !cupShown(g)).length;
@@ -1629,11 +1631,11 @@ async function renderCup() {
       ${toReveal ? `<button class="btn nightb big" id="cuprev"><svg class="mb" viewBox="0 0 64 64" aria-hidden="true"><use href="#moonball"/></svg>Révéler la Coupe</button>` : ""}</div>
     ${sect(`Le tableau final${stKO ? ` <small>${stKO}</small>` : ""}`)}
     <div class="cbr">
-      <div class="cbc"><div class="cbt">Est</div>${colQF(qfE)}</div>
-      <div class="cbc mid1">${sfPlate(sfE)}</div>
-      <div class="cbc fin">${trophy}${fPlate}${champHTML}</div>
-      <div class="cbc mid1">${sfPlate(sfW)}</div>
       <div class="cbc"><div class="cbt">Ouest</div>${colQF(qfW)}</div>
+      <div class="cbc mid1">${sfPlate(sfW)}</div>
+      <div class="cbc fin">${trophy}${fPlate}${champHTML}</div>
+      <div class="cbc mid1">${sfPlate(sfE)}</div>
+      <div class="cbc"><div class="cbt">Est</div>${colQF(qfE)}</div>
     </div>
     ${sect(`La phase de groupes <small>${stGroups}</small>`)}
     <div class="cgrid">${gl.map(groupHTML).join("")}</div>`;

@@ -336,6 +336,9 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     (`renderCup`), le classement à jour (`cut` tient compte de `allOpen`). 2e appui = tout recacher. Plus de bouton dans l'en-tête de
     la nuit ni de « Révéler la Coupe ». Bulle au survol (« Dévoile tous les résultats jusqu'à la nuit du 27 → 28 : scores, NBA Cup,
     classement ») + phrase dans le bandeau de bienvenue. ⚠️ `classList.toggle(x, undefined)` BASCULE : toujours passer un booléen.
+    Puis (même jour) : placé JUSTE APRÈS LE LOGO, avant les onglets (le plus important), largeur fixe 254 px sur PC (les onglets ne
+    bougent pas) ; libellé « Révéler tous les résultats » / « ✓ Résultats révélés · recacher », sur téléphone « Tout révéler » /
+    « ✓ Révélé » (`.rl` / `.rs` ; surtout pas `.lg`, classe des logos).
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des

@@ -251,6 +251,11 @@ dernière nuit soustraits tant que l'interrupteur « Inclure la dernière nuit �
     tri sur la note exacte (`watchScore`), plus sur les 6 niveaux. Sans déroulé : l'ancienne note sur le score final.
     Réétalonner : Actions → « Étalonnage des notes » (`scripts/notes_calib.js`, ESPN joignable depuis GitHub). Le téléphone
     (`boucle.py` → `note`) choisit encore les matchs à analyser avec l'ancienne formule.
+  - **Jauge d'avant-match = HYPE (28/11, retour Kiki : Lakers-Spurs, 1er contre 2e de l'Ouest, Doncic contre Wembanyama, n'avait
+    que 3 barres)** : avant, les barres d'un match à venir venaient des seuls bilans (et plafonnaient à 4). Maintenant `hypeLevel` =
+    la note d'affiche `afficheOf` (classement, stars, séries, rivalités) : seuils `HYPE = [0.7, 2, 3.5, 5, 7]`, mots `HYPL` (Sans enjeu,
+    Discret, Correct, Belle affiche, Grosse affiche, Le choc) ; 3,5 = 3 barres comme le ◆ du programme ; raisons au survol (`hypeTip`).
+    `loadRanks` est chargé aussi pour la nuit et « la nuit prochaine ».
   - **Partage aux amis (23/11)** : adresse publique https://kikitmt-bit.github.io/bada-bing-nba/ ; aperçu des liens (balises
     `og:` dans index.html, image `docs/partage.jpg` 1200×630 faite avec les polices du site). **Fuseau réglable** (Réglages →
     Automatique / Paris / Montréal, `bb2_tz`, `TZ` lu au chargement : changer = recharger) : heures (`hourLocal`), titres des
